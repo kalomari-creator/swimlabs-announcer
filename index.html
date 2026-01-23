@@ -134,9 +134,66 @@
       cursor:text;
       font-weight:800;
     }
+    input[type="text"]:focus, input[type="password"]:focus{
+      border-color: #04D9FF;
+      box-shadow: 0 0 0 3px rgba(4,217,255,.15);
+    }
     select option{
       background:#000;
       color:#fff;
+    }
+
+    /* Search bar */
+    .searchWrap{
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .searchInput{
+      width: 280px;
+      padding: 9px 34px 9px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.75);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      outline: none;
+      transition: all .15s ease;
+    }
+    .searchInput:focus{
+      border-color: #04D9FF;
+      box-shadow: 0 0 0 3px rgba(4,217,255,.15);
+      background: #000;
+    }
+    .searchInput::placeholder{
+      color: rgba(159,176,208,.6);
+      font-weight: 600;
+    }
+    .searchClear{
+      position: absolute;
+      right: 8px;
+      padding: 4px 6px;
+      background: transparent;
+      border: none;
+      color: rgba(159,176,208,.8);
+      font-size: 16px;
+      cursor: pointer;
+      min-height: auto;
+      line-height: 1;
+      border-radius: 6px;
+      transition: all .12s ease;
+    }
+    .searchClear:hover{
+      color: #04D9FF;
+      background: rgba(4,217,255,.1);
+    }
+    .searchClear:active{
+      transform: scale(0.95);
+    }
+    .searchClear.hidden{
+      display: none;
     }
 
     table{
@@ -369,6 +426,12 @@
         </div>
 
         <div class="spacer"></div>
+
+        <div class="searchWrap">
+          <input type="text" id="rosterSearch" class="searchInput" placeholder="Search roster..." />
+          <button class="searchClear hidden" id="searchClear" title="Clear search">✕</button>
+        </div>
+
         <button class="secondary" id="addSwimmerBtn">+ Add swimmer</button>
         <span class="pill">Sort</span>
         <select id="sortBy">
@@ -559,6 +622,7 @@
   let autoTimers = [];
   let currentLocation = null;
   let allLocations = [];
+  let searchFilter = '';
 
   const el = (id) => document.getElementById(id);
 
@@ -1001,8 +1065,31 @@
     }
 
     const data = await api(`/api/blocks/${encodeURIComponent(currentBlock)}`);
-    const kids = sortKids(data.kids || []);
-    el('rosterMeta').textContent = `(${kids.length} swimmers • ${fmtTime(currentBlock)})`;
+    let kids = sortKids(data.kids || []);
+
+    // Apply search filter
+    const totalCount = kids.length;
+    if (searchFilter.trim()) {
+      const query = searchFilter.toLowerCase();
+      kids = kids.filter(kid => {
+        const name = (kid.swimmer_name || '').toLowerCase();
+        const instructor = (kid.instructor_name || '').toLowerCase();
+        const zone = (kid.zone || '').toString().toLowerCase();
+        const program = (kid.program || '').toLowerCase();
+
+        return name.includes(query) ||
+               instructor.includes(query) ||
+               zone.includes(query) ||
+               program.includes(query);
+      });
+    }
+
+    // Update roster meta with filter info
+    if (searchFilter.trim()) {
+      el('rosterMeta').textContent = `(Showing ${kids.length} of ${totalCount} swimmers • ${fmtTime(currentBlock)})`;
+    } else {
+      el('rosterMeta').textContent = `(${kids.length} swimmers • ${fmtTime(currentBlock)})`;
+    }
 
     const tbody = el('roster');
     tbody.innerHTML = '';
@@ -1345,6 +1432,35 @@
   });
   el('presetCodeBrown').addEventListener('click', () => {
     el('customText').value = 'Code Brown. Please clear the pool area immediately.';
+  });
+
+  // Search functionality
+  el('rosterSearch').addEventListener('input', (e) => {
+    searchFilter = e.target.value;
+
+    // Show/hide clear button
+    const clearBtn = el('searchClear');
+    if (searchFilter.trim()) {
+      clearBtn.classList.remove('hidden');
+    } else {
+      clearBtn.classList.add('hidden');
+    }
+
+    // Reload roster with filter
+    if (currentBlock) {
+      loadRoster();
+    }
+  });
+
+  el('searchClear').addEventListener('click', () => {
+    searchFilter = '';
+    el('rosterSearch').value = '';
+    el('searchClear').classList.add('hidden');
+
+    // Reload roster without filter
+    if (currentBlock) {
+      loadRoster();
+    }
   });
 
   // Boot
