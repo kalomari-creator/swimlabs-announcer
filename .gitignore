@@ -1,25 +1,12 @@
-# Node modules
-node_modules/
-package-lock.json
-
-# Database (contains sensitive swimmer data)
-data/
-database/
+# Database files (contain sensitive swimmer data)
+data/app.db
 *.db
 
-# Generated files
-tts_out/
-exports/
-schedules/*/
-rolls/
+# Generated audio files
+tts_out/*.wav
 
-# Backups
-*backup*.html
-*backup*.js
-*-v4.0-*
-
-# Environment
-.env
+# Node modules (reinstalled via npm)
+node_modules/
 
 # Logs
 *.log
