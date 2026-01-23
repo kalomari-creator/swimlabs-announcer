@@ -224,6 +224,22 @@
     th{ color:var(--muted); font-weight:900; font-size:12px; text-transform: uppercase; letter-spacing: .5px; }
     tbody tr:hover{ background: rgba(255,255,255,.035); }
 
+    /* Program type color coding */
+    tbody tr.program-group{ background: rgba(34,197,94,0.08); }
+    tbody tr.program-group:hover{ background: rgba(34,197,94,0.14); }
+
+    tbody tr.program-semi-private{ background: rgba(59,130,246,0.08); }
+    tbody tr.program-semi-private:hover{ background: rgba(59,130,246,0.14); }
+
+    tbody tr.program-private{ background: rgba(168,85,247,0.08); }
+    tbody tr.program-private:hover{ background: rgba(168,85,247,0.14); }
+
+    tbody tr.program-parent-tot{ background: rgba(249,115,22,0.08); }
+    tbody tr.program-parent-tot:hover{ background: rgba(249,115,22,0.14); }
+
+    tbody tr.program-trial{ background: rgba(234,179,8,0.08); }
+    tbody tr.program-trial:hover{ background: rgba(234,179,8,0.14); }
+
     .zone{
       display:inline-flex;
       align-items:center;
@@ -725,6 +741,30 @@
     return { type: p, level: '—' };
   }
 
+  function getProgramColorClass(program){
+    const p = String(program || '').toUpperCase().trim();
+    if(!p) return '';
+
+    // Check for GROUP programs
+    if(p.startsWith('GROUP:')) return 'program-group';
+
+    // Check for SEMI-PRIVATE
+    if(p.includes('SEMI') && p.includes('PRIVATE')) return 'program-semi-private';
+    if(p.includes('SEMI-PRIVATE')) return 'program-semi-private';
+
+    // Check for PRIVATE (but not semi-private)
+    if(p.includes('PRIVATE')) return 'program-private';
+
+    // Check for PARENT-TOT
+    if(p.includes('PARENT') && p.includes('TOT')) return 'program-parent-tot';
+    if(p.includes('PARENTTOT')) return 'program-parent-tot';
+
+    // Check for TRIAL (could be in program name or as a flag indicator)
+    if(p.includes('TRIAL')) return 'program-trial';
+
+    return '';
+  }
+
   async function api(path, opts={}){
     const res = await fetch(path, {
       headers: { 'Content-Type': 'application/json' },
@@ -1096,6 +1136,10 @@
 
     for(const kid of kids){
       const tr = document.createElement('tr');
+
+      // Apply program type color class
+      const colorClass = getProgramColorClass(kid.program);
+      if(colorClass) tr.className = colorClass;
 
       // Attendance
       const tdAtt = document.createElement('td');
