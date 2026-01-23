@@ -1,0 +1,1363 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SwimLabs Announcer</title>
+  <style>
+    :root{
+      --bg:#070b14;
+      --cardA:rgba(255,255,255,.06);
+      --cardB:rgba(255,255,255,.03);
+      --text:#e8eefc;
+      --muted:#9fb0d0;
+      --line:rgba(255,255,255,.10);
+      --line2:rgba(255,255,255,.14);
+      --btn:#1f2a44;
+      --btn2:#2a3a63;
+      --good:#22c55e;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --chip:rgba(255,255,255,.06);
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      padding:18px;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 600px at 20% 0%, #0e1b3a 0%, var(--bg) 55%) fixed;
+      color:var(--text);
+    }
+    .wrap{ max-width: 1250px; margin: 0 auto; }
+    .topbar{ display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; padding-bottom: 4px; }
+    h1{ margin:0; font-size:22px; letter-spacing:.2px; }
+    .muted{ color:var(--muted); font-size:14px; }
+    .tiny{ font-size:12px; }
+    .right{ margin-left:auto; }
+    .card{
+      background: linear-gradient(180deg, var(--cardA), var(--cardB));
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:14px;
+      margin-top:14px;
+      box-shadow: 0 12px 34px rgba(0,0,0,.30);
+      backdrop-filter: blur(8px);
+    }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .spacer{ flex:1; }
+
+    .tabs{
+      display:flex;
+      gap:8px;
+      padding:6px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+    }
+    button{
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, var(--btn2), var(--btn));
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:14px;
+      cursor:pointer;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    button:hover{ filter: brightness(1.08); }
+    button:active{ transform: translateY(1px); }
+    button.primary{ border-color: rgba(34,197,94,.45); }
+    button.secondary{ border-color: rgba(245,158,11,.35); }
+    button.danger{ border-color: rgba(239,68,68,.35); }
+
+    button.tab{ padding:9px 12px; border-radius:999px; background: transparent; border-color: transparent; }
+    button.tab.active{
+      background: rgba(255,255,255,.09);
+      border-color: rgba(255,255,255,.14);
+      outline: 2px solid rgba(255,255,255,.10);
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+      padding:7px 10px;
+      border-radius:999px;
+      font-size:13px;
+      color:var(--muted);
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .pill strong{ color: var(--text); font-weight:900; }
+    .ok{ color: var(--good); font-weight:900; }
+    .warn{ color: var(--warn); font-weight:900; }
+
+    .grid{ display:grid; grid-template-columns: 1fr; gap:14px; }
+    @media (min-width: 980px){ .grid{ grid-template-columns: 520px 1fr; } }
+
+    .blocks{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .blocks button{ min-width: 120px; }
+    .blocks button.active{
+      outline:2px solid rgba(255,255,255,.18);
+      border-color: rgba(255,255,255,.28);
+      filter: brightness(1.10);
+    }
+
+    textarea{
+      width:100%;
+      min-height: 120px;
+      resize: vertical;
+      padding:12px 12px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      outline: none;
+      font-size:14px;
+      line-height: 1.4;
+    }
+
+    /* readable black inputs + dropdowns */
+    select, input[type="text"], input[type="password"]{
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.18);
+      background: #000;
+      color: #fff;
+      font-weight:900;
+      outline: none;
+      cursor:pointer;
+    }
+    input[type="text"], input[type="password"]{
+      cursor:text;
+      font-weight:800;
+    }
+    select option{
+      background:#000;
+      color:#fff;
+    }
+
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      margin-top:10px;
+      overflow:hidden;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+    }
+    thead th{
+      position: sticky;
+      top: 0;
+      background: rgba(10, 16, 34, .92);
+      backdrop-filter: blur(8px);
+      z-index: 5;
+      border-bottom: 1px solid var(--line2);
+    }
+    th,td{
+      text-align:left;
+      padding:10px 10px;
+      border-bottom:1px solid var(--line);
+      vertical-align: top;
+      font-size:14px;
+    }
+    th{ color:var(--muted); font-weight:900; font-size:12px; text-transform: uppercase; letter-spacing: .5px; }
+    tbody tr:hover{ background: rgba(255,255,255,.035); }
+
+    .zone{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      border:1px solid var(--line);
+      padding:6px 10px;
+      border-radius:999px;
+      color:var(--muted);
+      background: rgba(255,255,255,.04);
+      font-size:13px;
+      font-weight:900;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select:none;
+    }
+    .zone.locked{ cursor: not-allowed; opacity:.85; }
+
+    .hidden{ display:none; }
+
+    .level{ font-weight:900; color: rgba(232,238,252,.95); line-height: 1.2; }
+    .nowrap{ white-space: nowrap; }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 9px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: var(--chip);
+      color: var(--muted);
+      font-size:12px;
+      font-weight:900;
+      margin-left:8px;
+      vertical-align: middle;
+    }
+    .badge.addon{ border-color: rgba(245,158,11,.40); }
+    .badge.over{ border-color: rgba(34,197,94,.35); }
+
+    /* Attendance buttons */
+    .attWrap{ display:flex; gap:6px; align-items:center; }
+    .attBtn{
+      padding:7px 9px;
+      border-radius:12px;
+      font-size:12px;
+      font-weight:900;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.04);
+      cursor:pointer;
+      user-select:none;
+      line-height:1;
+    }
+    .attBtn.here.active{ border-color: rgba(34,197,94,.5); background: rgba(34,197,94,.12); }
+    .attBtn.absent.active{ border-color: rgba(239,68,68,.5); background: rgba(239,68,68,.12); }
+    .attBtn.clear.active{ border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.08); }
+
+    /* Flags */
+    .flags{ display:flex; gap:8px; margin-top:6px; align-items:center; flex-wrap:wrap; }
+    .flag{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:28px;
+      height:26px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      cursor:pointer;
+      user-select:none;
+      font-size:16px;
+      opacity:.35;
+      transition: filter .12s ease, opacity .12s ease, transform .05s ease;
+    }
+    .flag:hover{ filter: brightness(1.15); }
+    .flag:active{ transform: translateY(1px); }
+    .flag.on{ opacity:1; border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.08); }
+    .flagHelp{ font-size:12px; color: rgba(159,176,208,.9); margin-left:8px; }
+
+    /* Modal */
+    .modalBackdrop{
+      position: fixed;
+      inset:0;
+      background: rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      z-index: 9999;
+    }
+    .modal{
+      width: 100%;
+      max-width: 560px;
+      background: linear-gradient(180deg, rgba(20,26,50,.92), rgba(10,12,24,.92));
+      border:1px solid var(--line2);
+      border-radius:18px;
+      box-shadow: 0 22px 60px rgba(0,0,0,.55);
+      padding:14px;
+      backdrop-filter: blur(10px);
+    }
+    .modal h3{ margin:4px 0 10px; font-size:16px; }
+    .modal .grid2{ display:grid; grid-template-columns: 1fr; gap:10px; }
+    @media(min-width: 640px){ .modal .grid2{ grid-template-columns: 1fr 1fr; } }
+    .field label{
+      display:block;
+      font-size:12px;
+      color: var(--muted);
+      font-weight:900;
+      margin-bottom:6px;
+      letter-spacing:.3px;
+      text-transform: uppercase;
+    }
+    .field .hint{
+      margin-top:6px;
+      font-size:12px;
+      color: rgba(159,176,208,.85);
+      line-height:1.35;
+    }
+    .modalFooter{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+
+    /* TABLET & MOBILE OPTIMIZATION */
+    @media (max-width: 900px) {
+      body { padding: 10px; }
+      .wrap { max-width: 100%; }
+      .card { padding: 12px; }
+      h1 { font-size: 20px; }
+      button { min-height: 48px; padding: 12px 16px; font-size: 15px; }
+      th, td { padding: 10px 8px; font-size: 14px; }
+      .level { font-size: 15px; font-weight: 700; }
+      .blocks button { min-height: 48px; padding: 10px 14px; font-size: 15px; }
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 6px; }
+      .card { padding: 10px; border-radius: 12px; }
+      h1 { font-size: 18px; }
+      button { min-height: 44px; padding: 10px 14px; font-size: 14px; }
+      th, td { padding: 8px 6px; font-size: 13px; }
+      .level { font-size: 14px; }
+      .blocks button { min-height: 44px; padding: 8px 12px; font-size: 14px; }
+      .pill { padding: 6px 8px; font-size: 12px; }
+      .attBtn { padding: 6px 10px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>SwimLabs Announcer</h1>
+      <div class="muted" id="status">Loading…</div>
+    </div>
+
+    <div class="right row">
+      <select id="locationSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+        <option value="">Loading locations...</option>
+      </select>
+      <div class="tabs">
+        <button class="tab active" id="tabRoster">Roster</button>
+        <button class="tab" id="tabAnnouncements" style="display:none;">Announcements</button>
+      </div>
+      <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
+      <button id="settingsBtn" title="Settings">⚙️</button>
+      <span class="pill">Last: <strong id="lastAt">None</strong></span>
+    </div>
+  </div>
+
+  <div id="panelRoster">
+    <div class="card">
+      <div class="row">
+        <button class="primary" id="importBtn">Import Today (PDF)</button>
+        <button class="primary" id="uploadHtmlBtn">Upload HTML</button>
+        <input type="file" id="htmlFileInput" accept=".html" style="display: none;">
+        <button class="secondary" id="exportJsonBtn" title="Download a JSON backup of the active roster">Export JSON</button>
+        <button class="secondary" id="importJsonBtn" title="Upload a JSON export to restore a roster">Import JSON</button>
+        <input type="file" id="jsonFileInput" accept="application/json,.json" style="display:none;">
+
+        <div class="spacer"></div>
+        <span class="pill tiny">Auto announcement runs about 3 minutes before each time block.</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div class="pill">Time Blocks <span class="muted">(Date:</span> <input id="rosterDate" type="date" class="dateInput" /> <button id="setDateBtn" class="miniBtn">Set</button> <span class="muted">)</span> <span id="blockHint" class="muted"></span></div>
+        <div class="spacer"></div>
+        <div class="pill">Selected: <strong id="selectedBlock">None</strong></div>
+      </div>
+      <div class="blocks" id="blocks"></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div class="pill">Roster <span id="rosterMeta" class="muted"></span></div>
+        <div class="legend" id="tagLegend">
+          <span class="legendItem"><span class="flagBadge on">⭐</span><span class="legendText">First time</span></span>
+          <span class="legendItem"><span class="flagBadge on">🎁</span><span class="legendText">Makeup</span></span>
+          <span class="legendItem"><span class="flagBadge on">📜</span><span class="legendText">Policy</span></span>
+          <span class="legendItem"><span class="flagBadge on">💳</span><span class="legendText">Balance</span></span>
+          <span class="legendItem"><span class="flagBadge on">🧪</span><span class="legendText">Trial</span></span>
+        </div>
+
+        <div class="spacer"></div>
+        <button class="secondary" id="addSwimmerBtn">+ Add swimmer</button>
+        <span class="pill">Sort</span>
+        <select id="sortBy">
+          <option value="instructor" selected>Instructor + A-Z</option>
+          <option value="name">Swimmer A-Z</option>
+        </select>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:140px;">Attendance</th>
+            <th>Swimmer</th>
+            <th style="width:110px;">Age</th>
+            <th style="width:150px;">Type</th>
+            <th style="width:170px;">Level</th>
+            <th style="width:170px;">Instructor</th>
+            <th style="width:140px;">Zone</th>
+            <th style="width:170px;">Action</th>
+          </tr>
+        </thead>
+        <tbody id="roster"></tbody>
+      </table>
+
+      <div class="tiny" style="margin-top:10px; color: rgba(159,176,208,.92); line-height:1.4;">
+        Flags: ⭐ First time, 📋 Makeup, 📝 Missing waiver, 💲 Unpaid, 🅣 Trial. Click to toggle.
+      </div>
+    </div>
+  </div>
+
+  <div id="panelAnnouncements" class="hidden">
+    <div class="grid">
+      <div class="card">
+        <div class="row" style="margin-bottom:10px;">
+          <button class="secondary" id="repeatBtn">Repeat last</button>
+          <button class="secondary" id="forceTimeBtn">Force time-block</button>
+        </div>
+
+        <textarea id="customText" placeholder="Type an announcement here, then click Speak."></textarea>
+        <div class="row" style="margin-top:10px;">
+          <button class="primary" id="speakBtn">Speak typed message</button>
+          <button class="danger" id="clearBtn">Clear</button>
+        </div>
+
+        <div class="card" style="margin-top:12px; background: rgba(255,255,255,.03);">
+          <div class="pill" style="margin-bottom:8px;">Last announcement</div>
+          <div id="lastText" class="tiny" style="line-height:1.45; color: rgba(232,238,252,.92);">None</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="pill" style="margin-bottom:10px;">Quick presets</div>
+        <div class="row">
+          <button class="secondary" id="presetFrontDeck">Front desk to deck</button>
+          <button class="secondary" id="presetCodeGreen">Code Green</button>
+          <button class="secondary" id="presetCodeBrown">Code Brown</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modalBackdrop" id="settingsModal">
+  <div class="modal">
+    <h3>Device settings</h3>
+    <div class="field">
+      <label>Set device mode</label>
+      <select id="deviceModeSelect">
+        <option value="deck">Deck (tablet)</option>
+        <option value="frontdesk">Front Desk (computer)</option>
+      </select>
+      <div class="hint">Deck requires manager approval to change zones.</div>
+    </div>
+    <div class="modalFooter">
+      <button class="secondary" id="settingsClose">Close</button>
+      <button class="primary" id="settingsSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Swimmer Modal -->
+<div class="modalBackdrop" id="addModal">
+  <div class="modal">
+    <h3>Add swimmer (Add-on)</h3>
+
+    <div class="grid2">
+      <div class="field">
+        <label>Swimmer name</label>
+        <input type="text" id="addName" placeholder="First Last" />
+      </div>
+
+      <div class="field">
+        <label>Age (optional)</label>
+        <input type="text" id="addAge" placeholder="Example: 6y 2m" />
+      </div>
+
+      <div class="field">
+        <label>Class type</label>
+        <select id="addProgram">
+          <option value="GROUP: Beginner 1">GROUP: Beginner 1</option>
+          <option value="GROUP: Beginner 2">GROUP: Beginner 2</option>
+          <option value="GROUP: Beginner 3">GROUP: Beginner 3</option>
+          <option value="GROUP: Beginner 4">GROUP: Beginner 4</option>
+          <option value="GROUP: Intermediate 1">GROUP: Intermediate 1</option>
+          <option value="GROUP: Intermediate 2">GROUP: Intermediate 2</option>
+          <option value="GROUP: Intermediate 3">GROUP: Intermediate 3</option>
+          <option value="GROUP: Advanced 1">GROUP: Advanced 1</option>
+          <option value="GROUP: Advanced 2">GROUP: Advanced 2</option>
+          <option value="Private">Private</option>
+          <option value="Semi-Private">Semi-Private</option>
+          <option value="ParentTot">ParentTot</option>
+          <option value="Toddler Transition">Toddler Transition</option>
+          <option value="Adult">Adult</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Instructor (optional)</label>
+        <input type="text" id="addInstructor" placeholder="Example: Nova H" />
+      </div>
+
+      <div class="field">
+        <label>Zone (optional)</label>
+        <select id="addZone">
+          <option value="">(leave blank)</option>
+          <option value="1">Zone 1</option>
+          <option value="2">Zone 2</option>
+          <option value="3">Zone 3</option>
+          <option value="4">Zone 4</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Time block</label>
+        <input type="text" id="addTime" disabled />
+      </div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="addCancel">Cancel</button>
+      <button class="primary" id="addSave">Add swimmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Zone Override Modal -->
+<div class="modalBackdrop" id="zoneModal">
+  <div class="modal">
+    <h3>Change zone</h3>
+
+    <div class="row">
+      <span class="pill">Swimmer: <strong id="zoneWho">—</strong></span>
+      <div class="spacer"></div>
+      <span class="pill">Mode: <strong id="zoneMode">Deck</strong></span>
+    </div>
+
+    <div class="grid2" style="margin-top:12px;">
+      <div class="field">
+        <label>New zone</label>
+        <select id="zoneSelect">
+          <option value="1">Zone 1</option>
+          <option value="2">Zone 2</option>
+          <option value="3">Zone 3</option>
+          <option value="4">Zone 4</option>
+        </select>
+      </div>
+
+      <div class="field" id="managerCodeField">
+        <label>Manager code (required on Deck)</label>
+        <input type="password" id="managerCode" placeholder="Enter code" />
+      </div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="zoneCancel">Cancel</button>
+      <button class="primary" id="zoneSave">Save zone</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentBlock = null;
+  let zoneTarget = null;
+  let deviceMode = localStorage.getItem('deviceMode') || 'deck';
+  let activeDateISO = null;
+  let blocksList = [];
+  let autoTimers = [];
+  let currentLocation = null;
+  let allLocations = [];
+
+  const el = (id) => document.getElementById(id);
+
+  // Load locations on startup
+  async function loadLocations() {
+    try {
+      const resp = await api('/api/locations');
+      allLocations = resp.locations;
+      
+      const select = el('locationSelect');
+      select.innerHTML = '';
+      
+      allLocations.forEach(loc => {
+        const opt = document.createElement('option');
+        opt.value = loc.id;
+        opt.textContent = loc.name;
+        select.appendChild(opt);
+      });
+      
+      // Load saved location or default to first
+      const savedLocId = localStorage.getItem('location_id') || allLocations[0]?.id;
+      select.value = savedLocId;
+      currentLocation = allLocations.find(l => l.id == savedLocId);
+      
+      // Show/hide announcements tab based on location
+      updateAnnouncementsVisibility();
+      
+    } catch (e) {
+      console.error('Failed to load locations:', e);
+    }
+  }
+
+  function updateAnnouncementsVisibility() {
+    const announcementsTab = el('tabAnnouncements');
+    const announcementsSection = el('announcements-section');
+    
+    if (currentLocation && currentLocation.has_announcements) {
+      announcementsTab.style.display = '';
+      if (announcementsSection) announcementsSection.style.display = '';
+    } else {
+      announcementsTab.style.display = 'none';
+      if (announcementsSection) announcementsSection.style.display = 'none';
+      // Switch to Roster tab if on Announcements
+      if (announcementsTab.classList.contains('active')) {
+        el('tabRoster').click();
+      }
+    }
+  }
+
+  el('locationSelect').addEventListener('change', async (e) => {
+    const locId = e.target.value;
+    currentLocation = allLocations.find(l => l.id == locId);
+    localStorage.setItem('location_id', locId);
+    
+    try {
+      await api('/api/set-location', {
+        method: 'POST',
+        body: JSON.stringify({ location_id: locId })
+      });
+      
+      updateAnnouncementsVisibility();
+      await loadStatus();
+      await loadBlocks();
+      if (currentBlock) await loadRoster();
+      
+    } catch (e) {
+      alert('Failed to switch location: ' + e.message);
+    }
+  });
+
+  function escapeHtml(s){
+    return String(s ?? '')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#039;');
+  }
+
+  function fmtTime(time24){
+    if(!time24) return '—';
+    const parts = String(time24).split(':');
+    const hh = parseInt(parts[0], 10);
+    const mm = parseInt(parts[1] || '0', 10);
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = ((hh + 11) % 12) + 1;
+    if(mm === 0) return `${h12} ${ampm}`;
+    return `${h12}:${String(mm).padStart(2,'0')} ${ampm}`;
+  }
+
+  function parseTypeLevel(program){
+    const p = String(program || '').trim();
+    if(!p) return { type: '—', level: '—' };
+    const up = p.toUpperCase();
+    if(up.startsWith('GROUP:')){
+      const level = p.split(':').slice(1).join(':').trim();
+      return { type: 'Group', level: level || '—' };
+    }
+    // Non-group
+    return { type: p, level: '—' };
+  }
+
+  async function api(path, opts={}){
+    const res = await fetch(path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts
+    });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok || data.ok === false){
+      const details = data && data.details ? ` | ${typeof data.details === 'string' ? data.details : JSON.stringify(data.details)}` : '';
+      const msg = (data.error || `Request failed: ${res.status}`) + details;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  function setStatus(text, kind){
+    const s = el('status');
+    s.textContent = text;
+    s.classList.remove('ok','warn');
+    if(kind) s.classList.add(kind);
+  }
+  function toast(msg){
+    const prev = el('status').textContent;
+    setStatus(msg, 'ok');
+    setTimeout(() => {
+      if (el('status').textContent === msg) el('status').textContent = prev;
+    }, 1800);
+  }
+
+
+  function showModal(id, on=true){
+    el(id).style.display = on ? 'flex' : 'none';
+  }
+
+  function syncDeviceUI(){
+    el('deviceModeLabel').textContent = deviceMode === 'frontdesk' ? 'Front Desk' : 'Deck';
+    el('deviceModeSelect').value = deviceMode;
+    el('zoneMode').textContent = deviceMode === 'frontdesk' ? 'Front Desk' : 'Deck';
+    el('managerCodeField').style.display = (deviceMode === 'deck') ? 'block' : 'none';
+  }
+
+  function setLastAnnouncementUI(last){
+    const at = last?.at ? new Date(last.at) : null;
+    el('lastAt').textContent = at ? at.toLocaleTimeString() : 'None';
+    el('lastText').textContent = last?.text || 'None';
+  }
+
+  function setSelectedBlockUI(){
+    el('selectedBlock').textContent = currentBlock ? fmtTime(currentBlock) : 'None';
+    [...el('blocks').querySelectorAll('button')].forEach(b => {
+      b.classList.toggle('active', b.dataset.time === currentBlock);
+    });
+    el('addSwimmerBtn').disabled = !currentBlock;
+  }
+
+  async function loadStatus(){
+    const st = await api('/api/status');
+
+    const activeDate = st.activeDate || st.todayISO;
+    const ttsOk = (st.piperBinExists && st.voiceModelExists);
+    const ttsMsg = ttsOk ? 'TTS ready' : 'TTS missing (piper/model)';
+    const rosterMsg = st.htmlExists ? `Roster loaded (${Math.round((st.htmlSizeBytes||0)/1024)} KB)` : 'No roster uploaded yet';
+
+    setStatus(`${ttsMsg} • ${rosterMsg}`, (ttsOk ? 'ok' : 'warn'));
+
+    const di = el('rosterDate');
+    if (di && activeDate) di.value = activeDate;
+
+    setLastAnnouncementUI(st.lastAnnouncement);
+    el('blockHint').textContent = '';
+  }
+
+  async function loadBlocks(){
+    const b = await api('/api/blocks');
+    const wrap = el('blocks');
+    wrap.innerHTML = '';
+
+    blocksList = (b.blocks || []);
+
+    blocksList.forEach((t) => {
+      const btn = document.createElement('button');
+      btn.textContent = fmtTime(t);
+      btn.dataset.time = t;
+      btn.addEventListener('click', () => {
+        currentBlock = t;
+        setSelectedBlockUI();
+        loadRoster();
+      });
+      wrap.appendChild(btn);
+    });
+
+    if(!currentBlock && (b.blocks || []).length){
+      currentBlock = b.blocks[0];
+    }
+
+    setSelectedBlockUI();
+    if(currentBlock) await loadRoster();
+    scheduleAutoAnnouncements();
+  }
+
+
+  function parseBlockDateTime(dateISO, time24){
+    if(!dateISO || !time24) return null;
+    const [y,m,d] = dateISO.split('-').map(n=>parseInt(n,10));
+    const [hh,mm] = String(time24).split(':').map(n=>parseInt(n,10));
+    if(!y||!m||!d||Number.isNaN(hh)) return null;
+    return new Date(y, (m-1), d, hh, mm||0, 0, 0);
+  }
+
+  function scheduleAutoAnnouncements(){
+    // clear existing timers
+    autoTimers.forEach(id => clearTimeout(id));
+    autoTimers = [];
+
+    if(!activeDateISO || !blocksList.length) return;
+
+    const now = new Date();
+
+    blocksList.forEach((t, idxBlock) => {
+      const classAt = parseBlockDateTime(activeDateISO, t);
+      if(!classAt) return;
+
+      const announceAt = new Date(classAt.getTime() - 3*60*1000);
+      const delay = announceAt.getTime() - now.getTime();
+      if(delay <= 0) return; // too late, don't back-announce
+
+      // cap: only schedule within 36 hours to avoid weird multi-day timers
+      if(delay > 36*60*60*1000) return;
+
+      const id = setTimeout(async () => {
+        try{
+          // First block: call-up only. Subsequent blocks: pick-up + call-up.
+          const timeLabel = fmtTime(t);
+          const text = (idxBlock === 0)
+            ? `Attention. ${timeLabel} classes. Instructors, please call up your first swimmer.`
+            : `Attention. ${timeLabel} classes. Front desk, please pick up swimmers for this time block. Instructors, please call up your next swimmer.`;
+
+          const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode }) });
+          setLastAnnouncementUI(resp.lastAnnouncement);
+        }catch(e){
+          // don't spam alerts for background timers
+          console.error('auto announcement failed', e);
+        }
+      }, delay);
+
+      autoTimers.push(id);
+    });
+  }
+
+  function sortKids(kids){
+    const sortBy = el('sortBy').value;
+    const key = (s) => String(s || '').toLowerCase();
+
+    const arr = [...kids];
+    arr.sort((a,b) => {
+      if(sortBy === 'instructor'){
+        const ia = key(a.instructor_name);
+        const ib = key(b.instructor_name);
+        if(ia !== ib) return ia.localeCompare(ib);
+        return key(a.swimmer_name).localeCompare(key(b.swimmer_name));
+      }
+      return key(a.swimmer_name).localeCompare(key(b.swimmer_name));
+    });
+    return arr;
+  }
+
+  function renderAttendance(kid){
+    const w = document.createElement('div');
+    w.className = 'attWrap';
+
+    const mk = (label, cls, val) => {
+      const b = document.createElement('div');
+      b.className = `attBtn ${cls}`;
+      b.textContent = label;
+      b.classList.toggle('active', kid.attendance === val);
+      b.addEventListener('click', async () => {
+        try{
+          // toggle behavior: clicking active sets to null
+          const next = (kid.attendance === val) ? null : val;
+          await api('/api/attendance', {
+            method:'POST',
+            body: JSON.stringify({
+              start_time: currentBlock,
+              swimmer_name: kid.swimmer_name,
+              attendance: next,
+              device_mode: deviceMode
+            })
+          });
+          kid.attendance = next;
+          loadRoster();
+        }catch(e){
+          alert(e.message);
+        }
+      });
+      return b;
+    };
+
+    w.appendChild(mk('Here','here',1));
+    w.appendChild(mk('Absent','absent',0));
+    w.appendChild(mk('Clear','clear',null));
+    return w;
+  }
+
+  function renderFlags(kid){
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '6px';
+    row.style.alignItems = 'center';
+    
+    // Only show ACTIVE icons to save space
+    if (kid.flag_new) {
+      const icon = document.createElement('img');
+      icon.src = '/public/icons/1st-ever.png';
+      icon.title = 'First time (click to remove)';
+      icon.style.width = '18px';
+      icon.style.height = '18px';
+      icon.style.cursor = 'pointer';
+      icon.addEventListener('click', () => toggleFlag(kid, 'flag_new'));
+      row.appendChild(icon);
+    }
+    
+    if (kid.flag_makeup) {
+      const icon = document.createElement('img');
+      icon.src = '/public/icons/makeup.png';
+      icon.title = 'Makeup (click to remove)';
+      icon.style.width = '18px';
+      icon.style.height = '18px';
+      icon.style.cursor = 'pointer';
+      icon.addEventListener('click', () => toggleFlag(kid, 'flag_makeup'));
+      row.appendChild(icon);
+    }
+    
+    if (kid.flag_policy) {
+      const icon = document.createElement('img');
+      icon.src = '/public/icons/policy.png';
+      icon.title = 'Policy (click to remove)';
+      icon.style.width = '18px';
+      icon.style.height = '18px';
+      icon.style.cursor = 'pointer';
+      icon.addEventListener('click', () => toggleFlag(kid, 'flag_policy'));
+      row.appendChild(icon);
+    }
+    
+    if (kid.flag_owes) {
+      const icon = document.createElement('img');
+      icon.src = '/public/icons/balance.png';
+      icon.title = 'Balance due (click to remove)';
+      icon.style.width = '18px';
+      icon.style.height = '18px';
+      icon.style.cursor = 'pointer';
+      icon.addEventListener('click', () => toggleFlag(kid, 'flag_owes'));
+      row.appendChild(icon);
+    }
+    
+    if (kid.flag_trial) {
+      const icon = document.createElement('img');
+      icon.src = '/public/icons/birthday.png';
+      icon.title = 'Trial (click to remove)';
+      icon.style.width = '18px';
+      icon.style.height = '18px';
+      icon.style.cursor = 'pointer';
+      icon.addEventListener('click', () => toggleFlag(kid, 'flag_trial'));
+      row.appendChild(icon);
+    }
+    
+    // Add edit button
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '✏️';
+    editBtn.title = 'Edit swimmer';
+    editBtn.style.padding = '4px 8px';
+    editBtn.style.fontSize = '14px';
+    editBtn.style.minHeight = '28px';
+    editBtn.style.cursor = 'pointer';
+    editBtn.addEventListener('click', () => openEditModal(kid));
+    row.appendChild(editBtn);
+    
+    return row;
+  }
+
+  async function toggleFlag(kid, flagKey) {
+    try {
+      const flags = {
+        flag_new: !!kid.flag_new,
+        flag_makeup: !!kid.flag_makeup,
+        flag_policy: !!kid.flag_policy,
+        flag_owes: !!kid.flag_owes,
+        flag_trial: !!kid.flag_trial
+      };
+      flags[flagKey] = !flags[flagKey];
+      
+      const resp = await api('/api/update-flags', {
+        method:'POST',
+        body: JSON.stringify({
+          start_time: currentBlock,
+          swimmer_name: kid.swimmer_name,
+          device_mode: deviceMode,
+          flags
+        })
+      });
+      
+      kid.flag_new = resp.flags.flag_new;
+      kid.flag_makeup = resp.flags.flag_makeup;
+      kid.flag_policy = resp.flags.flag_policy;
+      kid.flag_owes = resp.flags.flag_owes;
+      kid.flag_trial = resp.flags.flag_trial;
+      loadRoster();
+    } catch(e) {
+      alert(e.message);
+    }
+  }
+
+  function openEditModal(kid) {
+    // TODO: Implement edit modal
+    alert(`Edit ${kid.swimmer_name}\n\nEdit functionality coming soon!\n\nFor now, you can:\n- Click icons to remove them\n- Use zone button to change zone\n- Use attendance buttons`);
+  }
+
+  function renderZoneChip(kid){
+    const z = kid.zone ? `Zone ${kid.zone}` : '—';
+    const chip = document.createElement('div');
+    chip.className = 'zone' + (deviceMode === 'deck' ? ' locked' : '');
+    chip.textContent = z;
+    chip.title = (deviceMode === 'deck') ? 'Deck mode: requires manager code' : 'Click to change zone';
+    chip.addEventListener('click', () => {
+      zoneTarget = kid;
+      el('zoneWho').textContent = kid.swimmer_name;
+      el('zoneSelect').value = String(kid.zone || 1);
+      el('managerCode').value = '';
+      syncDeviceUI();
+      showModal('zoneModal', true);
+    });
+    return chip;
+  }
+
+  async function loadRoster(){
+    if(!currentBlock){
+      el('roster').innerHTML = '';
+      el('rosterMeta').textContent = '';
+      return;
+    }
+
+    const data = await api(`/api/blocks/${encodeURIComponent(currentBlock)}`);
+    const kids = sortKids(data.kids || []);
+    el('rosterMeta').textContent = `(${kids.length} swimmers • ${fmtTime(currentBlock)})`;
+
+    const tbody = el('roster');
+    tbody.innerHTML = '';
+
+    for(const kid of kids){
+      const tr = document.createElement('tr');
+
+      // Attendance
+      const tdAtt = document.createElement('td');
+      tdAtt.appendChild(renderAttendance(kid));
+      tr.appendChild(tdAtt);
+
+      // Swimmer (with badges + flags)
+      const tdName = document.createElement('td');
+      const nameLine = document.createElement('div');
+      nameLine.className = 'level';
+      nameLine.textContent = kid.swimmer_name || '—';
+
+      if(kid.is_addon){
+        const b = document.createElement('span');
+        b.className = 'badge addon';
+        b.textContent = 'ADD-ON';
+        nameLine.appendChild(b);
+      }
+
+      if(kid.zone_overridden){
+        const b = document.createElement('span');
+        b.className = 'badge over';
+        b.textContent = 'OVERRIDE';
+        nameLine.appendChild(b);
+      }
+
+      tdName.appendChild(nameLine);
+      tdName.appendChild(renderFlags(kid));
+      tr.appendChild(tdName);
+
+      // Age
+      const tdAge = document.createElement('td');
+      tdAge.className = 'nowrap';
+      tdAge.textContent = kid.age_text || '—';
+      tr.appendChild(tdAge);
+
+      // Type / Level
+      const tl = parseTypeLevel(kid.program);
+      const tdType = document.createElement('td');
+      tdType.textContent = tl.type;
+      tr.appendChild(tdType);
+
+      const tdLevel = document.createElement('td');
+      tdLevel.textContent = tl.level;
+      tr.appendChild(tdLevel);
+
+      // Instructor
+      const tdInst = document.createElement('td');
+      tdInst.textContent = kid.instructor_name || '—';
+      tr.appendChild(tdInst);
+
+      // Zone
+      const tdZone = document.createElement('td');
+      tdZone.appendChild(renderZoneChip(kid));
+      tr.appendChild(tdZone);
+
+      // Action
+      const tdAction = document.createElement('td');
+
+      const callBtn = document.createElement('button');
+      callBtn.className = 'secondary';
+      callBtn.textContent = 'Call parent';
+      callBtn.addEventListener('click', async () => {
+        try{
+          await api('/api/call-parent', {
+            method:'POST',
+            body: JSON.stringify({ start_time: currentBlock, swimmer_name: kid.swimmer_name, device_mode: deviceMode })
+          });
+        }catch(e){
+          alert(e.message);
+        }
+      });
+      tdAction.appendChild(callBtn);
+
+      if(kid.is_addon){
+        const rm = document.createElement('button');
+        rm.className = 'danger';
+        rm.style.marginLeft = '8px';
+        rm.textContent = 'Remove';
+        rm.addEventListener('click', async () => {
+          if(!confirm(`Remove add-on swimmer: ${kid.swimmer_name}?`)) return;
+          try{
+            await api('/api/remove-addon', {
+              method:'POST',
+              body: JSON.stringify({ start_time: currentBlock, swimmer_name: kid.swimmer_name, device_mode: deviceMode })
+            });
+            loadRoster();
+          }catch(e){
+            alert(e.message);
+          }
+        });
+        tdAction.appendChild(rm);
+      }
+
+      tr.appendChild(tdAction);
+
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ---- Announcements ----
+  async function speakTyped(text){
+    const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode }) });
+    setLastAnnouncementUI(resp.lastAnnouncement);
+  }
+
+  // ---- Wire up UI ----
+  el('tabRoster').addEventListener('click', () => {
+    el('tabRoster').classList.add('active');
+    el('tabAnnouncements').classList.remove('active');
+    el('panelRoster').classList.remove('hidden');
+    el('panelAnnouncements').classList.add('hidden');
+  });
+
+  el('tabAnnouncements').addEventListener('click', () => {
+    el('tabAnnouncements').classList.add('active');
+    el('tabRoster').classList.remove('active');
+    el('panelRoster').classList.add('hidden');
+    el('panelAnnouncements').classList.remove('hidden');
+  });
+
+  el('settingsBtn').addEventListener('click', () => {
+    syncDeviceUI();
+    showModal('settingsModal', true);
+  });
+  el('settingsClose').addEventListener('click', () => showModal('settingsModal', false));
+  el('settingsModal').addEventListener('click', (e) => { if(e.target === el('settingsModal')) showModal('settingsModal', false); });
+
+  el('settingsSave').addEventListener('click', () => {
+    deviceMode = el('deviceModeSelect').value;
+    localStorage.setItem('deviceMode', deviceMode);
+    syncDeviceUI();
+    showModal('settingsModal', false);
+    loadRoster();
+  });
+
+  el('importBtn').addEventListener('click', async () => {
+    try{
+      el('importBtn').disabled = true;
+      await api('/api/import-today', { method:'POST', body: JSON.stringify({ device_mode: deviceMode }) });
+      await loadStatus();
+      await loadBlocks();
+    }catch(e){
+      alert(e.message);
+    }finally{
+      el('importBtn').disabled = false;
+    }
+  });
+
+  // HTML Upload handlers
+  el('uploadHtmlBtn').addEventListener('click', () => {
+    el('htmlFileInput').click();
+  });
+
+  el('htmlFileInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+      el('uploadHtmlBtn').disabled = true;
+      el('uploadHtmlBtn').textContent = 'Uploading...';
+      
+      const text = await file.text();
+      const html_base64 = btoa(unescape(encodeURIComponent(text)));
+      
+      const result = await api('/api/upload-html', {
+        method: 'POST',
+        body: JSON.stringify({
+          html_base64: html_base64,
+          filename: file.name,
+          location_id: currentLocation?.id || 1
+        })
+      });
+      
+      if (result.ok) {
+        alert(`Success! Imported ${result.count} swimmers`);
+        await loadStatus();
+        await loadBlocks();
+      } else {
+        alert(`Error: ${result.error}`);
+      }
+    } catch (e) {
+      alert(`Upload failed: ${e.message}`);
+    } finally {
+      el('uploadHtmlBtn').disabled = false;
+      el('uploadHtmlBtn').textContent = 'Upload HTML';
+      el('htmlFileInput').value = '';
+    }
+  });
+
+  el('exportJsonBtn').addEventListener('click', () => {
+    window.location.href = '/api/export-json';
+  });
+
+  el('importJsonBtn').addEventListener('click', () => el('jsonFileInput').click());
+  el('jsonFileInput').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try{
+      const txt = await f.text();
+      const payload = JSON.parse(txt);
+      await api('/api/import-json', { method:'POST', body: JSON.stringify(payload) });
+      await loadStatus();
+      await loadBlocks();
+      await loadRoster();
+      toast('JSON import complete');
+    }catch(err){
+      alert('Import failed: ' + (err.message || err));
+    }finally{
+      e.target.value = '';
+    }
+  });
+
+  el('setDateBtn').addEventListener('click', async () => {
+    const d = el('rosterDate').value;
+    if (!d) return;
+    try{
+      await api('/api/set-active-date', { method:'POST', body: JSON.stringify({date:d}) });
+      await loadStatus();
+      await loadBlocks();
+      await loadRoster();
+      toast('Roster date updated');
+    }catch(err){
+      alert('Set date failed: ' + (err.message || err));
+    }
+  });
+
+  el('sortBy').addEventListener('change', () => loadRoster());
+
+  // Add-on modal
+  el('addSwimmerBtn').addEventListener('click', () => {
+    if(!currentBlock) return;
+    el('addName').value = '';
+    el('addAge').value = '';
+    el('addInstructor').value = '';
+    el('addZone').value = '';
+    el('addProgram').value = 'GROUP: Beginner 1';
+    el('addTime').value = fmtTime(currentBlock);
+    showModal('addModal', true);
+  });
+  el('addCancel').addEventListener('click', () => showModal('addModal', false));
+  el('addModal').addEventListener('click', (e) => { if(e.target === el('addModal')) showModal('addModal', false); });
+
+  el('addSave').addEventListener('click', async () => {
+    try{
+      const swimmer_name = el('addName').value.trim();
+      if(!swimmer_name){
+        alert('Swimmer name is required');
+        return;
+      }
+      await api('/api/add-swimmer', {
+        method:'POST',
+        body: JSON.stringify({
+          start_time: currentBlock,
+          swimmer_name,
+          age_text: el('addAge').value.trim() || null,
+          program: el('addProgram').value,
+          instructor_name: el('addInstructor').value.trim() || null,
+          zone: el('addZone').value || null,
+          device_mode: deviceMode
+        })
+      });
+      showModal('addModal', false);
+      loadRoster();
+    }catch(e){
+      alert(e.message);
+    }
+  });
+
+  // Zone modal
+  el('zoneCancel').addEventListener('click', () => showModal('zoneModal', false));
+  el('zoneModal').addEventListener('click', (e) => { if(e.target === el('zoneModal')) showModal('zoneModal', false); });
+
+  el('zoneSave').addEventListener('click', async () => {
+    if(!zoneTarget) return;
+    try{
+      const payload = {
+        start_time: currentBlock,
+        swimmer_name: zoneTarget.swimmer_name,
+        new_zone: el('zoneSelect').value,
+        device_mode: deviceMode,
+        manager_code: (deviceMode === 'deck') ? el('managerCode').value : undefined
+      };
+      await api('/api/update-zone', { method:'POST', body: JSON.stringify(payload) });
+      showModal('zoneModal', false);
+      loadRoster();
+    }catch(e){
+      alert(e.message);
+    }
+  });
+
+  // Announcements
+  el('speakBtn').addEventListener('click', async () => {
+    try{
+      const text = el('customText').value.trim();
+      await speakTyped(text);
+    }catch(e){
+      alert(e.message);
+    }
+  });
+
+  el('clearBtn').addEventListener('click', () => { el('customText').value = ''; });
+
+  el('repeatBtn').addEventListener('click', async () => {
+    try{
+      const resp = await api('/api/repeat-last', { method:'POST', body: JSON.stringify({ device_mode: deviceMode }) });
+      setLastAnnouncementUI(resp.lastAnnouncement);
+    }catch(e){
+      alert(e.message);
+    }
+  });
+
+  el('forceTimeBtn').addEventListener('click', async () => {
+    try{
+      if(!currentBlock){
+        alert('Select a time block first');
+        return;
+      }
+      const resp = await api('/api/force-time-announcement', {
+        method:'POST',
+        body: JSON.stringify({ start_time: currentBlock, device_mode: deviceMode })
+      });
+      setLastAnnouncementUI(resp.lastAnnouncement);
+    }catch(e){
+      alert(e.message);
+    }
+  });
+
+  el('presetFrontDeck').addEventListener('click', () => {
+    el('customText').value = 'Front desk to deck. Please call the next swimmer.';
+  });
+  el('presetCodeGreen').addEventListener('click', () => {
+    el('customText').value = 'Code Green. Please clear the pool area and wait for instructions.';
+  });
+  el('presetCodeBrown').addEventListener('click', () => {
+    el('customText').value = 'Code Brown. Please clear the pool area immediately.';
+  });
+
+  // Boot
+  (async function init(){
+    try{
+      syncDeviceUI();
+      await loadLocations();
+      await loadStatus();
+      await loadBlocks();
+    }catch(e){
+      setStatus(e.message || 'Failed to load', 'warn');
+    }
+  })();
+</script>
+</body>
+</html>

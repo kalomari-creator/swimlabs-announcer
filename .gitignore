@@ -1,0 +1,34 @@
+# Node modules
+node_modules/
+package-lock.json
+
+# Database (contains sensitive data)
+data/
+database/
+*.db
+
+# Generated files
+tts_out/
+exports/
+schedules/*/
+rolls/
+
+# Backups
+*backup*.html
+*backup*.js
+*-v4.0-*
+
+# Environment variables (if you add them later)
+.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

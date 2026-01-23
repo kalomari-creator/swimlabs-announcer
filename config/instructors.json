@@ -1,0 +1,12 @@
+{
+  "instructors": [
+    "John Smith",
+    "Sarah Johnson",
+    "Mike Chen",
+    "Emma Davis",
+    "Alex Rodriguez",
+    "Lisa Anderson"
+  ],
+  "last_updated": "2026-01-23T00:00:00.000Z",
+  "notes": "Edit this file to add/remove instructors. Changes apply immediately (hot reload)."
+}

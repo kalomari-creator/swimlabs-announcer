@@ -1,0 +1,23 @@
+[Unit]
+Description=SwimLabs Announcer - Multi-Location Management System
+After=network.target
+
+[Service]
+Type=simple
+User=swimlabs-server
+WorkingDirectory=/home/swimlabs-server/Desktop/announcer
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Restart on failure
+RestartSec=10
+KillMode=process
+
+# Environment
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

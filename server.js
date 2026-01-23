@@ -1,0 +1,1487 @@
+const express = require("express");
+const path = require("path");
+const fs = require("fs");
+const Database = require("better-sqlite3");
+const { spawn } = require("child_process");
+const crypto = require("crypto");
+const cheerio = require('cheerio');
+
+const app = express();
+const PORT = 5055;
+
+// -------------------- CONFIG --------------------
+const MANAGER_CODE = process.env.MANAGER_CODE || "4729";
+const MAX_FAILS = 3;
+const LOCKOUT_MS = 2 * 60 * 1000;
+
+// -------------------- Paths --------------------
+const dbPath = path.join(__dirname, "data", "app.db");
+if (!fs.existsSync(path.dirname(dbPath))) fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+const db = new Database(dbPath);
+
+const SCHEDULE_DIR = path.join(__dirname, "schedules");
+const EXPORT_DIR = path.join(__dirname, "exports");
+
+// Piper TTS
+let PIPER_BIN = process.env.PIPER_BIN_PATH || path.join(__dirname, "bin", "piper", "piper");
+// Support layouts where bin/piper/piper is a directory containing the piper binary
+try {
+  if (fs.existsSync(PIPER_BIN) && fs.statSync(PIPER_BIN).isDirectory()) {
+    const candidate = path.join(PIPER_BIN, "piper");
+    if (fs.existsSync(candidate)) PIPER_BIN = candidate;
+  }
+} catch (e) { /* ignore */ }
+
+const VOICE_MODEL =
+  process.env.VOICE_MODEL_PATH || path.join(__dirname, "tts", "en_US-lessac-medium.onnx");
+
+const TTS_OUT_DIR = path.join(__dirname, "tts_out");
+const TTS_OUT_WAV = path.join(TTS_OUT_DIR, "last.wav");
+const PING_WAV = path.join(TTS_OUT_DIR, "ping.wav");
+
+// -------------------- Middleware --------------------
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve index.html from project root + any assets in /public
+app.use("/public", express.static(path.join(__dirname, "public")));
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+
+if (!fs.existsSync(TTS_OUT_DIR)) fs.mkdirSync(TTS_OUT_DIR, { recursive: true });
+if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
+if (!fs.existsSync(SCHEDULE_DIR)) fs.mkdirSync(SCHEDULE_DIR, { recursive: true });
+
+// Create location-specific directories
+const LOCATION_CODES = ['SLW', 'SLX', 'SSR', 'SSM', 'SST', 'SSS'];
+LOCATION_CODES.forEach(code => {
+  const schedDir = path.join(SCHEDULE_DIR, code);
+  const expDir = path.join(EXPORT_DIR, code);
+  if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
+  if (!fs.existsSync(expDir)) fs.mkdirSync(expDir, { recursive: true });
+});
+
+// -------------------- DB schema / migration --------------------
+function ensureSchema() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS roster (
+      date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      swimmer_name TEXT NOT NULL,
+      instructor_name TEXT,
+      zone INTEGER,
+      program TEXT,
+      age_text TEXT,
+
+      attendance INTEGER DEFAULT NULL,
+      attendance_at TEXT,
+
+      is_addon INTEGER DEFAULT 0,
+
+      flag_new INTEGER DEFAULT 0,
+      flag_makeup INTEGER DEFAULT 0,
+      flag_policy INTEGER DEFAULT 0,
+      flag_owes INTEGER DEFAULT 0,
+      flag_trial INTEGER DEFAULT 0,
+
+      created_at TEXT,
+      updated_at TEXT,
+
+      zone_overridden INTEGER DEFAULT 0,
+      zone_override_at TEXT,
+      zone_override_by TEXT,
+
+      PRIMARY KEY(date, start_time, swimmer_name)
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      at TEXT NOT NULL,
+      ip TEXT,
+      device_mode TEXT,
+      action TEXT NOT NULL,
+      date TEXT,
+      start_time TEXT,
+      swimmer_name TEXT,
+      details TEXT
+    );
+  `);
+  db.exec(`CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT);`);
+
+  // Locations table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS locations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      has_announcements INTEGER DEFAULT 0,
+      brand TEXT DEFAULT 'swimlabs',
+      active INTEGER DEFAULT 1
+    );
+  `);
+
+  // Insert default locations if table is empty
+  const locCount = db.prepare(`SELECT COUNT(*) as c FROM locations`).get();
+  if (locCount.c === 0) {
+    const insertLoc = db.prepare(`INSERT INTO locations (code, name, has_announcements, brand) VALUES (?, ?, ?, ?)`);
+    insertLoc.run('SLW', 'SwimLabs Westchester', 1, 'swimlabs');
+    insertLoc.run('SLX', 'SwimLabs Woodlands', 0, 'swimlabs');
+    insertLoc.run('SSR', 'SafeSplash Riverdale', 0, 'safesplash');
+    insertLoc.run('SSM', 'SafeSplash Santa Monica', 0, 'safesplash');
+    insertLoc.run('SST', 'SafeSplash Torrance', 0, 'safesplash');
+    insertLoc.run('SSS', 'SafeSplash Summerlin', 0, 'safesplash');
+  }
+
+  const cols = db.prepare(`PRAGMA table_info(roster)`).all().map((r) => r.name);
+  const addIfMissing = (name, ddl) => { if (!cols.includes(name)) db.exec(ddl); };
+
+  addIfMissing("program", `ALTER TABLE roster ADD COLUMN program TEXT;`);
+  addIfMissing("age_text", `ALTER TABLE roster ADD COLUMN age_text TEXT;`);
+  addIfMissing("attendance", `ALTER TABLE roster ADD COLUMN attendance INTEGER DEFAULT NULL;`);
+  addIfMissing("attendance_at", `ALTER TABLE roster ADD COLUMN attendance_at TEXT;`);
+  addIfMissing("is_addon", `ALTER TABLE roster ADD COLUMN is_addon INTEGER DEFAULT 0;`);
+
+  addIfMissing("flag_new", `ALTER TABLE roster ADD COLUMN flag_new INTEGER DEFAULT 0;`);
+  addIfMissing("flag_makeup", `ALTER TABLE roster ADD COLUMN flag_makeup INTEGER DEFAULT 0;`);
+  addIfMissing("flag_policy", `ALTER TABLE roster ADD COLUMN flag_policy INTEGER DEFAULT 0;`);
+  addIfMissing("flag_owes", `ALTER TABLE roster ADD COLUMN flag_owes INTEGER DEFAULT 0;`);
+  addIfMissing("flag_trial", `ALTER TABLE roster ADD COLUMN flag_trial INTEGER DEFAULT 0;`);
+
+  addIfMissing("created_at", `ALTER TABLE roster ADD COLUMN created_at TEXT;`);
+  addIfMissing("updated_at", `ALTER TABLE roster ADD COLUMN updated_at TEXT;`);
+
+  addIfMissing("zone_overridden", `ALTER TABLE roster ADD COLUMN zone_overridden INTEGER DEFAULT 0;`);
+  addIfMissing("zone_override_at", `ALTER TABLE roster ADD COLUMN zone_override_at TEXT;`);
+  addIfMissing("zone_override_by", `ALTER TABLE roster ADD COLUMN zone_override_by TEXT;`);
+  addIfMissing("location_id", `ALTER TABLE roster ADD COLUMN location_id INTEGER DEFAULT 1;`);
+
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_key ON roster(date, start_time, swimmer_name);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);`);
+}
+ensureSchema();
+
+// -------------------- Lockout per IP --------------------
+const ipAuthState = new Map();
+
+function nowISO() { return new Date().toISOString(); }
+
+function getIP(req) {
+  const xf = req.headers["x-forwarded-for"];
+  if (xf) return String(xf).split(",")[0].trim();
+  return req.socket?.remoteAddress || "unknown";
+}
+
+function sha(s) {
+  return crypto.createHash("sha256").update(String(s)).digest("hex");
+}
+
+function isLocked(ip) {
+  const st = ipAuthState.get(ip);
+  if (!st) return false;
+  if (!st.lockedUntil) return false;
+  return Date.now() < st.lockedUntil;
+}
+
+function recordFail(ip) {
+  const st = ipAuthState.get(ip) || { fails: 0, lockedUntil: 0 };
+  st.fails += 1;
+  if (st.fails >= MAX_FAILS) {
+    st.lockedUntil = Date.now() + LOCKOUT_MS;
+    st.fails = 0;
+  }
+  ipAuthState.set(ip, st);
+  return st;
+}
+
+function clearFail(ip) {
+  ipAuthState.set(ip, { fails: 0, lockedUntil: 0 });
+}
+
+function verifyManagerCode(input) {
+  return sha(input || "") === sha(MANAGER_CODE);
+}
+
+function audit(req, action, payload = {}) {
+  const ip = getIP(req);
+  const device_mode = payload.device_mode || null;
+  const details = payload.details ? JSON.stringify(payload.details) : null;
+
+  db.prepare(`
+    INSERT INTO audit_log(at, ip, device_mode, action, date, start_time, swimmer_name, details)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    nowISO(),
+    ip,
+    device_mode,
+    action,
+    payload.date || null,
+    payload.start_time || null,
+    payload.swimmer_name || null,
+    details
+  );
+}
+
+// -------------------- Helpers --------------------
+function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+// ---- Active roster date (persisted) ----
+function getActiveDate() {
+  try {
+    const row = db.prepare(`SELECT value FROM app_state WHERE key = ?`).get("activeDate");
+    const v = row?.value ? String(row.value) : null;
+    if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  } catch (_) {}
+  return null;
+}
+
+function setActiveDate(date) {
+  const d = String(date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+  db.prepare(`
+    INSERT INTO app_state(key, value) VALUES(?, ?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value
+  `).run("activeDate", d);
+}
+
+function activeOrToday() {
+  return getActiveDate() || todayISO();
+}
+
+// ---- Date parsing helpers ----
+function parseDateFromFilename(filename) {
+  const base = path.basename(String(filename || "")).trim();
+  if (!base) return null;
+
+  // YYYY-MM-DD
+  let m = base.match(/(\d{4})[-_\.](\d{2})[-_\.](\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+  // MM-DD-YYYY
+  m = base.match(/(\d{2})[-_\.](\d{2})[-_\.](\d{4})/);
+  if (m) return `${m[3]}-${m[1]}-${m[2]}`;
+
+  return null;
+}
+
+function parseDateFromText(text) {
+  const t = String(text || "");
+
+  // YYYY-MM-DD
+  let m = t.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+  // MM/DD/YYYY
+  m = t.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  if (m) {
+    const mm = String(m[1]).padStart(2, "0");
+    const dd = String(m[2]).padStart(2, "0");
+    return `${m[3]}-${mm}-${dd}`;
+  }
+
+  return null;
+}
+
+function parseDateFromHTML(html) {
+  const stripped = String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ");
+  return parseDateFromText(stripped);
+}
+
+
+function todayRollSheetFilename() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `Roll_Sheets_${mm}-${dd}-${yyyy}.pdf`;
+}
+
+function normalizeWhitespaceLines(text) {
+  return text
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+function normalizeTimeTo24h(raw) {
+  const m = raw.trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (!m) return null;
+
+  let hh = parseInt(m[1], 10);
+  const mm = m[2] ? parseInt(m[2], 10) : 0;
+  const ap = m[3];
+
+  if (ap === "pm" && hh !== 12) hh += 12;
+  if (ap === "am" && hh === 12) hh = 0;
+
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+function formatTime12h(t) {
+  const [hh, mm] = t.split(":").map(Number);
+  const ampm = hh >= 12 ? "PM" : "AM";
+  const h12 = ((hh + 11) % 12) + 1;
+  if (mm === 0) return `${h12} ${ampm}`;
+  return `${h12}:${String(mm).padStart(2, "0")} ${ampm}`;
+}
+
+function lastFirstToFirstLast(s) {
+  const t = String(s || "").replace(/\s+/g, " ").trim();
+  const parts = t.split(",");
+  if (parts.length >= 2) {
+    const last = parts[0].trim();
+    const first = parts.slice(1).join(",").trim();
+    return `${first} ${last}`.replace(/\s+/g, " ").trim();
+  }
+  return t;
+}
+
+function cleanAgeText(s) {
+  const t = String(s || "").replace(/\s+/g, " ").trim();
+  const m = t.match(/^(\d+)\s*y(?:\s*(\d+)\s*m)?/i);
+  if (m) {
+    const y = parseInt(m[1], 10);
+    const mo = m[2] ? parseInt(m[2], 10) : 0;
+    if (mo === 0) return `${y}y`;
+    return `${y}y ${mo}m`;
+  }
+  return t;
+}
+
+function normalizeProgramNonGroup(rawProgram) {
+  const p = String(rawProgram || "").replace(/\s+/g, " ").trim();
+  if (!p) return null;
+
+  const up = p.toUpperCase();
+  if (up.startsWith("PRIVATE")) return "Private";
+  if (up.startsWith("SEMI-PRIVATE") || up.startsWith("SEMI PRIVATE")) return "Semi-Private";
+  if (up.startsWith("PARENTTOT") || up.startsWith("PARENT TOT")) return "ParentTot";
+  if (up.startsWith("TODDLER TRANSITION") || up.startsWith("TODDLER")) return "Toddler Transition";
+  if (up.startsWith("ADULT")) return "Adult";
+  return p;
+}
+
+function detectFlags(contextText) {
+  const s = String(contextText || "");
+  const up = s.toUpperCase();
+
+  const hasToken = (re) => re.test(up);
+
+  const flag_new =
+    hasToken(/⭐|★/) ||
+    hasToken(/\bFIRST\s*DAY\b/) ||
+    hasToken(/\bFIRST\s*TIME\b/) ||
+    hasToken(/\bNEW\b/) ||
+    hasToken(/\bFD\b/) ||
+    hasToken(/\bFIRST\b/);
+
+  const flag_makeup =
+    hasToken(/\bMAKE\s*UP\b/) ||
+    hasToken(/\bMAKEUP\b/) ||
+    hasToken(/\bMKUP\b/) ||
+    hasToken(/\bMU\b/) ||
+    hasToken(/\bM\/U\b/) ||
+    hasToken(/\bMUA\b/);
+
+  const flag_policy =
+    hasToken(/\bMISSING\s*WAIVER\b/) ||
+    hasToken(/\bMISSING\s*POLICY\b/) ||
+    hasToken(/\bWAIVER\b/) ||
+    hasToken(/\bPOLICY\b/) ||
+    hasToken(/\bMP\b/);
+
+  const flag_owes =
+    hasToken(/\bOWES\b/) ||
+    hasToken(/\bOWE\b/) ||
+    hasToken(/\bUNPAID\b/) ||
+    hasToken(/\bPAST\s*DUE\b/) ||
+    hasToken(/\bBALANCE\b/) ||
+    hasToken(/\bDUE\b/) ||
+    hasToken(/\$/);
+
+  const flag_trial =
+    hasToken(/\bTRIAL\b/) ||
+    hasToken(/\bTR\b/) ||
+    hasToken(/\bTR\.\b/) ||
+    hasToken(/\bTRIAL\s*CLASS\b/);
+
+  return {
+    flag_new: flag_new ? 1 : 0,
+    flag_makeup: flag_makeup ? 1 : 0,
+    flag_policy: flag_policy ? 1 : 0,
+    flag_owes: flag_owes ? 1 : 0,
+    flag_trial: flag_trial ? 1 : 0,
+  };
+}
+
+// -------------------- PDF extraction --------------------
+function pdftotextToString(pdfPath) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("pdftotext", ["-layout", pdfPath, "-"]);
+    let out = "";
+    let err = "";
+
+    proc.stdout.on("data", (d) => (out += d.toString("utf8")));
+    proc.stderr.on("data", (d) => (err += d.toString("utf8")));
+    proc.on("error", (e) => reject(e));
+    proc.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`pdftotext failed (code ${code}): ${err || "unknown error"}`));
+      resolve(out);
+    });
+  });
+}
+
+async function getTodayPdfText() {
+  const filename = todayRollSheetFilename();
+  const fullPath = path.join(SCHEDULE_DIR, filename);
+
+  if (!fs.existsSync(fullPath)) {
+    return { ok: false, error: "PDF not found", filename, fullPath };
+  }
+
+  try {
+    const text = await pdftotextToString(fullPath);
+    return { ok: true, method: "pdftotext", filename, fullPath, text };
+  } catch (e) {
+    return {
+      ok: false,
+      error: "Failed to read PDF via pdftotext",
+      filename,
+      fullPath,
+      details: String(e?.stack || e?.message || e),
+    };
+  }
+}
+
+// -------------------- Parse roster lines --------------------
+function parseRosterFromLines(lines) {
+  const rows = [];
+
+  let currentStartTime = null;
+  let currentInstructor = null;
+  let currentZone = null;
+  let currentProgram = null;
+
+  const isHeaderOrNoise = (s) => {
+    if (!s) return true;
+    if (s.startsWith("Student Medical")) return true;
+    if (s.startsWith("CLA-")) return true;
+    if (s.includes("Page ") && s.includes(" of ")) return true;
+    return false;
+  };
+
+  const isAgeLine = (s) => {
+    if (/^\d+\s*(y|m)\b/i.test(s)) return true;
+    if (s.includes("•")) return true;
+    if (s.toLowerCase().includes("allerg")) return true;
+    return false;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.startsWith("Schedule:")) {
+      const timeMatch = line.match(/Schedule:\s+\w+\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i);
+      const instMatch = line.match(/Instructors:\s+(.*?)\s+Program:/i);
+      const zoneMatch = line.match(/Zone:\s+Zone\s+([1-4])/i);
+      const programMatch = line.match(/Program:\s+(.*?)\s+Zone:/i);
+
+      currentStartTime = timeMatch ? normalizeTimeTo24h(timeMatch[1]) : null;
+
+      const instRaw = instMatch ? instMatch[1] : null;
+      currentInstructor = instRaw ? lastFirstToFirstLast(instRaw) : null;
+
+      currentZone = zoneMatch ? parseInt(zoneMatch[1], 10) : null;
+
+      const rawProgram = programMatch ? String(programMatch[1]).trim() : null;
+      const upProg = String(rawProgram || "").toUpperCase();
+
+      if (upProg === "GROUP") {
+        let found = null;
+        for (let back = 1; back <= 16; back++) {
+          const prev = String(lines[i - back] || "").trim();
+          const m = prev.match(
+            /^GROUP:\s*(.+?)\s+on\s+\w{3}\s*:\s*\d{1,2}(?::\d{2})?\s*-\s*\d{1,2}(?::\d{2})?\s+with\s+/i
+          );
+          if (m) {
+            found = `GROUP: ${m[1].trim()}`;
+            break;
+          }
+        }
+        currentProgram = found || "GROUP";
+      } else {
+        currentProgram = normalizeProgramNonGroup(rawProgram);
+      }
+
+      continue;
+    }
+
+    if (!currentStartTime || !currentInstructor || !currentZone) continue;
+    if (isHeaderOrNoise(line)) continue;
+    if (/^\d+$/.test(line)) continue;
+    if (isAgeLine(line)) continue;
+
+    const upper = line.toUpperCase();
+    if (
+      upper.startsWith("GROUP:") ||
+      upper.startsWith("PRIVATE:") ||
+      upper.startsWith("SEMI-PRIVATE:") ||
+      upper.startsWith("SEMI PRIVATE:") ||
+      upper.startsWith("ADULT:") ||
+      upper.startsWith("PARENTTOT:") ||
+      upper.startsWith("PARENT TOT:") ||
+      upper.startsWith("TODDLER") ||
+      upper.startsWith("15% OFF:")
+    ) {
+      continue;
+    }
+
+    let swimmerName = null;
+    let rawNameLine = line;
+
+    if (line.endsWith(",")) {
+      const next = lines[i + 1] || "";
+      const m = next.match(/^\d+\s+(.+)$/);
+      if (m) {
+        swimmerName = `${line} ${m[1]}`.replace(/\s+/g, " ").trim();
+        i += 1;
+      }
+    }
+
+    if (!swimmerName) {
+      const next = lines[i + 1] || "";
+      if (/^\d+$/.test(next)) {
+        swimmerName = line.trim();
+        i += 1;
+      }
+    }
+
+    if (!swimmerName) {
+      const m = line.match(/^\d+\s+(.+)$/);
+      if (m) swimmerName = m[1].trim();
+    }
+
+    if (swimmerName) {
+      let ageText = null;
+      const nextLine = lines[i + 1] || "";
+      if (isAgeLine(nextLine)) ageText = cleanAgeText(nextLine);
+
+      const ctx = [
+        rawNameLine,
+        lines[i + 1] || "",
+        lines[i + 2] || "",
+        lines[i - 1] || "",
+        lines[i - 2] || "",
+      ].join("  ");
+
+      const flags = detectFlags(ctx);
+
+      rows.push({
+        start_time: currentStartTime,
+        swimmer_name: lastFirstToFirstLast(swimmerName.replace(/[★⭐*]/g, "").trim()),
+        instructor_name: currentInstructor,
+        zone: currentZone,
+        program: currentProgram,
+        age_text: ageText,
+        ...flags
+      });
+    }
+  }
+
+  return rows;
+}
+
+// -------------------- Audio helpers --------------------
+function playWav(wavPath) {
+  return new Promise((resolve, reject) => {
+    const player = spawn("aplay", [wavPath]);
+    player.on("error", reject);
+    player.on("close", () => resolve());
+  });
+}
+
+function playPing() {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(PING_WAV)) return resolve();
+    playWav(PING_WAV).then(resolve).catch(() => resolve());
+  });
+}
+
+let speakQueue = Promise.resolve();
+let lastAnnouncement = { text: null, at: null };
+
+function speakWithPiper(text) {
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(PIPER_BIN)) return reject(new Error(`Piper binary not found: ${PIPER_BIN}`));
+    if (!fs.existsSync(VOICE_MODEL)) return reject(new Error(`Voice model not found: ${VOICE_MODEL}`));
+
+    const p = spawn(PIPER_BIN, ["--model", VOICE_MODEL, "--output_file", TTS_OUT_WAV]);
+    let err = "";
+
+    p.stderr.on("data", (d) => (err += d.toString("utf8")));
+    p.on("error", (e) => reject(e));
+
+    p.stdin.write(text);
+    p.stdin.end();
+
+    p.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`piper failed (${code}): ${err || "unknown error"}`));
+      playWav(TTS_OUT_WAV).then(resolve).catch(reject);
+    });
+  });
+}
+
+function speakAnnouncement(text, opts = {}) {
+  const { ping = true } = opts;
+  const cleaned = String(text || "").replace(/\s+/g, " ").trim();
+  if (!cleaned) return Promise.resolve({ ok: false, error: "empty text" });
+
+  speakQueue = speakQueue.then(async () => {
+    lastAnnouncement = { text: cleaned, at: nowISO() };
+    if (ping) {
+      await playPing();
+      await new Promise((r) => setTimeout(r, 350));
+    }
+    await speakWithPiper(cleaned);
+  });
+
+  return speakQueue.then(() => ({ ok: true, text: cleaned, at: lastAnnouncement.at }));
+}
+
+// -------------------- API --------------------
+app.get("/api/status", (req, res) => {
+  const activeDate = activeOrToday();
+
+  const expectedPdf = `Roll_Sheets_${activeDate.slice(5,7)}-${activeDate.slice(8,10)}-${activeDate.slice(0,4)}.pdf`;
+  const pdfPath = path.join(SCHEDULE_DIR, expectedPdf);
+
+  const htmlPath = path.join(SCHEDULE_DIR, "Roll Sheets.html");
+
+  const pdfExists = fs.existsSync(pdfPath);
+  const htmlExists = fs.existsSync(htmlPath);
+
+  res.json({
+    ok: true,
+    todayISO: todayISO(),
+    activeDate,
+    expectedPdf,
+    pdfExists,
+    pdfSizeBytes: pdfExists ? fs.statSync(pdfPath).size : 0,
+    htmlExists,
+    htmlSizeBytes: htmlExists ? fs.statSync(htmlPath).size : 0,
+    piperBinExists: fs.existsSync(PIPER_BIN),
+    voiceModelExists: fs.existsSync(VOICE_MODEL),
+    lastAnnouncement
+  });
+});
+
+app.post("/api/set-active-date", (req, res) => {
+  try {
+    const { date } = req.body || {};
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+      return res.status(400).json({ ok: false, error: "invalid date" });
+    }
+    setActiveDate(date);
+    audit(req, "set_active_date", { date });
+    res.json({ ok: true, activeDate: activeOrToday() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "set-active-date failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/import-today", async (req, res) => {
+  try {
+    const pdf = await getTodayPdfText();
+    if (!pdf.ok) return res.status(400).json({ ok: false, error: pdf.error, details: pdf.details, filename: pdf.filename });
+
+    const lines = normalizeWhitespaceLines(pdf.text);
+    const parsed = parseRosterFromLines(lines);
+
+    const date = activeOrToday();
+    const now = nowISO();
+
+    const ins = db.prepare(`
+      INSERT INTO roster (
+        date, start_time, swimmer_name,
+        instructor_name, zone, program, age_text,
+        attendance, attendance_at,
+        is_addon,
+        flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        created_at, updated_at
+      ) VALUES (
+        ?, ?, ?,
+        ?, ?, ?, ?,
+        NULL, NULL,
+        0,
+        ?, ?, ?, ?, ?,
+        ?, ?
+      )
+      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+        instructor_name=excluded.instructor_name,
+        zone=excluded.zone,
+        program=excluded.program,
+        age_text=excluded.age_text,
+        flag_new=excluded.flag_new,
+        flag_makeup=excluded.flag_makeup,
+        flag_policy=excluded.flag_policy,
+        flag_owes=excluded.flag_owes,
+        flag_trial=excluded.flag_trial,
+        updated_at=excluded.updated_at
+    `);
+
+    const tx = db.transaction((rows) => {
+      for (const r of rows) {
+        ins.run(
+          date, r.start_time, r.swimmer_name,
+          r.instructor_name || null, r.zone || null, r.program || null, r.age_text || null,
+          r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
+          now, now
+        );
+      }
+    });
+
+    tx(parsed);
+
+    audit(req, "import_today", {
+      device_mode: req.body?.device_mode || null,
+      details: { parsed_count: parsed.length }
+    });
+
+    res.json({ ok: true, imported: parsed.length });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "Import failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.get("/api/blocks", (req, res) => {
+  const date = activeOrToday();
+  const rows = db.prepare(`
+    SELECT DISTINCT start_time
+    FROM roster
+    WHERE date = ?
+    ORDER BY start_time ASC
+  `).all(date);
+
+  res.json({ ok: true, blocks: rows.map(r => r.start_time) });
+});
+
+app.get("/api/blocks/:start_time", (req, res) => {
+  const date = activeOrToday();
+  const start_time = req.params.start_time;
+
+  const kids = db.prepare(`
+    SELECT
+      swimmer_name,
+      instructor_name,
+      zone,
+      program,
+      age_text,
+      attendance,
+      is_addon,
+      zone_overridden,
+      flag_new, flag_makeup, flag_policy, flag_owes, flag_trial
+    FROM roster
+    WHERE date = ? AND start_time = ?
+  `).all(date, start_time);
+
+  res.json({ ok: true, kids });
+});
+
+app.post("/api/update-flags", (req, res) => {
+  try {
+    const ip = getIP(req);
+    const { start_time, swimmer_name, device_mode, flags } = req.body || {};
+    if (!start_time || !swimmer_name || !flags) return res.status(400).json({ ok: false, error: "missing fields" });
+
+    const date = activeOrToday();
+    const now = nowISO();
+
+    db.prepare(`
+      UPDATE roster SET
+        flag_new = ?,
+        flag_makeup = ?,
+        flag_policy = ?,
+        flag_owes = ?,
+        flag_trial = ?,
+        updated_at = ?
+      WHERE date = ? AND start_time = ? AND swimmer_name = ?
+    `).run(
+      flags.flag_new ? 1 : 0,
+      flags.flag_makeup ? 1 : 0,
+      flags.flag_policy ? 1 : 0,
+      flags.flag_owes ? 1 : 0,
+      flags.flag_trial ? 1 : 0,
+      now,
+      date,
+      start_time,
+      swimmer_name
+    );
+
+    audit(req, "update_flags", { device_mode, date, start_time, swimmer_name, details: { by: ip, flags } });
+
+    const row = db.prepare(`
+      SELECT flag_new, flag_makeup, flag_policy, flag_owes, flag_trial
+      FROM roster WHERE date = ? AND start_time = ? AND swimmer_name = ?
+    `).get(date, start_time, swimmer_name);
+
+    res.json({ ok: true, flags: row });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "update flags failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// -------------------- Missing endpoints (wired by the UI) --------------------
+
+// Attendance: 1 = here, 0 = absent, null = clear
+app.post("/api/attendance", (req, res) => {
+  try {
+    const { start_time, swimmer_name, attendance, device_mode } = req.body || {};
+    if (!start_time || !swimmer_name) return res.status(400).json({ ok: false, error: "missing fields" });
+
+    const date = activeOrToday();
+    const now = nowISO();
+
+    let att = null;
+    if (attendance === 0 || attendance === "0") att = 0;
+    if (attendance === 1 || attendance === "1") att = 1;
+
+    db.prepare(`
+      UPDATE roster SET
+        attendance = ?,
+        attendance_at = ?,
+        updated_at = ?
+      WHERE date = ? AND start_time = ? AND swimmer_name = ?
+    `).run(att, att === null ? null : now, now, date, start_time, swimmer_name);
+
+    audit(req, "attendance", { device_mode, date, start_time, swimmer_name, details: { attendance: att } });
+
+    res.json({ ok: true, attendance: att, at: now });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "attendance update failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// Zone update: requires manager_code in deck mode
+app.post("/api/update-zone", (req, res) => {
+  try {
+    const ip = getIP(req);
+    const { start_time, swimmer_name, new_zone, device_mode, manager_code } = req.body || {};
+    if (!start_time || !swimmer_name || !new_zone) return res.status(400).json({ ok: false, error: "missing fields" });
+
+    const zoneInt = parseInt(new_zone, 10);
+    if (![1,2,3,4].includes(zoneInt)) return res.status(400).json({ ok: false, error: "invalid zone", details: { zone } });
+
+    if (String(device_mode || "").toLowerCase() === "deck") {
+      if (isLocked(ip)) return res.status(429).json({ ok: false, error: "Manager code locked. Try again in 2 minutes." });
+
+      if (!verifyManagerCode(manager_code)) {
+        const st = recordFail(ip);
+        const locked = isLocked(ip);
+        return res.status(401).json({
+          ok: false,
+          error: locked ? "Too many failed attempts. Locked for 2 minutes." : "Invalid manager code",
+          details: { fails_remaining: locked ? 0 : (MAX_FAILS - (st.fails || 0)) }
+        });
+      }
+      clearFail(ip);
+    }
+
+    const date = activeOrToday();
+    const now = nowISO();
+
+    db.prepare(`
+      UPDATE roster SET
+        zone = ?,
+        zone_overridden = 1,
+        zone_override_at = ?,
+        zone_override_by = ?,
+        updated_at = ?
+      WHERE date = ? AND start_time = ? AND swimmer_name = ?
+    `).run(zoneInt, now, ip, now, date, start_time, swimmer_name);
+
+    audit(req, "update_zone", { device_mode, date, start_time, swimmer_name, details: { new_zone: zoneInt, by: ip } });
+
+    res.json({ ok: true, zone: zoneInt });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "update zone failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// Add swimmer (add-on)
+app.post("/api/add-swimmer", (req, res) => {
+  try {
+    const { start_time, swimmer_name, instructor_name, zone, program, age_text, device_mode } = req.body || {};
+    if (!start_time || !swimmer_name) return res.status(400).json({ ok: false, error: "missing fields" });
+
+    const date = activeOrToday();
+    const now = nowISO();
+
+    const z = zone === "" || zone === undefined || zone === null ? null : parseInt(zone, 10);
+    if (z !== null && ![1,2,3,4].includes(z)) return res.status(400).json({ ok: false, error: "invalid zone", details: { zone } });
+
+    db.prepare(`
+      INSERT INTO roster (
+        date, start_time, swimmer_name,
+        instructor_name, zone, program, age_text,
+        attendance, attendance_at,
+        is_addon,
+        flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        created_at, updated_at,
+        zone_overridden, zone_override_at, zone_override_by
+      ) VALUES (
+        ?, ?, ?,
+        ?, ?, ?, ?,
+        NULL, NULL,
+        1,
+        0,0,0,0,0,
+        ?, ?,
+        0, NULL, NULL
+      )
+      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+        instructor_name=excluded.instructor_name,
+        zone=excluded.zone,
+        program=excluded.program,
+        age_text=excluded.age_text,
+        is_addon=1,
+        updated_at=excluded.updated_at
+    `).run(
+      date, start_time, swimmer_name,
+      instructor_name || null,
+      z,
+      program || null,
+      age_text || null,
+      now, now
+    );
+
+    audit(req, "add_swimmer", { device_mode, date, start_time, swimmer_name, details: { is_addon: true, zone: z } });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "add swimmer failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// Remove add-on swimmer only
+app.post("/api/remove-addon", (req, res) => {
+  try {
+    const { start_time, swimmer_name, device_mode } = req.body || {};
+    if (!start_time || !swimmer_name) return res.status(400).json({ ok: false, error: "missing fields" });
+
+    const date = activeOrToday();
+    const info = db.prepare(`
+      SELECT is_addon FROM roster WHERE date = ? AND start_time = ? AND swimmer_name = ?
+    `).get(date, start_time, swimmer_name);
+
+    if (!info) return res.status(404).json({ ok: false, error: "not found" });
+    if (!info.is_addon) return res.status(400).json({ ok: false, error: "not an add-on" });
+
+    db.prepare(`
+      DELETE FROM roster WHERE date = ? AND start_time = ? AND swimmer_name = ?
+    `).run(date, start_time, swimmer_name);
+
+    audit(req, "remove_addon", { device_mode, date, start_time, swimmer_name });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "remove add-on failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// Speak typed announcement
+app.post("/api/speak", async (req, res) => {
+  try {
+    const { text, device_mode } = req.body || {};
+    const out = await speakAnnouncement(text, { ping: true });
+    if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
+
+    audit(req, "speak", { device_mode, details: { text: out.text } });
+    res.json({ ok: true, lastAnnouncement });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "speak failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// Repeat last announcement
+app.post("/api/repeat-last", async (req, res) => {
+  try {
+    const { device_mode } = req.body || {};
+    if (!lastAnnouncement?.text) return res.status(400).json({ ok: false, error: "No last announcement yet" });
+
+    const out = await speakAnnouncement(lastAnnouncement.text, { ping: true });
+    if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
+
+    audit(req, "repeat_last", { device_mode });
+    res.json({ ok: true, lastAnnouncement });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "repeat failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// Force time-block announcement
+app.post("/api/force-time-announcement", async (req, res) => {
+  try {
+    const { start_time, device_mode } = req.body || {};
+    if (!start_time) return res.status(400).json({ ok: false, error: "missing start_time" });
+
+    const date = activeOrToday();
+    const countRow = db.prepare(`
+      SELECT COUNT(*) AS c FROM roster WHERE date = ? AND start_time = ?
+    `).get(date, start_time);
+    const c = countRow?.c || 0;
+
+    const msg = `Attention families. ${formatTime12h(start_time)} classes are starting soon. Please bring your swimmer to the pool deck.`.replace(/\s+/g, " ").trim();
+
+    const out = await speakAnnouncement(msg, { ping: true });
+    if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
+
+    audit(req, "force_time_announcement", { device_mode, date, start_time, details: { count: c } });
+    res.json({ ok: true, lastAnnouncement });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "force-time announcement failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// "Call parent" action: speaks a standard page
+app.post("/api/call-parent", async (req, res) => {
+  try {
+    const { swimmer_name, device_mode } = req.body || {};
+    if (!swimmer_name) return res.status(400).json({ ok: false, error: "missing swimmer_name" });
+
+    const msg = `Parent or guardian of ${swimmer_name}. Please come to the front desk.`;
+    const out = await speakAnnouncement(msg, { ping: true });
+    if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
+
+    audit(req, "call_parent", { device_mode, swimmer_name, details: { text: msg } });
+    res.json({ ok: true, lastAnnouncement });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "call-parent failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// Export CSV of today's roster + attendance
+app.get("/api/export-attendance", (req, res) => {
+  try {
+    const date = activeOrToday();
+    const rows = db.prepare(`
+      SELECT
+        date, start_time, swimmer_name, instructor_name, zone, program, age_text,
+        attendance, attendance_at,
+        is_addon,
+        flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        zone_overridden, zone_override_at, zone_override_by
+      FROM roster
+      WHERE date = ?
+      ORDER BY start_time ASC, instructor_name ASC, swimmer_name ASC
+    `).all(date);
+
+    const toAtt = (v) => (v === 1 ? "Here" : v === 0 ? "Absent" : "");
+
+    const header = [
+      "date","start_time","start_time_12h","swimmer_name","instructor_name","zone","program","age_text",
+      "attendance","attendance_at",
+      "is_addon",
+      "flag_new","flag_makeup","flag_policy","flag_owes","flag_trial",
+      "zone_overridden","zone_override_at","zone_override_by"
+    ];
+
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      const vals = [
+        r.date,
+        r.start_time,
+        formatTime12h(r.start_time),
+        r.swimmer_name,
+        r.instructor_name || "",
+        r.zone ?? "",
+        r.program || "",
+        r.age_text || "",
+        toAtt(r.attendance),
+        r.attendance_at || "",
+        r.is_addon ? "1" : "0",
+        r.flag_new ? "1" : "0",
+        r.flag_makeup ? "1" : "0",
+        r.flag_policy ? "1" : "0",
+        r.flag_owes ? "1" : "0",
+        r.flag_trial ? "1" : "0",
+        r.zone_overridden ? "1" : "0",
+        r.zone_override_at || "",
+        r.zone_override_by || ""
+      ].map((x) => {
+        const s = String(x ?? "");
+        if (s.includes('"') || s.includes(",") || s.includes("\n")) return `"${s.replace(/"/g,'""')}"`;
+        return s;
+      });
+      lines.push(vals.join(","));
+    }
+
+    const csv = lines.join("\n");
+    const filename = `attendance_${date}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "export failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+// Export JSON of active roster (backup/restore)
+app.get("/api/export-json", (req, res) => {
+  try {
+    const date = activeOrToday();
+    const rows = db.prepare(`
+      SELECT
+        date, start_time, swimmer_name, instructor_name, zone, program, age_text,
+        attendance, attendance_at,
+        is_addon,
+        flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        zone_overridden, zone_override_at, zone_override_by,
+        created_at, updated_at
+      FROM roster
+      WHERE date = ?
+      ORDER BY start_time ASC, instructor_name ASC, swimmer_name ASC
+    `).all(date);
+
+    const payload = { ok: true, date, rows };
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="roster_${date}.json"`);
+    res.send(JSON.stringify(payload, null, 2));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "export-json failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/import-json", (req, res) => {
+  try {
+    const payload = req.body || {};
+    const date = (payload.date && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.date))) ? String(payload.date) : activeOrToday();
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    if (!rows.length) return res.status(400).json({ ok: false, error: "No rows provided" });
+
+    setActiveDate(date);
+
+    db.prepare(`DELETE FROM roster WHERE date = ? AND is_addon = 0`).run(date);
+
+    const now = nowISO();
+    const ins = db.prepare(`
+      INSERT INTO roster (
+        date, start_time, swimmer_name,
+        instructor_name, zone, program, age_text,
+        attendance, attendance_at,
+        is_addon,
+        flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        created_at, updated_at,
+        zone_overridden, zone_override_at, zone_override_by
+      ) VALUES (
+        ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?,
+        ?,
+        ?, ?, ?, ?, ?,
+        ?, ?,
+        ?, ?, ?
+      )
+      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+        instructor_name=excluded.instructor_name,
+        zone=excluded.zone,
+        program=excluded.program,
+        age_text=excluded.age_text,
+        attendance=excluded.attendance,
+        attendance_at=excluded.attendance_at,
+        is_addon=excluded.is_addon,
+        flag_new=excluded.flag_new,
+        flag_makeup=excluded.flag_makeup,
+        flag_policy=excluded.flag_policy,
+        flag_owes=excluded.flag_owes,
+        flag_trial=excluded.flag_trial,
+        zone_overridden=excluded.zone_overridden,
+        zone_override_at=excluded.zone_override_at,
+        zone_override_by=excluded.zone_override_by,
+        updated_at=excluded.updated_at
+    `);
+
+    const tx = db.transaction((arr) => {
+      for (const r of arr) {
+        const st = String(r.start_time || "").trim();
+        const sn = String(r.swimmer_name || "").trim();
+        if (!st || !sn) continue;
+        ins.run(
+          date,
+          st,
+          sn,
+          r.instructor_name || null,
+          (r.zone === 0 || r.zone) ? r.zone : null,
+          r.program || null,
+          r.age_text || null,
+          (r.attendance === 0 || r.attendance === 1) ? r.attendance : null,
+          r.attendance_at || null,
+          r.is_addon ? 1 : 0,
+          r.flag_new ? 1 : 0,
+          r.flag_makeup ? 1 : 0,
+          r.flag_policy ? 1 : 0,
+          r.flag_owes ? 1 : 0,
+          r.flag_trial ? 1 : 0,
+          r.created_at || now,
+          now,
+          r.zone_overridden ? 1 : 0,
+          r.zone_override_at || null,
+          r.zone_override_by || null
+        );
+      }
+    });
+    tx(rows);
+
+    audit(req, "import_json", { date, count: rows.length });
+    res.json({ ok: true, date, count: rows.length });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "import-json failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+
+// ==================== HTML UPLOAD SUPPORT ====================
+function parseHTMLRoster(html) {
+  const $ = cheerio.load(html);
+  const swimmers = [];
+  
+  const iconMap = {
+    '1st-ever.png': 'flag_new',
+    'balance.png': 'flag_owes', 
+    'makeup.png': 'flag_makeup',
+    'policy.png': 'flag_policy',
+    'birthday.png': 'flag_trial'
+  };
+  
+  $('div[style*="page-break-inside"]').each((_, section) => {
+    const $section = $(section);
+    
+    let startTime = null;
+    const scheduleText = $section.find('th:contains("Schedule:")').next().text();
+    const timeMatch = scheduleText.match(/(\d{1,2})(?::(\d{2}))?\s*([ap]m)/i);
+    if (timeMatch) {
+      startTime = normalizeTimeTo24h(timeMatch[0].trim());
+    }
+    
+    if (!startTime) return;
+    
+    let instructorName = null;
+    const instructorText = $section.find('th:contains("Instructors:")').next().find('li').first().text().trim();
+    if (instructorText) {
+      instructorName = lastFirstToFirstLast(instructorText);
+    }
+    
+    let programText = null;
+    const programSpan = $section.find('th:contains("Program:")').next().find('span').first().text().trim();
+    if (programSpan) {
+      const upProg = programSpan.toUpperCase();
+      if (upProg === 'GROUP') {
+        const fullText = $section.text();
+        const levelMatch = fullText.match(/GROUP:\s*(Beginner|Intermediate|Advanced|Swimmer)\s*(\d+)/i);
+        if (levelMatch) {
+          const levelName = levelMatch[1].charAt(0).toUpperCase() + levelMatch[1].slice(1).toLowerCase();
+          programText = `GROUP: ${levelName} ${levelMatch[2]}`;
+        } else {
+          programText = 'GROUP';
+        }
+      } else {
+        programText = normalizeProgramNonGroup(programSpan);
+      }
+    }
+    
+    let zone = 1;
+    const zoneText = $section.find('th:contains("Zone:")').next().find('span').text().trim();
+    const zoneMatch = zoneText.match(/Zone\s*(\d+)/i);
+    if (zoneMatch) {
+      zone = parseInt(zoneMatch[1]);
+    }
+    
+    $section.find('table.table-roll-sheet tbody tr').each((_, row) => {
+      const $row = $(row);
+      
+      const nameEl = $row.find('.student-name strong');
+      if (nameEl.length === 0) return;
+      
+      const swimmerName = lastFirstToFirstLast(nameEl.text().trim());
+      const ageText = $row.find('.student-info').text().trim();
+      
+      const flags = {
+        flag_new: 0,
+        flag_makeup: 0,
+        flag_policy: 0,
+        flag_owes: 0,
+        flag_trial: 0
+      };
+      
+      $row.find('.icons img').each((_, img) => {
+        const src = $(img).attr('src') || '';
+        const filename = src.split('/').pop();
+        const flagName = iconMap[filename];
+        if (flagName && flags.hasOwnProperty(flagName)) {
+          flags[flagName] = 1;
+        }
+      });
+      
+      swimmers.push({
+        start_time: startTime,
+        swimmer_name: swimmerName,
+        age_text: ageText,
+        instructor_name: instructorName,
+        program: programText,
+        zone: zone,
+        ...flags
+      });
+    });
+  });
+  
+  console.log(`HTML Parser: Found ${swimmers.length} swimmers`);
+  return swimmers;
+}
+
+app.post("/api/upload-html", async (req, res) => {
+  try {
+    const { html_base64, filename, location_id } = req.body || {};
+
+    if (!html_base64) {
+      return res.status(400).json({ ok: false, error: "No file data provided" });
+    }
+
+    const locId = location_id || 1; // Default to SwimLabs Westchester
+    const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
+    
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const html = Buffer.from(html_base64, "base64").toString("utf-8");
+
+    const detectedDate =
+      parseDateFromFilename(filename) ||
+      parseDateFromHTML(html) ||
+      todayISO();
+
+    setActiveDate(detectedDate);
+
+    // Save to location-specific folder
+    const locationDir = path.join(SCHEDULE_DIR, location.code);
+    if (!fs.existsSync(locationDir)) fs.mkdirSync(locationDir, { recursive: true });
+    const htmlPath = path.join(locationDir, `${detectedDate}.html`);
+    fs.writeFileSync(htmlPath, html, "utf-8");
+
+    const swimmers = parseHTMLRoster(html);
+    if (swimmers.length === 0) {
+      return res.status(400).json({ ok: false, error: "No swimmers found in HTML file" });
+    }
+
+    // Delete existing roster for this location/date
+    db.prepare(`DELETE FROM roster WHERE date = ? AND location_id = ? AND is_addon = 0`).run(detectedDate, locId);
+
+    const now = nowISO();
+    const ins = db.prepare(`
+      INSERT INTO roster (
+        date, start_time, swimmer_name,
+        instructor_name, zone, program, age_text,
+        attendance, attendance_at,
+        is_addon,
+        flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        location_id,
+        created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `);
+
+    const tx = db.transaction((rows) => {
+      for (const r of rows) {
+        ins.run(
+          detectedDate, r.start_time, r.swimmer_name,
+          r.instructor_name || null, r.zone || null, r.program || null, r.age_text || null,
+          r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
+          locId,
+          now, now
+        );
+      }
+    });
+
+    tx(swimmers);
+
+    audit(req, "html_upload", { 
+      location: location.name,
+      date: detectedDate,
+      count: swimmers.length 
+    });
+
+    res.json({ ok: true, count: swimmers.length, date: detectedDate, location: location.name });
+  } catch (error) {
+    console.error("HTML upload error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== LOCATION MANAGEMENT ====================
+app.get("/api/locations", (req, res) => {
+  try {
+    const locations = db.prepare(`SELECT * FROM locations WHERE active = 1 ORDER BY id`).all();
+    res.json({ ok: true, locations });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/set-location", (req, res) => {
+  try {
+    const { location_id } = req.body;
+    if (!location_id) {
+      return res.status(400).json({ ok: false, error: 'location_id required' });
+    }
+    
+    const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(location_id);
+    if (!location) {
+      return res.status(404).json({ ok: false, error: 'Location not found' });
+    }
+    
+    audit(req, "set_location", { location_id, location_name: location.name });
+    res.json({ ok: true, location });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/add-location", (req, res) => {
+  try {
+    const { code, name, has_announcements, brand } = req.body;
+    
+    if (!code || !name) {
+      return res.status(400).json({ ok: false, error: 'code and name required' });
+    }
+    
+    // Create directories
+    const schedDir = path.join(SCHEDULE_DIR, code);
+    const expDir = path.join(EXPORT_DIR, code);
+    if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
+    if (!fs.existsSync(expDir)) fs.mkdirSync(expDir, { recursive: true });
+    
+    const insert = db.prepare(`
+      INSERT INTO locations (code, name, has_announcements, brand)
+      VALUES (?, ?, ?, ?)
+    `);
+    const result = insert.run(code, name, has_announcements ? 1 : 0, brand || 'swimlabs');
+    
+    audit(req, "add_location", { code, name });
+    res.json({ ok: true, location_id: result.lastInsertRowid });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`SwimLabs Announcer server running on http://localhost:${PORT}`);
+});

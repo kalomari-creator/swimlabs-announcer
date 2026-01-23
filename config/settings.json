@@ -1,0 +1,16 @@
+{
+  "admin_pin": "8118",
+  "absence_tracker": {
+    "min_weeks_threshold": 2,
+    "enabled": true
+  },
+  "trial_tracker": {
+    "enabled": true,
+    "auto_populate": true
+  },
+  "attendance_history": {
+    "days_to_keep": 90
+  },
+  "app_version": "5.0.0",
+  "last_updated": "2026-01-23T00:00:00.000Z"
+}
