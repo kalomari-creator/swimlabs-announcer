@@ -2,7 +2,7 @@
 node_modules/
 package-lock.json
 
-# Database (contains sensitive data)
+# Database (contains sensitive swimmer data)
 data/
 database/
 *.db
@@ -18,7 +18,7 @@ rolls/
 *backup*.js
 *-v4.0-*
 
-# Environment variables (if you add them later)
+# Environment
 .env
 
 # Logs
