@@ -388,7 +388,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.5.2</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.5.1</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -406,11 +406,11 @@
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
       <button id="settingsBtn" title="Settings">⚙️</button>
       <span class="pill">
-        <span style="font-size:11px; color:var(--muted);">Time:</span>
+        <span style="font-size:11px; color:var(--muted);">Current Time:</span>
         <strong id="currentTime" style="color:#04D9FF; margin-left:4px;">—</strong>
       </span>
       <span class="pill" id="nextAnnouncementPill">
-        <span style="font-size:11px; color:var(--muted);">Next:</span>
+        <span style="font-size:11px; color:var(--muted);">Next Announcement:</span>
         <strong id="nextAnnouncementTimer" style="color:#04D9FF; margin-left:4px;">—</strong>
       </span>
       <span class="pill">Last: <strong id="lastAt">None</strong></span>
@@ -862,6 +862,77 @@
   let countdownInterval = null; // Interval for countdown updates
 
   const el = (id) => document.getElementById(id);
+  const normalizeKey = (value) => String(value || '').trim().toLowerCase();
+  const locationTimeZones = new Map([
+    ['new york', 'America/New_York'],
+    ['ny', 'America/New_York'],
+    ['westchester', 'America/New_York'],
+    ['riverdale', 'America/New_York'],
+    ['swimlabs westchester', 'America/New_York'],
+    ['safesplash riverdale', 'America/New_York'],
+    ['slw', 'America/New_York'],
+    ['ssr', 'America/New_York'],
+    ['texas', 'America/Chicago'],
+    ['tx', 'America/Chicago'],
+    ['woodlands', 'America/Chicago'],
+    ['swimlabs woodlands', 'America/Chicago'],
+    ['slx', 'America/Chicago'],
+    ['california', 'America/Los_Angeles'],
+    ['ca', 'America/Los_Angeles'],
+    ['santa monica', 'America/Los_Angeles'],
+    ['torrance', 'America/Los_Angeles'],
+    ['safesplash santa monica', 'America/Los_Angeles'],
+    ['safesplash torrance', 'America/Los_Angeles'],
+    ['ssm', 'America/Los_Angeles'],
+    ['sst', 'America/Los_Angeles'],
+    ['nevada', 'America/Los_Angeles'],
+    ['nv', 'America/Los_Angeles'],
+    ['summerlin', 'America/Los_Angeles'],
+    ['safesplash summerlin', 'America/Los_Angeles'],
+    ['sss', 'America/Los_Angeles']
+  ]);
+
+  function getLocationTimeZone() {
+    const fallbackZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!currentLocation) return fallbackZone;
+    const candidates = [
+      currentLocation.name,
+      currentLocation.code,
+      currentLocation.short_code,
+      currentLocation.shortCode
+    ].map(normalizeKey);
+    for (const key of candidates) {
+      if (locationTimeZones.has(key)) {
+        return locationTimeZones.get(key);
+      }
+    }
+    return fallbackZone;
+  }
+
+  function getTimeZoneOffsetMinutes(date, timeZone) {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = Object.fromEntries(
+      dtf.formatToParts(date).map((p) => [p.type, p.value])
+    );
+    const asUTC = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second)
+    );
+    return (asUTC - date.getTime()) / 60000;
+  }
 
   // Load locations on startup
   async function loadLocations() {
@@ -948,6 +1019,32 @@
     const h12 = ((hh + 11) % 12) + 1;
     if(mm === 0) return `${h12} ${ampm}`;
     return `${h12}:${String(mm).padStart(2,'0')} ${ampm}`;
+  }
+
+  function fmtCurrentTime(date, timeZone) {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const parts = formatter.formatToParts(date);
+      const hour = parts.find((p) => p.type === 'hour')?.value;
+      const minute = parts.find((p) => p.type === 'minute')?.value;
+      const dayPeriod = parts.find((p) => p.type === 'dayPeriod')?.value;
+      if (hour && minute && dayPeriod) {
+        return `${hour}:${minute}${dayPeriod}`;
+      }
+      return formatter.format(date).replace(/\s+/g, '');
+    } catch (e) {
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 || 12;
+      const displayMinutes = String(minutes).padStart(2, '0');
+      return `${displayHours}:${displayMinutes}${ampm}`;
+    }
   }
 
   function parseTypeLevel(program){
@@ -1087,12 +1184,14 @@
   }
 
 
-  function parseBlockDateTime(dateISO, time24){
+  function parseBlockDateTime(dateISO, time24, timeZone){
     if(!dateISO || !time24) return null;
     const [y,m,d] = dateISO.split('-').map(n=>parseInt(n,10));
     const [hh,mm] = String(time24).split(':').map(n=>parseInt(n,10));
     if(!y||!m||!d||Number.isNaN(hh)) return null;
-    return new Date(y, (m-1), d, hh, mm||0, 0, 0);
+    const utcGuess = new Date(Date.UTC(y, (m-1), d, hh, mm||0, 0, 0));
+    const offsetMinutes = getTimeZoneOffsetMinutes(utcGuess, timeZone);
+    return new Date(utcGuess.getTime() - offsetMinutes * 60000);
   }
 
   function scheduleAutoAnnouncements(){
@@ -1109,9 +1208,10 @@
     }
 
     const now = new Date();
+    const timeZone = getLocationTimeZone();
 
     blocksList.forEach((t, idxBlock) => {
-      const classAt = parseBlockDateTime(activeDateISO, t);
+      const classAt = parseBlockDateTime(activeDateISO, t, timeZone);
       if(!classAt) return;
 
       const announceAt = new Date(classAt.getTime() - 3*60*1000);
@@ -1170,11 +1270,6 @@
   }
 
   function stopCountdown() {
-    if (countdownInterval) {
-      clearInterval(countdownInterval);
-      countdownInterval = null;
-    }
-
     // Show timer pill but with dash
     el('nextAnnouncementTimer').textContent = '—';
     el('nextAnnouncementPill').style.display = '';
@@ -1182,14 +1277,10 @@
 
   function updateCountdown() {
     const now = new Date();
+    const timeZone = getLocationTimeZone();
 
     // Update current time display
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    const displayMinutes = String(minutes).padStart(2, '0');
-    el('currentTime').textContent = `${displayHours}:${displayMinutes} ${ampm}`;
+    el('currentTime').textContent = fmtCurrentTime(now, timeZone);
 
     if (!nextAnnouncementTime) {
       el('nextAnnouncementTimer').textContent = '—';
