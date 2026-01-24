@@ -1455,14 +1455,55 @@ app.post("/api/set-location", (req, res) => {
   }
 });
 
+// ==================== INSTRUCTOR MANAGEMENT ====================
+app.get("/api/instructors", (req, res) => {
+  try {
+    const configPath = path.join(__dirname, "config", "instructors.json");
+
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    }
+
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { instructors, locationMapping } = configData;
+
+    // Get current location from session/request (from location_id in query or default)
+    const location_id = req.query.location_id || req.session?.location_id || 1;
+    const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(location_id);
+
+    if (!location) {
+      return res.json({ ok: true, instructors: [] });
+    }
+
+    // Map location name to region
+    const region = locationMapping[location.name] || location.name;
+
+    // Filter instructors by region and format as "First L."
+    const filtered = instructors
+      .filter(i => i.location === region)
+      .map(i => ({
+        displayName: `${i.firstName} ${i.lastName.charAt(0)}.`,
+        fullName: `${i.firstName} ${i.lastName}`,
+        firstName: i.firstName,
+        lastName: i.lastName
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+    res.json({ ok: true, instructors: filtered, location: location.name, region });
+  } catch (error) {
+    console.error("Instructor fetch error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.post("/api/add-location", (req, res) => {
   try {
     const { code, name, has_announcements, brand } = req.body;
-    
+
     if (!code || !name) {
       return res.status(400).json({ ok: false, error: 'code and name required' });
     }
-    
+
     // Create directories
     const schedDir = path.join(SCHEDULE_DIR, code);
     const expDir = path.join(EXPORT_DIR, code);

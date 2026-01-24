@@ -567,7 +567,9 @@
 
       <div class="field">
         <label>Instructor (optional)</label>
-        <input type="text" id="addInstructor" placeholder="Example: Nova H" />
+        <select id="addInstructor">
+          <option value="">(loading...)</option>
+        </select>
       </div>
 
       <div class="field">
@@ -1369,8 +1371,39 @@
 
   el('sortBy').addEventListener('change', () => loadRoster());
 
+  // Load instructors for dropdown
+  async function loadInstructors() {
+    try {
+      const locId = currentLocation?.id || 1;
+      const resp = await api(`/api/instructors?location_id=${locId}`);
+      const select = el('addInstructor');
+
+      // Clear existing options
+      select.innerHTML = '';
+
+      // Add blank option
+      const blankOpt = document.createElement('option');
+      blankOpt.value = '';
+      blankOpt.textContent = '(select instructor)';
+      select.appendChild(blankOpt);
+
+      // Add instructor options
+      (resp.instructors || []).forEach(instructor => {
+        const opt = document.createElement('option');
+        opt.value = instructor.displayName;
+        opt.textContent = instructor.displayName;
+        select.appendChild(opt);
+      });
+
+    } catch (e) {
+      console.error('Failed to load instructors:', e);
+      const select = el('addInstructor');
+      select.innerHTML = '<option value="">(error loading instructors)</option>';
+    }
+  }
+
   // Add-on modal
-  el('addSwimmerBtn').addEventListener('click', () => {
+  el('addSwimmerBtn').addEventListener('click', async () => {
     if(!currentBlock) return;
     el('addName').value = '';
     el('addAge').value = '';
@@ -1378,6 +1411,10 @@
     el('addZone').value = '';
     el('addProgram').value = 'GROUP: Beginner 1';
     el('addTime').value = fmtTime(currentBlock);
+
+    // Load instructors for current location
+    await loadInstructors();
+
     showModal('addModal', true);
   });
   el('addCancel').addEventListener('click', () => showModal('addModal', false));
