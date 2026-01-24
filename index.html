@@ -388,7 +388,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.5.1</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.6.2</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -424,6 +424,8 @@
         <button class="primary" id="uploadHtmlBtn">Upload HTML</button>
         <input type="file" id="htmlFileInput" accept=".html" style="display: none;">
         <button class="secondary" id="exportJsonBtn" title="Download a JSON backup of the active roster">Export JSON</button>
+        <button class="secondary" id="exportServerBtn" title="Save a JSON backup on the server">Export to Server</button>
+        <button class="secondary" id="importServerBtn" title="Restore a roster from server backups">Import from Server</button>
         <button class="secondary" id="importJsonBtn" title="Upload a JSON export to restore a roster">Import JSON</button>
         <input type="file" id="jsonFileInput" accept="application/json,.json" style="display:none;">
 
@@ -568,6 +570,11 @@
         <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavTrials">
           <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🧪 Trial Follow-up</div>
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Manage trial swimmers and conversion tracking</div>
+        </div>
+
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavGuards">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
         </div>
 
         <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavHistory">
@@ -847,6 +854,89 @@
   </div>
 </div>
 
+<!-- Trial Follow-up Modal -->
+<div class="modalBackdrop" id="trialFollowupModal">
+  <div class="modal" style="max-width:900px;">
+    <h3>🧪 Trial Follow-up Report</h3>
+
+    <div class="row" style="margin:10px 0 12px;">
+      <span class="pill">Last <strong id="trialDaysLabel">30</strong> days</span>
+      <div class="spacer"></div>
+      <button class="secondary" id="trialRefreshBtn">Refresh</button>
+    </div>
+
+    <div id="trialSummary" class="tiny" style="color:var(--muted); margin-bottom:10px;">Loading…</div>
+    <div id="trialReportTable" style="max-height:520px; overflow-y:auto;"></div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="trialCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Server Import Modal -->
+<div class="modalBackdrop" id="serverImportModal">
+  <div class="modal" style="max-width:720px;">
+    <h3>📦 Server Backups</h3>
+
+    <div class="row" style="margin:10px 0 12px;">
+      <span class="pill">Location: <strong id="serverExportLocation">—</strong></span>
+      <div class="spacer"></div>
+      <button class="secondary" id="serverExportRefresh">Refresh</button>
+    </div>
+
+    <div id="serverExportList" style="max-height:420px; overflow-y:auto;"></div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="serverImportClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Guard Tasks Modal -->
+<div class="modalBackdrop" id="guardTasksModal">
+  <div class="modal" style="max-width:980px;">
+    <h3>🛟 Guard Tasks & Rotation (SwimLabs Westchester)</h3>
+
+    <div class="row" style="margin:10px 0 12px;">
+      <label class="tiny" style="color:var(--muted);">Day Type</label>
+      <select id="guardDayType" style="margin-left:8px; padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+        <option value="weekday">Weekday (2 guards)</option>
+        <option value="weekend">Weekend (3 guards)</option>
+      </select>
+      <div class="spacer"></div>
+      <button class="secondary" id="guardRefreshBtn">Refresh</button>
+      <button class="primary" id="guardSaveBtn">Save Rotation</button>
+    </div>
+
+    <div class="tiny" id="guardNote" style="color:var(--muted); margin-bottom:10px;"></div>
+
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-bottom:16px;">
+      <div class="card" style="background: rgba(255,255,255,0.03);">
+        <div class="pill" style="margin-bottom:8px;">Opening</div>
+        <div id="guardOpeningList"></div>
+      </div>
+      <div class="card" style="background: rgba(255,255,255,0.03);">
+        <div class="pill" style="margin-bottom:8px;">Midday</div>
+        <div id="guardMiddayList"></div>
+      </div>
+      <div class="card" style="background: rgba(255,255,255,0.03);">
+        <div class="pill" style="margin-bottom:8px;">Closing</div>
+        <div id="guardClosingList"></div>
+      </div>
+    </div>
+
+    <div class="card" style="background: rgba(255,255,255,0.03);">
+      <div class="pill" style="margin-bottom:8px;">Rotation by Block</div>
+      <div id="guardRotationTable"></div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="guardCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let currentBlock = null;
   let zoneTarget = null;
@@ -862,6 +952,12 @@
   let countdownInterval = null; // Interval for countdown updates
 
   const el = (id) => document.getElementById(id);
+  const escapeSelector = (value) => {
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+      return window.CSS.escape(value);
+    }
+    return String(value).replace(/["\\]/g, '\\$&');
+  };
   const normalizeKey = (value) => String(value || '').trim().toLowerCase();
   const locationTimeZones = new Map([
     ['new york', 'America/New_York'],
@@ -957,6 +1053,7 @@
       
       // Show/hide announcements tab based on location
       updateAnnouncementsVisibility();
+      updateGuardTasksVisibility();
       
     } catch (e) {
       console.error('Failed to load locations:', e);
@@ -964,20 +1061,42 @@
   }
 
   function updateAnnouncementsVisibility() {
-    const announcementsTab = el('tabAnnouncements');
-    const announcementsSection = el('announcements-section');
-    
-    if (currentLocation && currentLocation.has_announcements) {
-      announcementsTab.style.display = '';
-      if (announcementsSection) announcementsSection.style.display = '';
-    } else {
-      announcementsTab.style.display = 'none';
-      if (announcementsSection) announcementsSection.style.display = 'none';
-      // Switch to Roster tab if on Announcements
-      if (announcementsTab.classList.contains('active')) {
-        el('tabRoster').click();
-      }
+    const viewSelect = el('viewSelect');
+    const panelAnnouncements = el('panelAnnouncements');
+    const panelRoster = el('panelRoster');
+    const announcementsOption = viewSelect?.querySelector('option[value="announcements"]');
+    const hasAnnouncements = Boolean(currentLocation && currentLocation.has_announcements);
+
+    if (announcementsOption) {
+      announcementsOption.hidden = !hasAnnouncements;
+      announcementsOption.disabled = !hasAnnouncements;
     }
+
+    if (!hasAnnouncements) {
+      if (viewSelect && viewSelect.value === 'announcements') {
+        viewSelect.value = 'roster';
+        panelRoster?.classList.remove('hidden');
+        panelAnnouncements?.classList.add('hidden');
+      }
+      return;
+    }
+
+    if (panelAnnouncements && viewSelect?.value === 'announcements') {
+      panelAnnouncements.classList.remove('hidden');
+    }
+  }
+
+  function isWestchesterLocation() {
+    if (!currentLocation) return false;
+    const code = String(currentLocation.code || '').toUpperCase();
+    const name = String(currentLocation.name || '').toLowerCase();
+    return code === 'SLW' || name.includes('westchester');
+  }
+
+  function updateGuardTasksVisibility() {
+    const guardCard = el('adminNavGuards');
+    if (!guardCard) return;
+    guardCard.style.display = isWestchesterLocation() ? '' : 'none';
   }
 
   el('locationSelect').addEventListener('change', async (e) => {
@@ -992,6 +1111,7 @@
       });
       
       updateAnnouncementsVisibility();
+      updateGuardTasksVisibility();
       await loadStatus();
       await loadBlocks();
       if (currentBlock) await loadRoster();
@@ -2058,6 +2178,291 @@
     if (e.target === el('attendanceHistoryModal')) showModal('attendanceHistoryModal', false);
   });
 
+  function formatBytes(bytes) {
+    if (!bytes && bytes !== 0) return '—';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let idx = 0;
+    while (size >= 1024 && idx < units.length - 1) {
+      size /= 1024;
+      idx += 1;
+    }
+    return `${size.toFixed(size >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+  }
+
+  function formatShortDate(dateStr) {
+    if (!dateStr) return '—';
+    const parts = String(dateStr).split('T')[0].split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[1]}/${parts[2]}/${parts[0]}`;
+  }
+
+  async function loadServerExports() {
+    const locId = currentLocation?.id || 1;
+    const resp = await api(`/api/server-exports?location_id=${locId}`);
+    const list = resp.exports || [];
+    el('serverExportLocation').textContent = currentLocation?.name || 'Unknown';
+
+    if (!list.length) {
+      el('serverExportList').innerHTML = '<div class="tiny" style="color:var(--muted); padding:8px;">No server backups found.</div>';
+      return;
+    }
+
+    let html = '<table style="width:100%;"><thead><tr>';
+    html += '<th>File</th><th>Modified</th><th>Size</th><th>Action</th>';
+    html += '</tr></thead><tbody>';
+    list.forEach((item) => {
+      html += '<tr>';
+      html += `<td><span class="tiny">${escapeHtml(item.filename)}</span></td>`;
+      html += `<td>${formatShortDate(item.modified_at)}</td>`;
+      html += `<td>${formatBytes(item.size)}</td>`;
+      html += `<td><button class="secondary" data-file="${escapeHtml(item.filename)}">Import</button></td>`;
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    el('serverExportList').innerHTML = html;
+
+    el('serverExportList').querySelectorAll('button[data-file]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const filename = btn.getAttribute('data-file');
+        if (!filename) return;
+        if (!confirm(`Import server backup: ${filename}?\n\nThis will replace the current roster for the active date.`)) return;
+        try {
+          btn.disabled = true;
+          await api('/api/import-server', {
+            method: 'POST',
+            body: JSON.stringify({
+              location_id: currentLocation?.id || 1,
+              filename
+            })
+          });
+          showModal('serverImportModal', false);
+          await loadStatus();
+          await loadBlocks();
+          await loadRoster();
+          toast('Server import complete');
+        } catch (err) {
+          alert('Import failed: ' + (err.message || err));
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function loadTrialReport() {
+    const locId = currentLocation?.id || 1;
+    const days = 30;
+    el('trialDaysLabel').textContent = String(days);
+    const resp = await api(`/api/trials?location_id=${locId}&days=${days}`);
+    const trials = resp.trials || [];
+
+    if (!trials.length) {
+      el('trialSummary').textContent = 'No trial swimmers found for this period.';
+      el('trialReportTable').innerHTML = '';
+      return;
+    }
+
+    const statusCounts = trials.reduce((acc, t) => {
+      const status = t.follow_up?.status || 'new';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+    const summary = Object.entries(statusCounts)
+      .map(([status, count]) => `${status}: ${count}`)
+      .join(' • ');
+    el('trialSummary').textContent = `Total trials: ${trials.length} • ${summary}`;
+
+    let html = '<table style="width:100%;"><thead><tr>';
+    html += '<th>Swimmer</th><th>Last Seen</th><th>Program</th><th>Instructor</th><th>Visits</th><th>Status</th><th>Last Contact</th><th>Next Follow-up</th><th>Notes</th><th>Save</th>';
+    html += '</tr></thead><tbody>';
+
+    trials.forEach((t) => {
+      const follow = t.follow_up || {};
+      const status = follow.status || 'new';
+      html += '<tr>';
+      html += `<td><strong>${escapeHtml(t.swimmer_name)}</strong></td>`;
+      html += `<td>${formatShortDate(t.last_date)}</td>`;
+      html += `<td><span class="tiny">${escapeHtml(t.program || '—')}</span></td>`;
+      html += `<td>${escapeHtml(t.instructor_name || '—')}</td>`;
+      html += `<td style="text-align:center;">${t.trial_visits || 0}</td>`;
+      html += '<td>';
+      html += `<select data-field="status" data-swimmer="${escapeHtml(t.swimmer_name)}">`;
+      ['new','contacted','scheduled','converted','lost'].forEach((opt) => {
+        html += `<option value="${opt}" ${opt === status ? 'selected' : ''}>${opt}</option>`;
+      });
+      html += '</select>';
+      html += '</td>';
+      html += `<td><input type="date" data-field="last_contact" data-swimmer="${escapeHtml(t.swimmer_name)}" value="${escapeHtml(follow.last_contact_at || '')}" /></td>`;
+      html += `<td><input type="date" data-field="next_follow" data-swimmer="${escapeHtml(t.swimmer_name)}" value="${escapeHtml(follow.next_follow_up_at || '')}" /></td>`;
+      html += `<td><input type="text" data-field="notes" data-swimmer="${escapeHtml(t.swimmer_name)}" value="${escapeHtml(follow.notes || '')}" placeholder="Notes" /></td>`;
+      html += `<td><button class="secondary" data-action="save" data-swimmer="${escapeHtml(t.swimmer_name)}">Save</button></td>`;
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    el('trialReportTable').innerHTML = html;
+
+    el('trialReportTable').querySelectorAll('button[data-action="save"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const swimmer = btn.getAttribute('data-swimmer');
+        if (!swimmer) return;
+        const safeSwimmer = escapeSelector(swimmer);
+        const status = el('trialReportTable').querySelector(`select[data-field="status"][data-swimmer="${safeSwimmer}"]`)?.value;
+        const lastContact = el('trialReportTable').querySelector(`input[data-field="last_contact"][data-swimmer="${safeSwimmer}"]`)?.value || '';
+        const nextFollow = el('trialReportTable').querySelector(`input[data-field="next_follow"][data-swimmer="${safeSwimmer}"]`)?.value || '';
+        const notes = el('trialReportTable').querySelector(`input[data-field="notes"][data-swimmer="${safeSwimmer}"]`)?.value || '';
+        try {
+          btn.disabled = true;
+          await api('/api/trials/followup', {
+            method: 'POST',
+            body: JSON.stringify({
+              swimmer_name: swimmer,
+              location_id: currentLocation?.id || 1,
+              status,
+              last_contact_at: lastContact || null,
+              next_follow_up_at: nextFollow || null,
+              notes
+            })
+          });
+          toast('Follow-up saved');
+        } catch (err) {
+          alert('Save failed: ' + (err.message || err));
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  function renderChecklistSection(containerId, section) {
+    const container = el(containerId);
+    if (!container) return;
+    if (!section) {
+      container.innerHTML = '<div class="tiny" style="color:var(--muted);">No checklist found.</div>';
+      return;
+    }
+    let html = '';
+    if (section.groups) {
+      section.groups.forEach((group) => {
+        html += `<div style="margin-bottom:10px;"><div class="tiny" style="font-weight:900; margin-bottom:6px;">${escapeHtml(group.title)}</div>`;
+        html += '<ul class="tiny" style="margin:0 0 8px 18px; padding:0;">';
+        (group.tasks || []).forEach((task) => {
+          html += `<li style="margin-bottom:4px;">${escapeHtml(task)}</li>`;
+        });
+        html += '</ul></div>';
+      });
+    } else if (section.tasks) {
+      html += '<ul class="tiny" style="margin:0 0 8px 18px; padding:0;">';
+      section.tasks.forEach((task) => {
+        html += `<li style="margin-bottom:4px;">${escapeHtml(task)}</li>`;
+      });
+      html += '</ul>';
+    }
+    container.innerHTML = html;
+  }
+
+  function getGuardDayType() {
+    return el('guardDayType')?.value === 'weekend' ? 'weekend' : 'weekday';
+  }
+
+  function getDayTypeFromDate(dateStr) {
+    if (!dateStr) return 'weekday';
+    const date = new Date(`${dateStr}T00:00:00`);
+    const day = date.getDay();
+    return day === 0 || day === 6 ? 'weekend' : 'weekday';
+  }
+
+  async function loadGuardTasks() {
+    if (!isWestchesterLocation()) {
+      alert('Guard tasks are only available for SwimLabs Westchester.');
+      return;
+    }
+
+    const type = getGuardDayType();
+    const locId = currentLocation?.id || 1;
+    const date = activeDateISO || el('rosterDate')?.value || '';
+
+    const checklistResp = await api(`/api/guard-checklist?location_id=${locId}&type=${type}`);
+    const checklist = checklistResp.checklist;
+
+    el('guardNote').textContent = checklist?.note || '';
+    renderChecklistSection('guardOpeningList', checklist?.opening);
+    renderChecklistSection('guardMiddayList', checklist?.midday);
+    renderChecklistSection('guardClosingList', checklist?.closing);
+
+    const rotationResp = await api(`/api/guard-rotation?location_id=${locId}&type=${type}&date=${date || ''}`);
+    const rotationMap = new Map((rotationResp.blocks || []).map((b) => [b.time, b]));
+
+    if (!blocksList.length) {
+      el('guardRotationTable').innerHTML = '<div class="tiny" style="color:var(--muted); padding:8px;">No time blocks available yet.</div>';
+      return;
+    }
+
+    let html = '<table style="width:100%;"><thead><tr>';
+    html += '<th>Block</th><th>Chores / Notes</th><th>Guard Rotation</th>';
+    html += '</tr></thead><tbody>';
+    blocksList.forEach((time) => {
+      const rotation = rotationMap.get(time) || {};
+      html += '<tr>';
+      html += `<td><strong>${fmtTime(time)}</strong></td>`;
+      html += `<td><input type="text" data-chores-time="${escapeHtml(time)}" value="${escapeHtml(rotation.chores || '')}" placeholder="Chores or focus" /></td>`;
+      html += `<td><input type="text" data-guard-time="${escapeHtml(time)}" value="${escapeHtml(rotation.guard || '')}" placeholder="Guard on deck / rotation" /></td>`;
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    el('guardRotationTable').innerHTML = html;
+  }
+
+  el('trialCloseBtn').addEventListener('click', () => showModal('trialFollowupModal', false));
+  el('trialFollowupModal').addEventListener('click', (e) => {
+    if (e.target === el('trialFollowupModal')) showModal('trialFollowupModal', false);
+  });
+  el('trialRefreshBtn').addEventListener('click', loadTrialReport);
+
+  el('guardCloseBtn').addEventListener('click', () => showModal('guardTasksModal', false));
+  el('guardTasksModal').addEventListener('click', (e) => {
+    if (e.target === el('guardTasksModal')) showModal('guardTasksModal', false);
+  });
+  el('guardDayType').addEventListener('change', loadGuardTasks);
+  el('guardRefreshBtn').addEventListener('click', loadGuardTasks);
+  el('guardSaveBtn').addEventListener('click', async () => {
+    const locId = currentLocation?.id || 1;
+    const date = activeDateISO || el('rosterDate')?.value || '';
+    const type = getGuardDayType();
+    const rows = [];
+    el('guardRotationTable').querySelectorAll('tr').forEach((row) => {
+      const time = row.querySelector('[data-guard-time]')?.getAttribute('data-guard-time');
+      if (!time) return;
+      const guard = row.querySelector('[data-guard-time]')?.value || '';
+      const chores = row.querySelector('[data-chores-time]')?.value || '';
+      rows.push({ time, guard, chores });
+    });
+    try {
+      el('guardSaveBtn').disabled = true;
+      await api('/api/guard-rotation', {
+        method: 'POST',
+        body: JSON.stringify({
+          location_id: locId,
+          date,
+          type,
+          blocks: rows
+        })
+      });
+      toast('Guard rotation saved');
+    } catch (err) {
+      alert('Save failed: ' + (err.message || err));
+    } finally {
+      el('guardSaveBtn').disabled = false;
+    }
+  });
+
+  el('serverImportClose').addEventListener('click', () => showModal('serverImportModal', false));
+  el('serverImportModal').addEventListener('click', (e) => {
+    if (e.target === el('serverImportModal')) showModal('serverImportModal', false);
+  });
+  el('serverExportRefresh').addEventListener('click', loadServerExports);
+
   // Add Location Modal
   el('addLocationBtn').addEventListener('click', () => {
     el('newLocationName').value = '';
@@ -2192,13 +2597,21 @@
     }
   });
 
-  // Admin navigation cards (placeholders for future sessions)
+  // Admin navigation cards
   el('adminNavAbsence').addEventListener('click', () => {
     alert('Absence Tracker\n\nComing in Session 9!\n\nThis will track multi-week absences and help you follow up with families.');
   });
 
   el('adminNavTrials').addEventListener('click', () => {
-    alert('Trial Follow-up\n\nComing in Session 10!\n\nThis will manage trial swimmers and track conversion rates.');
+    loadTrialReport();
+    showModal('trialFollowupModal', true);
+  });
+
+  el('adminNavGuards').addEventListener('click', async () => {
+    const dayType = getDayTypeFromDate(activeDateISO || el('rosterDate')?.value);
+    el('guardDayType').value = dayType;
+    await loadGuardTasks();
+    showModal('guardTasksModal', true);
   });
 
   el('adminNavHistory').addEventListener('click', () => {
@@ -2324,20 +2737,46 @@
   });
 
   el('exportJsonBtn').addEventListener('click', () => {
-    window.location.href = '/api/export-json';
+    const locId = currentLocation?.id || 1;
+    window.location.href = `/api/export-json?location_id=${locId}`;
+  });
+
+  el('exportServerBtn').addEventListener('click', async () => {
+    try {
+      el('exportServerBtn').disabled = true;
+      const date = el('rosterDate').value || activeDateISO;
+      const resp = await api('/api/export-server', {
+        method: 'POST',
+        body: JSON.stringify({
+          location_id: currentLocation?.id || 1,
+          date
+        })
+      });
+      alert(`✅ Exported ${resp.count} swimmers to server.\n\nFile: ${resp.filename}`);
+    } catch (err) {
+      alert('Export failed: ' + (err.message || err));
+    } finally {
+      el('exportServerBtn').disabled = false;
+    }
+  });
+
+  el('importServerBtn').addEventListener('click', async () => {
+    await loadServerExports();
+    showModal('serverImportModal', true);
   });
 
   el('importJsonBtn').addEventListener('click', () => el('jsonFileInput').click());
   el('jsonFileInput').addEventListener('change', async (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    try{
-      const txt = await f.text();
-      const payload = JSON.parse(txt);
-      await api('/api/import-json', { method:'POST', body: JSON.stringify(payload) });
-      await loadStatus();
-      await loadBlocks();
-      await loadRoster();
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      try{
+        const txt = await f.text();
+        const payload = JSON.parse(txt);
+        if (!payload.location_id) payload.location_id = currentLocation?.id || 1;
+        await api('/api/import-json', { method:'POST', body: JSON.stringify(payload) });
+        await loadStatus();
+        await loadBlocks();
+        await loadRoster();
       toast('JSON import complete');
     }catch(err){
       alert('Import failed: ' + (err.message || err));
