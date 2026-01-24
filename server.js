@@ -55,13 +55,22 @@ if (!fs.existsSync(TTS_OUT_DIR)) fs.mkdirSync(TTS_OUT_DIR, { recursive: true });
 if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
 if (!fs.existsSync(SCHEDULE_DIR)) fs.mkdirSync(SCHEDULE_DIR, { recursive: true });
 
+function sanitizeDirSegment(value) {
+  return String(value || "").trim().replace(/[\\/]/g, "-");
+}
+
 // Create location-specific directories
-const LOCATION_CODES = ['SLW', 'SLX', 'SSR', 'SSM', 'SST', 'SSS'];
-LOCATION_CODES.forEach(code => {
-  const schedDir = path.join(SCHEDULE_DIR, code);
-  const expDir = path.join(EXPORT_DIR, code);
+const LOCATION_NAMES = [
+  'SwimLabs Westchester',
+  'SwimLabs Woodlands',
+  'SafeSplash Riverdale',
+  'SafeSplash Santa Monica',
+  'SafeSplash Torrance',
+  'SafeSplash Summerlin'
+];
+LOCATION_NAMES.forEach(name => {
+  const schedDir = path.join(SCHEDULE_DIR, sanitizeDirSegment(name));
   if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
-  if (!fs.existsSync(expDir)) fs.mkdirSync(expDir, { recursive: true });
 });
 
 // -------------------- DB schema / migration --------------------
@@ -1640,12 +1649,10 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     setActiveDate(detectedDate);
 
     // Save to location-specific folder with descriptive filename
-    // Format: roll_sheet_{LOCATION_CODE}_{DATE}.html
-    // Example: roll_sheet_SLW_2026-01-24.html (SwimLabs Westchester)
-    //          roll_sheet_SSM_2026-01-24.html (SafeSplash Santa Monica)
-    const locationDir = path.join(SCHEDULE_DIR, location.code);
+    // Format: roll_sheet_{LOCATION_NAME}_{DATE}.html
+    const locationDir = getScheduleDir(location);
     if (!fs.existsSync(locationDir)) fs.mkdirSync(locationDir, { recursive: true });
-    const htmlFilename = `roll_sheet_${location.code}_${detectedDate}.html`;
+    const htmlFilename = `roll_sheet_${getLocationFileTag(location)}_${detectedDate}.html`;
     const htmlPath = path.join(locationDir, htmlFilename);
     fs.writeFileSync(htmlPath, html, "utf-8");
 
@@ -2407,7 +2414,7 @@ app.post("/api/add-location", (req, res) => {
     }
 
     // Create directories
-    const schedDir = path.join(SCHEDULE_DIR, code);
+    const schedDir = path.join(SCHEDULE_DIR, sanitizeDirSegment(name));
     const expDir = path.join(EXPORT_DIR, code);
     if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
     if (!fs.existsSync(expDir)) fs.mkdirSync(expDir, { recursive: true });
