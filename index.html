@@ -1492,24 +1492,21 @@
 
       const text = await file.text();
 
-      // Convert text to base64 safely
-      const encoder = new TextEncoder();
-      const data = encoder.encode(text);
-      let binary = '';
-      const len = data.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(data[i]);
-      }
-      const html_base64 = btoa(binary);
-
-      const result = await api('/api/upload-html', {
+      // Use direct fetch without the api() wrapper to avoid credential issues
+      const response = await fetch('/api/upload-html', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin',
         body: JSON.stringify({
-          html_base64: html_base64,
+          html_content: text,
           filename: file.name,
           location_id: currentLocation?.id || 1
         })
       });
+
+      const result = await response.json();
 
       if (result.ok) {
         alert(`Success! Imported ${result.count} swimmers`);

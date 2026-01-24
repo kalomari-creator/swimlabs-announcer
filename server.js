@@ -1348,20 +1348,24 @@ function parseHTMLRoster(html) {
 
 app.post("/api/upload-html", async (req, res) => {
   try {
-    const { html_base64, filename, location_id } = req.body || {};
+    const { html_base64, html_content, filename, location_id } = req.body || {};
 
-    if (!html_base64) {
+    // Support both base64 (old) and direct content (new)
+    let html;
+    if (html_content) {
+      html = html_content;
+    } else if (html_base64) {
+      html = Buffer.from(html_base64, "base64").toString("utf-8");
+    } else {
       return res.status(400).json({ ok: false, error: "No file data provided" });
     }
 
     const locId = location_id || 1; // Default to SwimLabs Westchester
     const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
-    
+
     if (!location) {
       return res.status(400).json({ ok: false, error: "Invalid location" });
     }
-
-    const html = Buffer.from(html_base64, "base64").toString("utf-8");
 
     const detectedDate =
       parseDateFromFilename(filename) ||
