@@ -405,6 +405,7 @@
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
       <button id="settingsBtn" title="Settings">⚙️</button>
       <span class="pill">Last: <strong id="lastAt">None</strong></span>
+      <span class="pill" id="nextAnnouncementPill" style="display:none;">Next: <strong id="nextAnnouncementTimer" style="color:#04D9FF;">—</strong></span>
     </div>
   </div>
 
@@ -741,6 +742,8 @@
   let allLocations = [];
   let searchFilter = '';
   let pendingPinPanel = null; // Track which panel requested PIN auth ('virtualDesk' or 'admin')
+  let nextAnnouncementTime = null; // Track next scheduled announcement
+  let countdownInterval = null; // Interval for countdown updates
 
   const el = (id) => document.getElementById(id);
 
@@ -981,7 +984,13 @@
     autoTimers.forEach(id => clearTimeout(id));
     autoTimers = [];
 
-    if(!activeDateISO || !blocksList.length) return;
+    // Reset next announcement tracking
+    nextAnnouncementTime = null;
+
+    if(!activeDateISO || !blocksList.length) {
+      stopCountdown();
+      return;
+    }
 
     const now = new Date();
 
@@ -1006,6 +1015,9 @@
 
           const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode }) });
           setLastAnnouncementUI(resp.lastAnnouncement);
+
+          // After announcement, reschedule to update next timer
+          setTimeout(() => scheduleAutoAnnouncements(), 1000);
         }catch(e){
           // don't spam alerts for background timers
           console.error('auto announcement failed', e);
@@ -1013,7 +1025,75 @@
       }, delay);
 
       autoTimers.push(id);
+
+      // Track the earliest announcement time
+      if (!nextAnnouncementTime || announceAt < nextAnnouncementTime) {
+        nextAnnouncementTime = announceAt;
+      }
     });
+
+    // Start countdown if we have scheduled announcements
+    if (nextAnnouncementTime) {
+      startCountdown();
+    } else {
+      stopCountdown();
+    }
+  }
+
+  function startCountdown() {
+    // Clear existing interval
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+    }
+
+    // Update immediately
+    updateCountdown();
+
+    // Update every second
+    countdownInterval = setInterval(updateCountdown, 1000);
+  }
+
+  function stopCountdown() {
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+
+    // Hide the countdown pill
+    el('nextAnnouncementPill').style.display = 'none';
+  }
+
+  function updateCountdown() {
+    if (!nextAnnouncementTime) {
+      stopCountdown();
+      return;
+    }
+
+    const now = new Date();
+    const diff = nextAnnouncementTime - now;
+
+    // If time has passed, hide countdown
+    if (diff <= 0) {
+      stopCountdown();
+      return;
+    }
+
+    // Calculate minutes and seconds
+    const totalSeconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    // Format the countdown
+    let display = '';
+    if (minutes > 0) {
+      display = `${minutes}m ${seconds}s`;
+    } else {
+      display = `${seconds}s`;
+    }
+
+    // Update the display
+    el('nextAnnouncementTimer').textContent = display;
+    el('nextAnnouncementPill').style.display = '';
   }
 
   function sortKids(kids){
