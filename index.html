@@ -134,9 +134,66 @@
       cursor:text;
       font-weight:800;
     }
+    input[type="text"]:focus, input[type="password"]:focus{
+      border-color: #04D9FF;
+      box-shadow: 0 0 0 3px rgba(4,217,255,.15);
+    }
     select option{
       background:#000;
       color:#fff;
+    }
+
+    /* Search bar */
+    .searchWrap{
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .searchInput{
+      width: 280px;
+      padding: 9px 34px 9px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.75);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      outline: none;
+      transition: all .15s ease;
+    }
+    .searchInput:focus{
+      border-color: #04D9FF;
+      box-shadow: 0 0 0 3px rgba(4,217,255,.15);
+      background: #000;
+    }
+    .searchInput::placeholder{
+      color: rgba(159,176,208,.6);
+      font-weight: 600;
+    }
+    .searchClear{
+      position: absolute;
+      right: 8px;
+      padding: 4px 6px;
+      background: transparent;
+      border: none;
+      color: rgba(159,176,208,.8);
+      font-size: 16px;
+      cursor: pointer;
+      min-height: auto;
+      line-height: 1;
+      border-radius: 6px;
+      transition: all .12s ease;
+    }
+    .searchClear:hover{
+      color: #04D9FF;
+      background: rgba(4,217,255,.1);
+    }
+    .searchClear:active{
+      transform: scale(0.95);
+    }
+    .searchClear.hidden{
+      display: none;
     }
 
     table{
@@ -166,6 +223,22 @@
     }
     th{ color:var(--muted); font-weight:900; font-size:12px; text-transform: uppercase; letter-spacing: .5px; }
     tbody tr:hover{ background: rgba(255,255,255,.035); }
+
+    /* Program type color coding */
+    tbody tr.program-group{ background: rgba(34,197,94,0.08); }
+    tbody tr.program-group:hover{ background: rgba(34,197,94,0.14); }
+
+    tbody tr.program-semi-private{ background: rgba(59,130,246,0.08); }
+    tbody tr.program-semi-private:hover{ background: rgba(59,130,246,0.14); }
+
+    tbody tr.program-private{ background: rgba(168,85,247,0.08); }
+    tbody tr.program-private:hover{ background: rgba(168,85,247,0.14); }
+
+    tbody tr.program-parent-tot{ background: rgba(249,115,22,0.08); }
+    tbody tr.program-parent-tot:hover{ background: rgba(249,115,22,0.14); }
+
+    tbody tr.program-trial{ background: rgba(234,179,8,0.08); }
+    tbody tr.program-trial:hover{ background: rgba(234,179,8,0.14); }
 
     .zone{
       display:inline-flex;
@@ -326,6 +399,7 @@
       <div class="tabs">
         <button class="tab active" id="tabRoster">Roster</button>
         <button class="tab" id="tabAnnouncements" style="display:none;">Announcements</button>
+        <button class="tab" id="tabAdmin">Admin</button>
       </div>
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
       <button id="settingsBtn" title="Settings">⚙️</button>
@@ -369,6 +443,12 @@
         </div>
 
         <div class="spacer"></div>
+
+        <div class="searchWrap">
+          <input type="text" id="rosterSearch" class="searchInput" placeholder="Search roster..." />
+          <button class="searchClear hidden" id="searchClear" title="Clear search">✕</button>
+        </div>
+
         <button class="secondary" id="addSwimmerBtn">+ Add swimmer</button>
         <span class="pill">Sort</span>
         <select id="sortBy">
@@ -427,6 +507,76 @@
           <button class="secondary" id="presetCodeBrown">Code Brown</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="panelAdmin" class="hidden">
+    <div class="card">
+      <h2 style="margin:0 0 16px; font-size:20px;">Admin Dashboard</h2>
+
+      <!-- Quick Stats -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
+        <div class="card" style="background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
+          <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Swimmers Today</div>
+          <div style="font-size:28px; font-weight:900; color:#22c55e;" id="adminStatSwimmers">—</div>
+        </div>
+
+        <div class="card" style="background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);">
+          <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Attendance Rate</div>
+          <div style="font-size:28px; font-weight:900; color:#3b82f6;" id="adminStatAttendance">—</div>
+        </div>
+
+        <div class="card" style="background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.2);">
+          <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Trials This Week</div>
+          <div style="font-size:28px; font-weight:900; color:#eab308;" id="adminStatTrials">—</div>
+        </div>
+      </div>
+
+      <!-- Navigation Cards -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px;">
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavAbsence">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📊 Absence Tracker</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Track multi-week absences and follow up with families</div>
+        </div>
+
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavTrials">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🧪 Trial Follow-up</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Manage trial swimmers and conversion tracking</div>
+        </div>
+
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavHistory">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📅 Attendance History</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">View 30-day attendance patterns and reports</div>
+        </div>
+
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavObservations">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📝 Instructor Observations</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Generate evaluation forms and track progress</div>
+        </div>
+      </div>
+
+      <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
+        Admin features are protected by PIN authentication. Session expires after 2 hours.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PIN Authentication Modal -->
+<div class="modalBackdrop" id="pinModal">
+  <div class="modal" style="max-width: 420px;">
+    <h3>Admin Access</h3>
+
+    <div class="field">
+      <label>Enter 4-digit PIN</label>
+      <input type="password" id="pinInput" placeholder="••••" maxlength="4" style="font-size:24px; text-align:center; letter-spacing:8px;" />
+      <div class="hint" id="pinError" style="color:#ef4444; display:none;">Incorrect PIN. Try again.</div>
+      <div class="hint" id="pinLockout" style="color:#ef4444; display:none;">Too many attempts. Locked for 2 minutes.</div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="pinCancel">Cancel</button>
+      <button class="primary" id="pinSubmit">Unlock</button>
     </div>
   </div>
 </div>
@@ -488,7 +638,9 @@
 
       <div class="field">
         <label>Instructor (optional)</label>
-        <input type="text" id="addInstructor" placeholder="Example: Nova H" />
+        <select id="addInstructor">
+          <option value="">(loading...)</option>
+        </select>
       </div>
 
       <div class="field">
@@ -559,6 +711,7 @@
   let autoTimers = [];
   let currentLocation = null;
   let allLocations = [];
+  let searchFilter = '';
 
   const el = (id) => document.getElementById(id);
 
@@ -659,6 +812,30 @@
     }
     // Non-group
     return { type: p, level: '—' };
+  }
+
+  function getProgramColorClass(program){
+    const p = String(program || '').toUpperCase().trim();
+    if(!p) return '';
+
+    // Check for GROUP programs
+    if(p.startsWith('GROUP:')) return 'program-group';
+
+    // Check for SEMI-PRIVATE
+    if(p.includes('SEMI') && p.includes('PRIVATE')) return 'program-semi-private';
+    if(p.includes('SEMI-PRIVATE')) return 'program-semi-private';
+
+    // Check for PRIVATE (but not semi-private)
+    if(p.includes('PRIVATE')) return 'program-private';
+
+    // Check for PARENT-TOT
+    if(p.includes('PARENT') && p.includes('TOT')) return 'program-parent-tot';
+    if(p.includes('PARENTTOT')) return 'program-parent-tot';
+
+    // Check for TRIAL (could be in program name or as a flag indicator)
+    if(p.includes('TRIAL')) return 'program-trial';
+
+    return '';
   }
 
   async function api(path, opts={}){
@@ -1001,14 +1178,41 @@
     }
 
     const data = await api(`/api/blocks/${encodeURIComponent(currentBlock)}`);
-    const kids = sortKids(data.kids || []);
-    el('rosterMeta').textContent = `(${kids.length} swimmers • ${fmtTime(currentBlock)})`;
+    let kids = sortKids(data.kids || []);
+
+    // Apply search filter
+    const totalCount = kids.length;
+    if (searchFilter.trim()) {
+      const query = searchFilter.toLowerCase();
+      kids = kids.filter(kid => {
+        const name = (kid.swimmer_name || '').toLowerCase();
+        const instructor = (kid.instructor_name || '').toLowerCase();
+        const zone = (kid.zone || '').toString().toLowerCase();
+        const program = (kid.program || '').toLowerCase();
+
+        return name.includes(query) ||
+               instructor.includes(query) ||
+               zone.includes(query) ||
+               program.includes(query);
+      });
+    }
+
+    // Update roster meta with filter info
+    if (searchFilter.trim()) {
+      el('rosterMeta').textContent = `(Showing ${kids.length} of ${totalCount} swimmers • ${fmtTime(currentBlock)})`;
+    } else {
+      el('rosterMeta').textContent = `(${kids.length} swimmers • ${fmtTime(currentBlock)})`;
+    }
 
     const tbody = el('roster');
     tbody.innerHTML = '';
 
     for(const kid of kids){
       const tr = document.createElement('tr');
+
+      // Apply program type color class
+      const colorClass = getProgramColorClass(kid.program);
+      if(colorClass) tr.className = colorClass;
 
       // Attendance
       const tdAtt = document.createElement('td');
@@ -1119,15 +1323,130 @@
   el('tabRoster').addEventListener('click', () => {
     el('tabRoster').classList.add('active');
     el('tabAnnouncements').classList.remove('active');
+    el('tabAdmin').classList.remove('active');
     el('panelRoster').classList.remove('hidden');
     el('panelAnnouncements').classList.add('hidden');
+    el('panelAdmin').classList.add('hidden');
   });
 
   el('tabAnnouncements').addEventListener('click', () => {
     el('tabAnnouncements').classList.add('active');
     el('tabRoster').classList.remove('active');
+    el('tabAdmin').classList.remove('active');
     el('panelRoster').classList.add('hidden');
     el('panelAnnouncements').classList.remove('hidden');
+    el('panelAdmin').classList.add('hidden');
+  });
+
+  // Admin tab with PIN protection
+  el('tabAdmin').addEventListener('click', async () => {
+    // Check if already authenticated
+    const pinAuth = sessionStorage.getItem('admin_pin_auth');
+    const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
+
+    if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
+      // Already authenticated and not expired
+      showAdminPanel();
+      return;
+    }
+
+    // Need to authenticate
+    showModal('pinModal', true);
+    el('pinInput').value = '';
+    el('pinError').style.display = 'none';
+    el('pinLockout').style.display = 'none';
+    el('pinInput').focus();
+  });
+
+  function showAdminPanel() {
+    el('tabAdmin').classList.add('active');
+    el('tabRoster').classList.remove('active');
+    el('tabAnnouncements').classList.remove('active');
+    el('panelRoster').classList.add('hidden');
+    el('panelAnnouncements').classList.add('hidden');
+    el('panelAdmin').classList.remove('hidden');
+
+    // Load admin stats
+    loadAdminStats();
+  }
+
+  async function loadAdminStats() {
+    try {
+      const resp = await api('/api/admin/stats');
+      if (resp.ok) {
+        el('adminStatSwimmers').textContent = resp.stats.swimmers_today;
+        el('adminStatAttendance').textContent = resp.stats.attendance_rate + '%';
+        el('adminStatTrials').textContent = resp.stats.trials_this_week;
+      }
+    } catch (e) {
+      console.error('Failed to load admin stats:', e);
+    }
+  }
+
+  // PIN modal handlers
+  el('pinCancel').addEventListener('click', () => {
+    showModal('pinModal', false);
+  });
+
+  el('pinSubmit').addEventListener('click', async () => {
+    const pin = el('pinInput').value.trim();
+
+    if (!pin || pin.length !== 4) {
+      el('pinError').textContent = 'Please enter a 4-digit PIN';
+      el('pinError').style.display = 'block';
+      return;
+    }
+
+    try {
+      const resp = await api('/api/verify-pin', {
+        method: 'POST',
+        body: JSON.stringify({ pin })
+      });
+
+      if (resp.ok && resp.authenticated) {
+        // Success!
+        sessionStorage.setItem('admin_pin_auth', 'true');
+        sessionStorage.setItem('admin_pin_expiry', resp.expires_at.toString());
+
+        showModal('pinModal', false);
+        showAdminPanel();
+      }
+    } catch (e) {
+      if (e.message.includes('Too many failed attempts')) {
+        el('pinError').style.display = 'none';
+        el('pinLockout').style.display = 'block';
+      } else {
+        el('pinLockout').style.display = 'none';
+        el('pinError').textContent = e.message || 'Incorrect PIN. Try again.';
+        el('pinError').style.display = 'block';
+      }
+      el('pinInput').value = '';
+      el('pinInput').focus();
+    }
+  });
+
+  // Allow Enter key to submit PIN
+  el('pinInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      el('pinSubmit').click();
+    }
+  });
+
+  // Admin navigation cards (placeholders for future sessions)
+  el('adminNavAbsence').addEventListener('click', () => {
+    alert('Absence Tracker\n\nComing in Session 9!\n\nThis will track multi-week absences and help you follow up with families.');
+  });
+
+  el('adminNavTrials').addEventListener('click', () => {
+    alert('Trial Follow-up\n\nComing in Session 10!\n\nThis will manage trial swimmers and track conversion rates.');
+  });
+
+  el('adminNavHistory').addEventListener('click', () => {
+    alert('Attendance History\n\nComing in Session 12 (Optional)!\n\nThis will show 30-day attendance patterns and reports.');
+  });
+
+  el('adminNavObservations').addEventListener('click', () => {
+    alert('Instructor Observations\n\nComing in Session 13 (Optional)!\n\nThis will generate evaluation forms for instructor observations.');
   });
 
   el('settingsBtn').addEventListener('click', () => {
@@ -1238,8 +1557,39 @@
 
   el('sortBy').addEventListener('change', () => loadRoster());
 
+  // Load instructors for dropdown
+  async function loadInstructors() {
+    try {
+      const locId = currentLocation?.id || 1;
+      const resp = await api(`/api/instructors?location_id=${locId}`);
+      const select = el('addInstructor');
+
+      // Clear existing options
+      select.innerHTML = '';
+
+      // Add blank option
+      const blankOpt = document.createElement('option');
+      blankOpt.value = '';
+      blankOpt.textContent = '(select instructor)';
+      select.appendChild(blankOpt);
+
+      // Add instructor options
+      (resp.instructors || []).forEach(instructor => {
+        const opt = document.createElement('option');
+        opt.value = instructor.displayName;
+        opt.textContent = instructor.displayName;
+        select.appendChild(opt);
+      });
+
+    } catch (e) {
+      console.error('Failed to load instructors:', e);
+      const select = el('addInstructor');
+      select.innerHTML = '<option value="">(error loading instructors)</option>';
+    }
+  }
+
   // Add-on modal
-  el('addSwimmerBtn').addEventListener('click', () => {
+  el('addSwimmerBtn').addEventListener('click', async () => {
     if(!currentBlock) return;
     el('addName').value = '';
     el('addAge').value = '';
@@ -1247,6 +1597,10 @@
     el('addZone').value = '';
     el('addProgram').value = 'GROUP: Beginner 1';
     el('addTime').value = fmtTime(currentBlock);
+
+    // Load instructors for current location
+    await loadInstructors();
+
     showModal('addModal', true);
   });
   el('addCancel').addEventListener('click', () => showModal('addModal', false));
@@ -1345,6 +1699,35 @@
   });
   el('presetCodeBrown').addEventListener('click', () => {
     el('customText').value = 'Code Brown. Please clear the pool area immediately.';
+  });
+
+  // Search functionality
+  el('rosterSearch').addEventListener('input', (e) => {
+    searchFilter = e.target.value;
+
+    // Show/hide clear button
+    const clearBtn = el('searchClear');
+    if (searchFilter.trim()) {
+      clearBtn.classList.remove('hidden');
+    } else {
+      clearBtn.classList.add('hidden');
+    }
+
+    // Reload roster with filter
+    if (currentBlock) {
+      loadRoster();
+    }
+  });
+
+  el('searchClear').addEventListener('click', () => {
+    searchFilter = '';
+    el('rosterSearch').value = '';
+    el('searchClear').classList.add('hidden');
+
+    // Reload roster without filter
+    if (currentBlock) {
+      loadRoster();
+    }
   });
 
   // Boot
