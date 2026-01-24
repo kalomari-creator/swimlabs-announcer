@@ -1599,8 +1599,22 @@ app.get("/api/instructors", (req, res) => {
       return res.json({ ok: true, instructors: [] });
     }
 
-    // Map location name to region
-    const region = locationMapping[location.name] || location.name;
+    const normalizeKey = (value) => String(value || "").trim().toLowerCase();
+    const normalizedMapping = new Map(
+      Object.entries(locationMapping || {}).map(([key, value]) => [normalizeKey(key), value])
+    );
+    const regionCandidates = [
+      location.name,
+      location.code,
+      location.short_code,
+      location.shortCode
+    ].map(normalizeKey);
+    const mappedRegion = regionCandidates
+      .map((key) => normalizedMapping.get(key))
+      .find(Boolean);
+
+    // Map location name/code/short code to region
+    const region = mappedRegion || location.name;
 
     // Filter instructors by region and format as "First L."
     const filtered = instructors
