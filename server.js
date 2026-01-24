@@ -5,6 +5,10 @@ const Database = require("better-sqlite3");
 const { spawn } = require("child_process");
 const crypto = require("crypto");
 const cheerio = require('cheerio');
+const multer = require('multer');
+
+// Configure multer for file uploads (store in memory)
+const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
 const PORT = 5055;
@@ -1346,22 +1350,33 @@ function parseHTMLRoster(html) {
   return swimmers;
 }
 
-app.post("/api/upload-html", async (req, res) => {
+app.post("/api/upload-html", upload.single('html'), async (req, res) => {
   try {
-    const { html_base64, filename, location_id } = req.body || {};
+    // Handle FormData file upload (new method)
+    let html, filename;
 
-    if (!html_base64) {
+    if (req.file) {
+      // FormData upload
+      html = req.file.buffer.toString('utf-8');
+      filename = req.file.originalname;
+    } else if (req.body.html_content) {
+      // JSON upload (fallback for compatibility)
+      html = req.body.html_content;
+      filename = req.body.filename;
+    } else if (req.body.html_base64) {
+      // Base64 upload (legacy)
+      html = Buffer.from(req.body.html_base64, "base64").toString("utf-8");
+      filename = req.body.filename;
+    } else {
       return res.status(400).json({ ok: false, error: "No file data provided" });
     }
 
-    const locId = location_id || 1; // Default to SwimLabs Westchester
+    const locId = parseInt(req.body.location_id || req.file?.fieldname === 'html' && req.body.location_id || 1);
     const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
-    
+
     if (!location) {
       return res.status(400).json({ ok: false, error: "Invalid location" });
     }
-
-    const html = Buffer.from(html_base64, "base64").toString("utf-8");
 
     const detectedDate =
       parseDateFromFilename(filename) ||

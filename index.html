@@ -1490,26 +1490,22 @@
       el('uploadHtmlBtn').disabled = true;
       el('uploadHtmlBtn').textContent = 'Uploading...';
 
-      const text = await file.text();
+      // Use FormData for clean file upload without credential issues
+      const formData = new FormData();
+      formData.append('html', file);
+      formData.append('location_id', currentLocation?.id || 1);
 
-      // Convert text to base64 safely
-      const encoder = new TextEncoder();
-      const data = encoder.encode(text);
-      let binary = '';
-      const len = data.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(data[i]);
-      }
-      const html_base64 = btoa(binary);
-
-      const result = await api('/api/upload-html', {
+      const response = await fetch('/api/upload-html', {
         method: 'POST',
-        body: JSON.stringify({
-          html_base64: html_base64,
-          filename: file.name,
-          location_id: currentLocation?.id || 1
-        })
+        body: formData
+        // No headers, no credentials - browser handles multipart automatically
       });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
 
       if (result.ok) {
         alert(`Success! Imported ${result.count} swimmers`);
