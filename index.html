@@ -1232,6 +1232,9 @@
     const st = await api('/api/status');
 
     const activeDate = st.activeDate || st.todayISO;
+    if (activeDate) {
+      activeDateISO = activeDate;
+    }
     const ttsOk = (st.piperBinExists && st.voiceModelExists);
     const ttsMsg = ttsOk ? 'TTS ready' : 'TTS missing (piper/model)';
     const rosterMsg = st.htmlExists ? `Roster loaded (${Math.round((st.htmlSizeBytes||0)/1024)} KB)` : 'No roster uploaded yet';
@@ -2876,10 +2879,11 @@
       await loadLocations();
       await loadStatus();
       await loadBlocks();
-      // Start clock update (runs independently of announcements)
-      startCountdown();
     }catch(e){
       setStatus(e.message || 'Failed to load', 'warn');
+    }finally{
+      // Start clock update (runs independently of announcements)
+      startCountdown();
     }
   })();
 </script>

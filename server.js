@@ -1634,7 +1634,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       return res.status(400).json({ ok: false, error: "No file data provided" });
     }
 
-    const locId = parseInt(req.body.location_id || req.file?.fieldname === 'html' && req.body.location_id || 1);
+    const locId = Number(req.body.location_id || req.query.location_id || 1);
     const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
 
     if (!location) {
