@@ -775,12 +775,14 @@ app.post("/api/import-today", async (req, res) => {
 
 app.get("/api/blocks", (req, res) => {
   const date = activeOrToday();
+  const location_id = req.query.location_id || req.session?.location_id || 1;
+
   const rows = db.prepare(`
     SELECT DISTINCT start_time
     FROM roster
-    WHERE date = ?
+    WHERE date = ? AND location_id = ?
     ORDER BY start_time ASC
-  `).all(date);
+  `).all(date, location_id);
 
   res.json({ ok: true, blocks: rows.map(r => r.start_time) });
 });
@@ -788,6 +790,7 @@ app.get("/api/blocks", (req, res) => {
 app.get("/api/blocks/:start_time", (req, res) => {
   const date = activeOrToday();
   const start_time = req.params.start_time;
+  const location_id = req.query.location_id || req.session?.location_id || 1;
 
   const kids = db.prepare(`
     SELECT
@@ -801,8 +804,8 @@ app.get("/api/blocks/:start_time", (req, res) => {
       zone_overridden,
       flag_new, flag_makeup, flag_policy, flag_owes, flag_trial
     FROM roster
-    WHERE date = ? AND start_time = ?
-  `).all(date, start_time);
+    WHERE date = ? AND start_time = ? AND location_id = ?
+  `).all(date, start_time, location_id);
 
   res.json({ ok: true, kids });
 });
@@ -930,11 +933,12 @@ app.post("/api/update-zone", (req, res) => {
 // Add swimmer (add-on)
 app.post("/api/add-swimmer", (req, res) => {
   try {
-    const { start_time, swimmer_name, instructor_name, zone, program, age_text, device_mode } = req.body || {};
+    const { start_time, swimmer_name, instructor_name, zone, program, age_text, device_mode, location_id } = req.body || {};
     if (!start_time || !swimmer_name) return res.status(400).json({ ok: false, error: "missing fields" });
 
     const date = activeOrToday();
     const now = nowISO();
+    const locId = location_id || 1;
 
     const z = zone === "" || zone === undefined || zone === null ? null : parseInt(zone, 10);
     if (z !== null && ![1,2,3,4].includes(z)) return res.status(400).json({ ok: false, error: "invalid zone", details: { zone } });
@@ -946,6 +950,7 @@ app.post("/api/add-swimmer", (req, res) => {
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        location_id,
         created_at, updated_at,
         zone_overridden, zone_override_at, zone_override_by
       ) VALUES (
@@ -954,6 +959,7 @@ app.post("/api/add-swimmer", (req, res) => {
         NULL, NULL,
         1,
         0,0,0,0,0,
+        ?,
         ?, ?,
         0, NULL, NULL
       )
@@ -963,6 +969,7 @@ app.post("/api/add-swimmer", (req, res) => {
         program=excluded.program,
         age_text=excluded.age_text,
         is_addon=1,
+        location_id=excluded.location_id,
         updated_at=excluded.updated_at
     `).run(
       date, start_time, swimmer_name,
@@ -970,6 +977,7 @@ app.post("/api/add-swimmer", (req, res) => {
       z,
       program || null,
       age_text || null,
+      locId,
       now, now
     );
 
@@ -1410,6 +1418,35 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     const swimmers = parseHTMLRoster(html);
     if (swimmers.length === 0) {
       return res.status(400).json({ ok: false, error: "No swimmers found in HTML file" });
+    }
+
+    // Auto-export existing roster before clearing (if any exists)
+    const existingRoster = db.prepare(`
+      SELECT * FROM roster
+      WHERE date = ? AND location_id = ? AND is_addon = 0
+    `).all(detectedDate, locId);
+
+    if (existingRoster.length > 0) {
+      // Create export directory for this location
+      const exportDir = path.join(EXPORT_DIR, location.code);
+      if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+      // Generate timestamp for filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const exportFilename = `roster_${detectedDate}_${timestamp}.json`;
+      const exportPath = path.join(exportDir, exportFilename);
+
+      // Save existing roster to JSON
+      fs.writeFileSync(exportPath, JSON.stringify({
+        location: location.name,
+        location_code: location.code,
+        date: detectedDate,
+        exported_at: nowISO(),
+        count: existingRoster.length,
+        roster: existingRoster
+      }, null, 2), 'utf-8');
+
+      console.log(`Auto-exported ${existingRoster.length} swimmers to ${exportFilename}`);
     }
 
     // Delete existing roster for this location/date
