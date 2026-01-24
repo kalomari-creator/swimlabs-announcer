@@ -393,19 +393,20 @@
     </div>
 
     <div class="right row">
-      <select id="locationSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+      <select id="locationSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
         <option value="">Loading locations...</option>
       </select>
-      <div class="tabs">
-        <button class="tab active" id="tabRoster">Roster</button>
-        <button class="tab" id="tabAnnouncements" style="display:none;">Announcements</button>
-        <button class="tab" id="tabVirtualDesk">Virtual Desk</button>
-        <button class="tab" id="tabAdmin">⚙️ Admin</button>
-      </div>
+      <select id="viewSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); min-width: 150px;">
+        <option value="roster">Roster</option>
+        <option value="lifeguard">Lifeguard 🏊</option>
+        <option value="announcements">Announcements</option>
+        <option value="virtualDesk">Virtual Desk</option>
+        <option value="admin">⚙️ Admin</option>
+      </select>
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
       <button id="settingsBtn" title="Settings">⚙️</button>
       <span class="pill">Last: <strong id="lastAt">None</strong></span>
-      <span class="pill" id="nextAnnouncementPill" style="display:none;">Next: <strong id="nextAnnouncementTimer" style="color:#04D9FF;">—</strong></span>
+      <span class="pill" id="nextAnnouncementPill">Next: <strong id="nextAnnouncementTimer" style="color:#04D9FF;">—</strong></span>
     </div>
   </div>
 
@@ -1449,75 +1450,59 @@
   }
 
   // ---- Wire up UI ----
-  el('tabRoster').addEventListener('click', () => {
-    el('tabRoster').classList.add('active');
-    el('tabAnnouncements').classList.remove('active');
-    el('tabVirtualDesk').classList.remove('active');
-    el('tabAdmin').classList.remove('active');
-    el('panelRoster').classList.remove('hidden');
+  // View selector dropdown
+  el('viewSelect').addEventListener('change', async (e) => {
+    const view = e.target.value;
+
+    // Hide all panels
+    el('panelRoster').classList.add('hidden');
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.add('hidden');
-  });
 
-  el('tabAnnouncements').addEventListener('click', () => {
-    el('tabAnnouncements').classList.add('active');
-    el('tabRoster').classList.remove('active');
-    el('tabVirtualDesk').classList.remove('active');
-    el('tabAdmin').classList.remove('active');
-    el('panelRoster').classList.add('hidden');
-    el('panelAnnouncements').classList.remove('hidden');
-    el('panelVirtualDesk').classList.add('hidden');
-    el('panelAdmin').classList.add('hidden');
-  });
+    if (view === 'roster') {
+      el('panelRoster').classList.remove('hidden');
+    } else if (view === 'lifeguard') {
+      alert('Lifeguard Tracker\n\nComing soon!\n\nThis will track lifeguard schedules and certifications.');
+      el('viewSelect').value = 'roster'; // Reset to roster
+      el('panelRoster').classList.remove('hidden');
+    } else if (view === 'announcements') {
+      el('panelAnnouncements').classList.remove('hidden');
+    } else if (view === 'virtualDesk') {
+      // Check PIN authentication
+      const pinAuth = sessionStorage.getItem('admin_pin_auth');
+      const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
 
-  // Virtual Desk tab with PIN protection
-  el('tabVirtualDesk').addEventListener('click', async () => {
-    // Check if already authenticated
-    const pinAuth = sessionStorage.getItem('admin_pin_auth');
-    const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
+      if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
+        showVirtualDeskPanel();
+      } else {
+        pendingPinPanel = 'virtualDesk';
+        showModal('pinModal', true);
+        el('pinInput').value = '';
+        el('pinError').style.display = 'none';
+        el('pinLockout').style.display = 'none';
+        el('pinInput').focus();
+      }
+    } else if (view === 'admin') {
+      // Check PIN authentication
+      const pinAuth = sessionStorage.getItem('admin_pin_auth');
+      const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
 
-    if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
-      // Already authenticated and not expired
-      showVirtualDeskPanel();
-      return;
+      if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
+        showAdminPanel();
+      } else {
+        pendingPinPanel = 'admin';
+        showModal('pinModal', true);
+        el('pinInput').value = '';
+        el('pinError').style.display = 'none';
+        el('pinLockout').style.display = 'none';
+        el('pinInput').focus();
+      }
     }
-
-    // Need to authenticate
-    pendingPinPanel = 'virtualDesk';
-    showModal('pinModal', true);
-    el('pinInput').value = '';
-    el('pinError').style.display = 'none';
-    el('pinLockout').style.display = 'none';
-    el('pinInput').focus();
-  });
-
-  // System Admin tab with PIN protection
-  el('tabAdmin').addEventListener('click', async () => {
-    // Check if already authenticated
-    const pinAuth = sessionStorage.getItem('admin_pin_auth');
-    const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
-
-    if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
-      // Already authenticated and not expired
-      showAdminPanel();
-      return;
-    }
-
-    // Need to authenticate
-    pendingPinPanel = 'admin';
-    showModal('pinModal', true);
-    el('pinInput').value = '';
-    el('pinError').style.display = 'none';
-    el('pinLockout').style.display = 'none';
-    el('pinInput').focus();
   });
 
   function showVirtualDeskPanel() {
-    el('tabVirtualDesk').classList.add('active');
-    el('tabRoster').classList.remove('active');
-    el('tabAnnouncements').classList.remove('active');
-    el('tabAdmin').classList.remove('active');
+    el('viewSelect').value = 'virtualDesk';
     el('panelRoster').classList.add('hidden');
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.remove('hidden');
@@ -1528,10 +1513,7 @@
   }
 
   function showAdminPanel() {
-    el('tabAdmin').classList.add('active');
-    el('tabRoster').classList.remove('active');
-    el('tabAnnouncements').classList.remove('active');
-    el('tabVirtualDesk').classList.remove('active');
+    el('viewSelect').value = 'admin';
     el('panelRoster').classList.add('hidden');
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.add('hidden');
