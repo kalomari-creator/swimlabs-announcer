@@ -43,13 +43,19 @@
     { "firstName": "Xyla", "lastName": "Ruff", "location": "New York", "phone": "9149122621", "birthday": "9/21/07" }
   ],
   "locationMapping": {
+    "SwimLabs Westchester": "New York",
     "Westchester": "New York",
+    "SafeSplash Riverdale": "New York",
     "Riverdale": "New York",
+    "SafeSplash Summerlin": "Nevada",
     "Summerlin": "Nevada",
+    "SafeSplash Santa Monica": "California",
     "Santa Monica": "California",
+    "SafeSplash Torrance": "California",
     "Torrance": "California",
+    "SwimLabs Woodlands": "Texas",
     "Woodlands": "Texas"
   },
-  "last_updated": "2026-01-24T12:00:00.000Z",
+  "last_updated": "2026-01-24T19:30:00.000Z",
   "notes": "Instructors with phone numbers and birthdays. Format: First Name, Last Initial in UI."
 }

@@ -388,7 +388,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer</h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.5.2</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -405,8 +405,19 @@
       </select>
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
       <button id="settingsBtn" title="Settings">⚙️</button>
+      <span class="pill">
+        <div style="line-height:1.3;">
+          <div style="font-size:11px; color:var(--muted);">Current Time</div>
+          <strong id="currentTime" style="color:#04D9FF; font-size:15px;">—</strong>
+        </div>
+      </span>
+      <span class="pill" id="nextAnnouncementPill">
+        <div style="line-height:1.3;">
+          <div style="font-size:11px; color:var(--muted);">Next Announcement</div>
+          <strong id="nextAnnouncementTimer" style="color:#04D9FF; font-size:15px;">—</strong>
+        </div>
+      </span>
       <span class="pill">Last: <strong id="lastAt">None</strong></span>
-      <span class="pill" id="nextAnnouncementPill">Next: <strong id="nextAnnouncementTimer" style="color:#04D9FF;">—</strong></span>
     </div>
   </div>
 
@@ -1168,22 +1179,38 @@
       countdownInterval = null;
     }
 
-    // Hide the countdown pill
-    el('nextAnnouncementPill').style.display = 'none';
+    // Show timer pill but with dash
+    el('nextAnnouncementTimer').textContent = '—';
+    el('nextAnnouncementPill').style.display = '';
   }
 
   function updateCountdown() {
+    const now = new Date();
+
+    // Update current time display
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = String(minutes).padStart(2, '0');
+    el('currentTime').textContent = `${displayHours}:${displayMinutes} ${ampm}`;
+
     if (!nextAnnouncementTime) {
-      stopCountdown();
+      el('nextAnnouncementTimer').textContent = '—';
+      el('nextAnnouncementTimer').style.color = '#04D9FF';
+      el('nextAnnouncementPill').style.display = '';
       return;
     }
 
-    const now = new Date();
     const diff = nextAnnouncementTime - now;
 
-    // If time has passed, hide countdown
+    // If time has passed, show NOW for 3 seconds
     if (diff <= 0) {
-      stopCountdown();
+      el('nextAnnouncementTimer').textContent = 'NOW';
+      el('nextAnnouncementTimer').style.color = '#22c55e';
+      setTimeout(() => {
+        stopCountdown();
+      }, 3000);
       return;
     }
 
@@ -1192,16 +1219,17 @@
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
 
-    // Format the countdown
+    // Format as :MM or :SS
     let display = '';
     if (minutes > 0) {
-      display = `${minutes}m ${seconds}s`;
+      display = `:${String(minutes).padStart(2, '0')}`;
     } else {
-      display = `${seconds}s`;
+      display = `:${String(seconds).padStart(2, '0')}`;
     }
 
     // Update the display
     el('nextAnnouncementTimer').textContent = display;
+    el('nextAnnouncementTimer').style.color = '#04D9FF';
     el('nextAnnouncementPill').style.display = '';
   }
 
@@ -2428,6 +2456,8 @@
       await loadLocations();
       await loadStatus();
       await loadBlocks();
+      // Start clock update (runs independently of announcements)
+      startCountdown();
     }catch(e){
       setStatus(e.message || 'Failed to load', 'warn');
     }
