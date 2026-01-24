@@ -805,7 +805,8 @@ app.get("/api/blocks/:start_time", (req, res) => {
       attendance,
       is_addon,
       zone_overridden,
-      flag_new, flag_makeup, flag_policy, flag_owes, flag_trial
+      flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+      balance_amount
     FROM roster
     WHERE date = ? AND start_time = ? AND location_id = ?
   `).all(date, start_time, location_id);
@@ -884,6 +885,29 @@ app.post("/api/attendance", (req, res) => {
     res.json({ ok: true, attendance: att, at: now });
   } catch (e) {
     res.status(500).json({ ok: false, error: "attendance update failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/attendance/remove-history", (req, res) => {
+  try {
+    const { date, start_time, swimmer_name, location_id } = req.body || {};
+    if (!date || !start_time || !swimmer_name || !location_id) {
+      return res.status(400).json({ ok: false, error: "missing fields" });
+    }
+
+    const result = db.prepare(`
+      DELETE FROM roster
+      WHERE date = ? AND start_time = ? AND swimmer_name = ? AND location_id = ?
+    `).run(date, start_time, swimmer_name, location_id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ ok: false, error: "record not found" });
+    }
+
+    audit(req, "remove_attendance_history", { date, start_time, swimmer_name, location_id });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "remove attendance history failed", details: String(e?.stack || e?.message || e) });
   }
 });
 
@@ -1599,8 +1623,22 @@ app.get("/api/instructors", (req, res) => {
       return res.json({ ok: true, instructors: [] });
     }
 
-    // Map location name to region
-    const region = locationMapping[location.name] || location.name;
+    const normalizeKey = (value) => String(value || "").trim().toLowerCase();
+    const normalizedMapping = new Map(
+      Object.entries(locationMapping || {}).map(([key, value]) => [normalizeKey(key), value])
+    );
+    const regionCandidates = [
+      location.name,
+      location.code,
+      location.short_code,
+      location.shortCode
+    ].map(normalizeKey);
+    const mappedRegion = regionCandidates
+      .map((key) => normalizedMapping.get(key))
+      .find(Boolean);
+
+    // Map location name/code/short code to region
+    const region = mappedRegion || location.name;
 
     // Filter instructors by region and format as "First L."
     const filtered = instructors
