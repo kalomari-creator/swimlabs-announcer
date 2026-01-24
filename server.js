@@ -1333,7 +1333,15 @@ function parseHTMLRoster(html) {
           flags[flagName] = 1;
         }
       });
-      
+
+      // Check for pre-marked absence (X-modifier.png icon in attendance cell)
+      let attendance = null;
+      const attendanceCell = $row.find('td.date-time, td.cell-bordered');
+      const xModifier = attendanceCell.find('img[src*="X-modifier"]');
+      if (xModifier.length > 0) {
+        attendance = 0; // 0 = absent
+      }
+
       swimmers.push({
         start_time: startTime,
         swimmer_name: swimmerName,
@@ -1341,6 +1349,7 @@ function parseHTMLRoster(html) {
         instructor_name: instructorName,
         program: programText,
         zone: zone,
+        attendance: attendance,
         ...flags
       });
     });
@@ -1410,7 +1419,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
         location_id,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `);
 
@@ -1419,6 +1428,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
         ins.run(
           detectedDate, r.start_time, r.swimmer_name,
           r.instructor_name || null, r.zone || null, r.program || null, r.age_text || null,
+          r.attendance !== undefined ? r.attendance : null,
           r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
           locId,
           now, now
