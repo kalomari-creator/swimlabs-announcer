@@ -1490,21 +1490,20 @@
       el('uploadHtmlBtn').disabled = true;
       el('uploadHtmlBtn').textContent = 'Uploading...';
 
-      const text = await file.text();
+      // Use FormData for clean file upload without credential issues
+      const formData = new FormData();
+      formData.append('html', file);
+      formData.append('location_id', currentLocation?.id || 1);
 
-      // Use direct fetch without the api() wrapper to avoid credential issues
       const response = await fetch('/api/upload-html', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          html_content: text,
-          filename: file.name,
-          location_id: currentLocation?.id || 1
-        })
+        body: formData
+        // No headers, no credentials - browser handles multipart automatically
       });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
 
       const result = await response.json();
 
