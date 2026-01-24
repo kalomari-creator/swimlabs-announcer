@@ -400,7 +400,7 @@
         <option value="roster">Roster</option>
         <option value="lifeguard">Lifeguard 🏊</option>
         <option value="announcements">Announcements</option>
-        <option value="virtualDesk">Virtual Desk</option>
+        <option value="virtualDesk">Manager</option>
         <option value="admin">⚙️ Admin</option>
       </select>
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
@@ -521,7 +521,7 @@
 
   <div id="panelVirtualDesk" class="hidden">
     <div class="card">
-      <h2 style="margin:0 0 16px; font-size:20px;">Virtual Desk Dashboard</h2>
+      <h2 style="margin:0 0 16px; font-size:20px;">Manager Dashboard</h2>
 
       <!-- Quick Stats -->
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
@@ -594,7 +594,22 @@
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
-        Virtual Desk features are protected by PIN authentication. Session expires after 2 hours.
+        Manager features are protected by PIN authentication. Session expires after 2 hours.
+      </div>
+    </div>
+  </div>
+
+  <div id="panelLifeguard" class="hidden">
+    <div class="card">
+      <h2 style="margin:0 0 16px; font-size:20px;">🛟 Lifeguard Dashboard</h2>
+      <div class="tiny" style="color:var(--muted); margin-bottom:12px;">
+        Guard tasks are available for SwimLabs Westchester.
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px;">
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="lifeguardNavGuards">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1207,7 +1222,7 @@
 
   function setSelectedBlockUI(){
     el('selectedBlock').textContent = currentBlock ? fmtTime(currentBlock) : 'None';
-    [...el('blocks').querySelectorAll('button')].forEach(b => {
+    [...el('blocks').querySelectorAll('button[data-time]')].forEach(b => {
       b.classList.toggle('active', b.dataset.time === currentBlock);
     });
     el('addSwimmerBtn').disabled = !currentBlock;
@@ -1238,7 +1253,15 @@
 
     blocksList = (b.blocks || []);
 
+    const issuesResp = await api(`/api/safety-issues?location_id=${locId}&date=${activeDateISO || ''}`);
+    const safetyMap = new Map((issuesResp.issues || []).map((i) => [i.start_time, i]));
+
     blocksList.forEach((t) => {
+      const holder = document.createElement('div');
+      holder.style.display = 'flex';
+      holder.style.gap = '6px';
+      holder.style.alignItems = 'center';
+
       const btn = document.createElement('button');
       btn.textContent = fmtTime(t);
       btn.dataset.time = t;
@@ -1247,7 +1270,44 @@
         setSelectedBlockUI();
         loadRoster();
       });
-      wrap.appendChild(btn);
+      holder.appendChild(btn);
+
+      const issueBtn = document.createElement('button');
+      issueBtn.className = 'miniBtn';
+      issueBtn.title = 'Flag safety issue for this block';
+      issueBtn.textContent = safetyMap.has(t) ? '⚠️' : '⚑';
+      issueBtn.style.minWidth = '40px';
+      issueBtn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const existing = safetyMap.get(t);
+        const note = prompt(
+          `Safety issue for ${fmtTime(t)}.\n\nEnter details (leave blank to clear):`,
+          existing?.note || ''
+        );
+        if (note === null) return;
+        try {
+          await api('/api/safety-issues', {
+            method: 'POST',
+            body: JSON.stringify({
+              date: activeDateISO,
+              start_time: t,
+              location_id: currentLocation?.id || 1,
+              note
+            })
+          });
+          await loadBlocks();
+          toast('Safety issue updated');
+        } catch (err) {
+          alert('Safety issue failed: ' + (err.message || err));
+        }
+      });
+      holder.appendChild(issueBtn);
+
+      if (safetyMap.has(t)) {
+        holder.title = safetyMap.get(t)?.note || 'Safety issue flagged';
+      }
+
+      wrap.appendChild(holder);
     });
 
     if(!currentBlock && (b.blocks || []).length){
@@ -1758,13 +1818,12 @@
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.add('hidden');
+    el('panelLifeguard').classList.add('hidden');
 
     if (view === 'roster') {
       el('panelRoster').classList.remove('hidden');
     } else if (view === 'lifeguard') {
-      alert('Lifeguard Tracker\n\nComing soon!\n\nThis will track lifeguard schedules and certifications.');
-      el('viewSelect').value = 'roster'; // Reset to roster
-      el('panelRoster').classList.remove('hidden');
+      el('panelLifeguard').classList.remove('hidden');
     } else if (view === 'announcements') {
       el('panelAnnouncements').classList.remove('hidden');
     } else if (view === 'virtualDesk') {
@@ -1806,6 +1865,7 @@
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.remove('hidden');
     el('panelAdmin').classList.add('hidden');
+    el('panelLifeguard').classList.add('hidden');
 
     // Load virtual desk stats and swimmer details
     loadAdminStats();
@@ -1818,6 +1878,7 @@
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.remove('hidden');
+    el('panelLifeguard').classList.add('hidden');
 
     // Load locations and staff
     loadAdminLocations();
