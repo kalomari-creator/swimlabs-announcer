@@ -159,6 +159,7 @@ function ensureSchema() {
   addIfMissing("zone_override_at", `ALTER TABLE roster ADD COLUMN zone_override_at TEXT;`);
   addIfMissing("zone_override_by", `ALTER TABLE roster ADD COLUMN zone_override_by TEXT;`);
   addIfMissing("location_id", `ALTER TABLE roster ADD COLUMN location_id INTEGER DEFAULT 1;`);
+  addIfMissing("substitute_instructor", `ALTER TABLE roster ADD COLUMN substitute_instructor TEXT;`);
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_key ON roster(date, start_time, swimmer_name);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
@@ -796,6 +797,7 @@ app.get("/api/blocks/:start_time", (req, res) => {
     SELECT
       swimmer_name,
       instructor_name,
+      substitute_instructor,
       zone,
       program,
       age_text,
@@ -1294,9 +1296,33 @@ function parseHTMLRoster(html) {
     if (!startTime) return;
     
     let instructorName = null;
-    const instructorText = $section.find('th:contains("Instructors:")').next().find('li').first().text().trim();
-    if (instructorText) {
-      instructorName = lastFirstToFirstLast(instructorText);
+    let substituteInstructor = null;
+
+    // Get all instructor list items
+    const instructorItems = $section.find('th:contains("Instructors:")').next().find('li');
+
+    if (instructorItems.length > 0) {
+      instructorItems.each((idx, item) => {
+        const text = $(item).text().trim();
+        if (!text) return;
+
+        // Check if this instructor has an asterisk (indicates substitute)
+        if (text.includes('*')) {
+          // This is the substitute - remove asterisk and convert name
+          const cleanName = text.replace(/\*/g, '').trim();
+          substituteInstructor = lastFirstToFirstLast(cleanName);
+        } else if (idx === 0) {
+          // First instructor without asterisk is the original/regular instructor
+          instructorName = lastFirstToFirstLast(text);
+        }
+      });
+
+      // If no regular instructor was found but we have a substitute,
+      // use the substitute as the main instructor
+      if (!instructorName && substituteInstructor) {
+        instructorName = substituteInstructor;
+        substituteInstructor = null;
+      }
     }
     
     let programText = null;
@@ -1363,6 +1389,7 @@ function parseHTMLRoster(html) {
         swimmer_name: swimmerName,
         age_text: ageText,
         instructor_name: instructorName,
+        substitute_instructor: substituteInstructor,
         program: programText,
         zone: zone,
         attendance: attendance,
@@ -1466,14 +1493,14 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     const ins = db.prepare(`
       INSERT INTO roster (
         date, start_time, swimmer_name,
-        instructor_name, zone, program, age_text,
+        instructor_name, substitute_instructor, zone, program, age_text,
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
         location_id,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `);
 
@@ -1481,7 +1508,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       for (const r of rows) {
         ins.run(
           detectedDate, r.start_time, r.swimmer_name,
-          r.instructor_name || null, r.zone || null, r.program || null, r.age_text || null,
+          r.instructor_name || null, r.substitute_instructor || null, r.zone || null, r.program || null, r.age_text || null,
           r.attendance !== undefined ? r.attendance : null,
           r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
           locId,

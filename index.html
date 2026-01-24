@@ -1365,9 +1365,32 @@
       tdLevel.textContent = tl.level;
       tr.appendChild(tdLevel);
 
-      // Instructor
+      // Instructor (with substitute indicator if applicable)
       const tdInst = document.createElement('td');
-      tdInst.textContent = kid.instructor_name || '—';
+      if (kid.substitute_instructor) {
+        // Show substitute with indicator
+        const subName = document.createElement('span');
+        subName.style.fontWeight = '700';
+        subName.textContent = kid.substitute_instructor;
+
+        const subBadge = document.createElement('span');
+        subBadge.className = 'badge';
+        subBadge.style.cssText = 'background:rgba(251,191,36,0.15); color:#fbbf24; border-color:rgba(251,191,36,0.3); margin-left:6px; font-size:10px; padding:2px 6px;';
+        subBadge.textContent = 'SUB';
+
+        const originalName = document.createElement('div');
+        originalName.className = 'tiny';
+        originalName.style.cssText = 'color:var(--muted); margin-top:2px; text-decoration:line-through;';
+        originalName.textContent = kid.instructor_name || '';
+
+        tdInst.appendChild(subName);
+        tdInst.appendChild(subBadge);
+        if (kid.instructor_name) {
+          tdInst.appendChild(originalName);
+        }
+      } else {
+        tdInst.textContent = kid.instructor_name || '—';
+      }
       tr.appendChild(tdInst);
 
       // Zone
