@@ -399,7 +399,8 @@
       <div class="tabs">
         <button class="tab active" id="tabRoster">Roster</button>
         <button class="tab" id="tabAnnouncements" style="display:none;">Announcements</button>
-        <button class="tab" id="tabAdmin">Admin</button>
+        <button class="tab" id="tabVirtualDesk">Virtual Desk</button>
+        <button class="tab" id="tabAdmin">⚙️ Admin</button>
       </div>
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
       <button id="settingsBtn" title="Settings">⚙️</button>
@@ -507,9 +508,9 @@
     </div>
   </div>
 
-  <div id="panelAdmin" class="hidden">
+  <div id="panelVirtualDesk" class="hidden">
     <div class="card">
-      <h2 style="margin:0 0 16px; font-size:20px;">Admin Dashboard</h2>
+      <h2 style="margin:0 0 16px; font-size:20px;">Virtual Desk Dashboard</h2>
 
       <!-- Quick Stats -->
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
@@ -558,7 +559,32 @@
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
-        Admin features are protected by PIN authentication. Session expires after 2 hours.
+        Virtual Desk features are protected by PIN authentication. Session expires after 2 hours.
+      </div>
+    </div>
+  </div>
+
+  <!-- System Admin Panel -->
+  <div id="panelAdmin" class="hidden">
+    <div class="card">
+      <h2 style="margin:0 0 16px; font-size:20px;">⚙️ System Administration</h2>
+
+      <!-- Location Management -->
+      <div class="card" style="margin-bottom:20px;">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900;">📍 Location Management</h3>
+        <div id="locationsList" style="margin-bottom:12px;"></div>
+        <button id="addLocationBtn" class="secondary">+ Add New Location</button>
+      </div>
+
+      <!-- Staff Management -->
+      <div class="card">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900;">👥 Staff Management</h3>
+        <div id="staffList" style="margin-bottom:12px;"></div>
+        <button id="addStaffBtn" class="secondary">+ Add New Staff</button>
+      </div>
+
+      <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
+        System administration features require elevated privileges. Changes affect all locations.
       </div>
     </div>
   </div>
@@ -714,6 +740,7 @@
   let currentLocation = null;
   let allLocations = [];
   let searchFilter = '';
+  let pendingPinPanel = null; // Track which panel requested PIN auth ('virtualDesk' or 'admin')
 
   const el = (id) => document.getElementById(id);
 
@@ -1322,22 +1349,47 @@
   el('tabRoster').addEventListener('click', () => {
     el('tabRoster').classList.add('active');
     el('tabAnnouncements').classList.remove('active');
+    el('tabVirtualDesk').classList.remove('active');
     el('tabAdmin').classList.remove('active');
     el('panelRoster').classList.remove('hidden');
     el('panelAnnouncements').classList.add('hidden');
+    el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.add('hidden');
   });
 
   el('tabAnnouncements').addEventListener('click', () => {
     el('tabAnnouncements').classList.add('active');
     el('tabRoster').classList.remove('active');
+    el('tabVirtualDesk').classList.remove('active');
     el('tabAdmin').classList.remove('active');
     el('panelRoster').classList.add('hidden');
     el('panelAnnouncements').classList.remove('hidden');
+    el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.add('hidden');
   });
 
-  // Admin tab with PIN protection
+  // Virtual Desk tab with PIN protection
+  el('tabVirtualDesk').addEventListener('click', async () => {
+    // Check if already authenticated
+    const pinAuth = sessionStorage.getItem('admin_pin_auth');
+    const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
+
+    if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
+      // Already authenticated and not expired
+      showVirtualDeskPanel();
+      return;
+    }
+
+    // Need to authenticate
+    pendingPinPanel = 'virtualDesk';
+    showModal('pinModal', true);
+    el('pinInput').value = '';
+    el('pinError').style.display = 'none';
+    el('pinLockout').style.display = 'none';
+    el('pinInput').focus();
+  });
+
+  // System Admin tab with PIN protection
   el('tabAdmin').addEventListener('click', async () => {
     // Check if already authenticated
     const pinAuth = sessionStorage.getItem('admin_pin_auth');
@@ -1350,6 +1402,7 @@
     }
 
     // Need to authenticate
+    pendingPinPanel = 'admin';
     showModal('pinModal', true);
     el('pinInput').value = '';
     el('pinError').style.display = 'none';
@@ -1357,16 +1410,33 @@
     el('pinInput').focus();
   });
 
+  function showVirtualDeskPanel() {
+    el('tabVirtualDesk').classList.add('active');
+    el('tabRoster').classList.remove('active');
+    el('tabAnnouncements').classList.remove('active');
+    el('tabAdmin').classList.remove('active');
+    el('panelRoster').classList.add('hidden');
+    el('panelAnnouncements').classList.add('hidden');
+    el('panelVirtualDesk').classList.remove('hidden');
+    el('panelAdmin').classList.add('hidden');
+
+    // Load virtual desk stats
+    loadAdminStats();
+  }
+
   function showAdminPanel() {
     el('tabAdmin').classList.add('active');
     el('tabRoster').classList.remove('active');
     el('tabAnnouncements').classList.remove('active');
+    el('tabVirtualDesk').classList.remove('active');
     el('panelRoster').classList.add('hidden');
     el('panelAnnouncements').classList.add('hidden');
+    el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.remove('hidden');
 
-    // Load admin stats
-    loadAdminStats();
+    // Load locations and staff
+    loadLocations();
+    loadStaff();
   }
 
   async function loadAdminStats() {
@@ -1379,6 +1449,96 @@
       }
     } catch (e) {
       console.error('Failed to load admin stats:', e);
+    }
+  }
+
+  async function loadLocations() {
+    try {
+      const resp = await api('/api/locations');
+      const list = el('locationsList');
+      list.innerHTML = '';
+
+      (resp.locations || []).forEach(loc => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; margin-bottom:6px; background:rgba(255,255,255,0.03); border-radius:8px;';
+
+        const info = document.createElement('div');
+        info.innerHTML = `<strong>${loc.name}</strong> (${loc.code}) <span class="tiny" style="color:var(--muted);">${loc.brand}</span>`;
+        item.appendChild(info);
+
+        const actions = document.createElement('div');
+        const delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.style.cssText = 'padding:4px 12px; font-size:12px;';
+        delBtn.textContent = 'Remove';
+        delBtn.addEventListener('click', () => removeLocation(loc.id, loc.name));
+        actions.appendChild(delBtn);
+        item.appendChild(actions);
+
+        list.appendChild(item);
+      });
+    } catch (e) {
+      console.error('Failed to load locations:', e);
+    }
+  }
+
+  async function loadStaff() {
+    try {
+      const resp = await api('/api/staff');
+      const list = el('staffList');
+      list.innerHTML = '';
+
+      (resp.staff || []).forEach(staff => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; margin-bottom:6px; background:rgba(255,255,255,0.03); border-radius:8px;';
+
+        const info = document.createElement('div');
+        info.innerHTML = `<strong>${staff.firstName} ${staff.lastName}</strong> <span class="tiny" style="color:var(--muted);">${staff.location}</span>`;
+        item.appendChild(info);
+
+        const actions = document.createElement('div');
+        const delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.style.cssText = 'padding:4px 12px; font-size:12px;';
+        delBtn.textContent = 'Remove';
+        delBtn.addEventListener('click', () => removeStaff(staff.id || `${staff.firstName}_${staff.lastName}`, `${staff.firstName} ${staff.lastName}`));
+        actions.appendChild(delBtn);
+        item.appendChild(actions);
+
+        list.appendChild(item);
+      });
+    } catch (e) {
+      console.error('Failed to load staff:', e);
+    }
+  }
+
+  async function removeLocation(id, name) {
+    if (!confirm(`Remove location: ${name}?\n\nThis will affect all rosters and settings for this location.`)) return;
+
+    try {
+      await api('/api/admin/remove-location', {
+        method: 'POST',
+        body: JSON.stringify({ id })
+      });
+      alert(`Location "${name}" removed successfully.`);
+      loadLocations();
+    } catch (e) {
+      alert(`Failed to remove location: ${e.message}`);
+    }
+  }
+
+  async function removeStaff(id, name) {
+    if (!confirm(`Remove staff member: ${name}?`)) return;
+
+    try {
+      await api('/api/admin/remove-staff', {
+        method: 'POST',
+        body: JSON.stringify({ id })
+      });
+      alert(`Staff member "${name}" removed successfully.`);
+      loadStaff();
+    } catch (e) {
+      alert(`Failed to remove staff: ${e.message}`);
     }
   }
 
@@ -1408,7 +1568,14 @@
         sessionStorage.setItem('admin_pin_expiry', resp.expires_at.toString());
 
         showModal('pinModal', false);
-        showAdminPanel();
+
+        // Show the panel that requested auth
+        if (pendingPinPanel === 'admin') {
+          showAdminPanel();
+        } else {
+          showVirtualDeskPanel();
+        }
+        pendingPinPanel = null;
       }
     } catch (e) {
       if (e.message.includes('Too many failed attempts')) {
