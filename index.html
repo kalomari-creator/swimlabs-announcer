@@ -1578,7 +1578,27 @@
         item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; margin-bottom:6px; background:rgba(255,255,255,0.03); border-radius:8px;';
 
         const info = document.createElement('div');
-        info.innerHTML = `<strong>${staff.firstName} ${staff.lastName}</strong> <span class="tiny" style="color:var(--muted);">${staff.location}</span>`;
+
+        // Format birthday to show only month/day (remove year)
+        let birthdayDisplay = '';
+        if (staff.birthday) {
+          const parts = staff.birthday.split('/');
+          if (parts.length >= 2) {
+            birthdayDisplay = `${parts[0]}/${parts[1]}`; // MM/DD only
+          }
+        }
+
+        // Build info HTML with phone and birthday
+        let infoHTML = `<strong>${staff.firstName} ${staff.lastName}</strong>`;
+        infoHTML += ` <span class="tiny" style="color:var(--muted);">${staff.location}</span>`;
+        if (staff.phone) {
+          infoHTML += `<br><span class="tiny" style="color:var(--muted);">📞 ${staff.phone}</span>`;
+        }
+        if (birthdayDisplay) {
+          infoHTML += ` <span class="tiny" style="color:var(--muted);">🎂 ${birthdayDisplay}</span>`;
+        }
+
+        info.innerHTML = infoHTML;
         item.appendChild(info);
 
         const actions = document.createElement('div');

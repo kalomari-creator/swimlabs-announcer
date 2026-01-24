@@ -1602,6 +1602,35 @@ app.get("/api/instructors", (req, res) => {
   }
 });
 
+// Get all staff for admin panel (includes phone and birthday)
+app.get("/api/staff", (req, res) => {
+  try {
+    const configPath = path.join(__dirname, "config", "instructors.json");
+
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    }
+
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { instructors } = configData;
+
+    // Return all staff with phone and birthday
+    const staff = instructors.map(i => ({
+      id: `${i.firstName}_${i.lastName}`,
+      firstName: i.firstName,
+      lastName: i.lastName,
+      location: i.location,
+      phone: i.phone || '',
+      birthday: i.birthday || ''
+    })).sort((a, b) => a.lastName.localeCompare(b.lastName));
+
+    res.json({ ok: true, staff });
+  } catch (error) {
+    console.error("Staff fetch error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // ==================== ADMIN PIN VERIFICATION ====================
 const pinAttempts = new Map(); // Track failed attempts by IP
 const pinLockouts = new Map(); // Track lockout expiry by IP
