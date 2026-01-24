@@ -1544,7 +1544,7 @@ function parseHTMLRoster(html) {
       if (nameEl.length === 0) return;
       
       const swimmerName = lastFirstToFirstLast(nameEl.text().trim());
-      const ageText = $row.find('.student-info').text().trim();
+      const ageText = normalizeAgeText($row.find('.student-info').text().trim());
       
       const flags = {
         flag_new: 0,
