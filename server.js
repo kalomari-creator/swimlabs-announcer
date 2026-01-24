@@ -160,6 +160,7 @@ function ensureSchema() {
   addIfMissing("zone_override_by", `ALTER TABLE roster ADD COLUMN zone_override_by TEXT;`);
   addIfMissing("location_id", `ALTER TABLE roster ADD COLUMN location_id INTEGER DEFAULT 1;`);
   addIfMissing("substitute_instructor", `ALTER TABLE roster ADD COLUMN substitute_instructor TEXT;`);
+  addIfMissing("balance_amount", `ALTER TABLE roster ADD COLUMN balance_amount REAL DEFAULT NULL;`);
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_key ON roster(date, start_time, swimmer_name);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
@@ -1384,6 +1385,20 @@ function parseHTMLRoster(html) {
         attendance = 0; // 0 = absent
       }
 
+      // Extract balance amount from Details column
+      let balanceAmount = null;
+      const detailsText = $row.find('td').eq(3).text(); // Details is usually the 4th column (index 3)
+      const balanceMatch = detailsText.match(/Balance:\s*\$?([-\d,.]+)/i);
+      if (balanceMatch) {
+        // Clean up balance string and convert to number
+        const balanceStr = balanceMatch[1].replace(/,/g, '');
+        balanceAmount = parseFloat(balanceStr);
+        // If we found a balance, mark flag_owes
+        if (!isNaN(balanceAmount) && balanceAmount !== 0) {
+          flags.flag_owes = 1;
+        }
+      }
+
       swimmers.push({
         start_time: startTime,
         swimmer_name: swimmerName,
@@ -1393,6 +1408,7 @@ function parseHTMLRoster(html) {
         program: programText,
         zone: zone,
         attendance: attendance,
+        balance_amount: balanceAmount,
         ...flags
       });
     });
@@ -1497,10 +1513,11 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        balance_amount,
         location_id,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `);
 
@@ -1511,6 +1528,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
           r.instructor_name || null, r.substitute_instructor || null, r.zone || null, r.program || null, r.age_text || null,
           r.attendance !== undefined ? r.attendance : null,
           r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
+          r.balance_amount !== undefined ? r.balance_amount : null,
           locId,
           now, now
         );
@@ -1999,7 +2017,8 @@ app.get("/api/virtual-desk/swimmers", (req, res) => {
         flag_makeup,
         flag_policy,
         flag_owes,
-        flag_trial
+        flag_trial,
+        balance_amount
       FROM roster
       WHERE date = ? AND location_id = ?
       ORDER BY start_time, instructor_name, swimmer_name
@@ -2041,6 +2060,7 @@ app.get("/api/virtual-desk/swimmers", (req, res) => {
         start_time: s.start_time,
         attendance: s.attendance,
         is_addon: s.is_addon,
+        balance_amount: s.balance_amount,
         flags: {
           new: s.flag_new,
           makeup: s.flag_makeup,
@@ -2054,6 +2074,7 @@ app.get("/api/virtual-desk/swimmers", (req, res) => {
           missed: missedCount,
           attendance_rate: attendanceRate
         },
+        attendance_history: attendanceHistory,
         balance_status: balanceStatus
       };
     });

@@ -825,6 +825,21 @@
   </div>
 </div>
 
+<!-- Attendance History Modal -->
+<div class="modalBackdrop" id="attendanceHistoryModal">
+  <div class="modal" style="max-width:700px;">
+    <h3 id="attendanceHistoryTitle">Attendance History</h3>
+
+    <div id="attendanceHistoryContent" style="margin-top:12px; max-height:500px; overflow-y:auto;">
+      <!-- Content will be populated by JavaScript -->
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="attendanceHistoryClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let currentBlock = null;
   let zoneTarget = null;
@@ -1614,7 +1629,7 @@
     el('panelAdmin').classList.remove('hidden');
 
     // Load locations and staff
-    loadLocations();
+    loadAdminLocations();
     loadStaff();
   }
 
@@ -1631,7 +1646,7 @@
     }
   }
 
-  async function loadLocations() {
+  async function loadAdminLocations() {
     try {
       const resp = await api('/api/locations');
       const list = el('locationsList');
@@ -1657,7 +1672,7 @@
         list.appendChild(item);
       });
     } catch (e) {
-      console.error('Failed to load locations:', e);
+      console.error('Failed to load admin locations:', e);
     }
   }
 
@@ -1720,7 +1735,8 @@
         body: JSON.stringify({ id })
       });
       alert(`Location "${name}" removed successfully.`);
-      loadLocations();
+      loadAdminLocations();
+      await loadLocations(); // Also update main dropdown
     } catch (e) {
       alert(`Failed to remove location: ${e.message}`);
     }
@@ -1741,6 +1757,9 @@
     }
   }
 
+  // Store swimmer data globally for attendance modal
+  let swimmersData = [];
+
   // Load detailed swimmer information for Virtual Desk
   async function loadSwimmerDetails() {
     try {
@@ -1754,8 +1773,11 @@
         return;
       }
 
+      // Store data globally
+      swimmersData = resp.swimmers;
+
       // Apply sorting
-      let swimmers = resp.swimmers;
+      let swimmers = swimmersData;
       const sortBy = el('swimmerSortBy').value;
 
       if (sortBy === 'name') {
@@ -1817,21 +1839,28 @@
         html += `<td style="text-align:center; color:var(--good);">${s.stats?.attended || 0}</td>`;
         html += `<td style="text-align:center; color:var(--bad);">${s.stats?.missed || 0}</td>`;
 
-        // Attendance rate with color
+        // Attendance rate with color (clickable)
         const rate = s.stats?.attendance_rate || 0;
         let rateColor = 'var(--good)';
         if (rate < 70) rateColor = 'var(--bad)';
         else if (rate < 85) rateColor = 'var(--warn)';
-        html += `<td style="text-align:center; color:${rateColor}; font-weight:700;">${rate}%</td>`;
+        const swimmerIndex = swimmers.indexOf(s);
+        html += `<td style="text-align:center;">`;
+        html += `<span onclick="showAttendanceHistory(${swimmerIndex})" style="color:${rateColor}; font-weight:700; cursor:pointer; text-decoration:underline; padding:4px 8px; border-radius:4px; background:rgba(255,255,255,0.05);">${rate}%</span>`;
+        html += `</td>`;
 
-        // Balance status
-        html += '<td>';
-        if (s.balance_status === 'owes') {
+        // Balance - show actual dollar amount or status
+        html += '<td style="text-align:center;">';
+        if (s.balance_amount !== null && s.balance_amount !== undefined) {
+          const balStr = s.balance_amount < 0 ? `-$${Math.abs(s.balance_amount).toFixed(2)}` : `$${s.balance_amount.toFixed(2)}`;
+          const balColor = s.balance_amount > 0 ? 'var(--bad)' : s.balance_amount < 0 ? 'var(--good)' : 'var(--muted)';
+          html += `<span style="color:${balColor}; font-weight:700;">${balStr}</span>`;
+        } else if (s.balance_status === 'owes') {
           html += '<span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444; border-color:rgba(239,68,68,0.3);">Owes</span>';
         } else if (s.balance_status === 'policy') {
           html += '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.3);">Policy</span>';
         } else {
-          html += '<span class="tiny" style="color:var(--muted);">Current</span>';
+          html += '<span class="tiny" style="color:var(--muted);">—</span>';
         }
         html += '</td>';
 
@@ -1861,6 +1890,58 @@
   // Event handlers for swimmer details view
   el('swimmerSortBy').addEventListener('change', loadSwimmerDetails);
   el('refreshSwimmers').addEventListener('click', loadSwimmerDetails);
+
+  // Show attendance history modal
+  window.showAttendanceHistory = function(swimmerIndex) {
+    const swimmer = swimmersData[swimmerIndex];
+    if (!swimmer || !swimmer.attendance_history) return;
+
+    el('attendanceHistoryTitle').textContent = `Attendance History: ${swimmer.swimmer_name}`;
+
+    let html = '<table style="width:100%;"><thead><tr>';
+    html += '<th>Date</th>';
+    html += '<th>Time</th>';
+    html += '<th>Status</th>';
+    html += '<th>Program</th>';
+    html += '<th>Instructor</th>';
+    html += '</tr></thead><tbody>';
+
+    swimmer.attendance_history.forEach(record => {
+      const statusText = record.attendance === 1 ? 'Attended' : record.attendance === 0 ? 'Missed' : '—';
+      const statusColor = record.attendance === 1 ? 'var(--good)' : record.attendance === 0 ? 'var(--bad)' : 'var(--muted)';
+
+      html += '<tr>';
+      html += `<td>${record.date}</td>`;
+      html += `<td>${fmtTime(record.start_time)}</td>`;
+      html += `<td style="color:${statusColor}; font-weight:700;">${statusText}</td>`;
+      html += `<td><span class="tiny">${record.program || '—'}</span></td>`;
+      html += `<td>${record.instructor_name || '—'}</td>`;
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+
+    // Add summary
+    const attended = swimmer.stats?.attended || 0;
+    const missed = swimmer.stats?.missed || 0;
+    const rate = swimmer.stats?.attendance_rate || 0;
+
+    html += '<div style="margin-top:16px; padding:12px; background:rgba(255,255,255,0.05); border-radius:8px;">';
+    html += '<div style="display:flex; gap:20px; justify-content:center;">';
+    html += `<div><span class="tiny" style="color:var(--muted);">Total:</span> <strong>${swimmer.stats?.total_classes || 0}</strong></div>`;
+    html += `<div><span class="tiny" style="color:var(--muted);">Attended:</span> <strong style="color:var(--good);">${attended}</strong></div>`;
+    html += `<div><span class="tiny" style="color:var(--muted);">Missed:</span> <strong style="color:var(--bad);">${missed}</strong></div>`;
+    html += `<div><span class="tiny" style="color:var(--muted);">Rate:</span> <strong style="color:var(--good);">${rate}%</strong></div>`;
+    html += '</div></div>';
+
+    el('attendanceHistoryContent').innerHTML = html;
+    showModal('attendanceHistoryModal', true);
+  };
+
+  el('attendanceHistoryClose').addEventListener('click', () => showModal('attendanceHistoryModal', false));
+  el('attendanceHistoryModal').addEventListener('click', (e) => {
+    if (e.target === el('attendanceHistoryModal')) showModal('attendanceHistoryModal', false);
+  });
 
   // Add Location Modal
   el('addLocationBtn').addEventListener('click', () => {
@@ -1892,9 +1973,9 @@
       });
       alert(`Location "${name}" added successfully.`);
       showModal('addLocationModal', false);
-      loadLocations();
+      loadAdminLocations();
       // Reload location dropdown
-      await loadLocationsList();
+      await loadLocations();
     } catch (e) {
       alert(`Failed to add location: ${e.message}`);
     }
