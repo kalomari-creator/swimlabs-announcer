@@ -1274,10 +1274,11 @@ function parseHTMLRoster(html) {
   
   const iconMap = {
     '1st-ever.png': 'flag_new',
-    'balance.png': 'flag_owes', 
+    'balance.png': 'flag_owes',
+    'birthday.png': 'flag_makeup',  // Birthday icon = Makeup class
     'makeup.png': 'flag_makeup',
     'policy.png': 'flag_policy',
-    'birthday.png': 'flag_trial'
+    'trial.png': 'flag_trial'
   };
   
   $('div[style*="page-break-inside"]').each((_, section) => {
