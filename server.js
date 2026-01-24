@@ -1652,6 +1652,79 @@ app.post("/api/verify-pin", (req, res) => {
   }
 });
 
+// ==================== ADMIN CLEAR ROSTER ====================
+app.post("/api/clear-roster", (req, res) => {
+  try {
+    const { location_id } = req.body || {};
+    const locId = location_id || 1;
+    const date = activeOrToday();
+
+    const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    // Get existing roster to export as backup
+    const existingRoster = db.prepare(`
+      SELECT * FROM roster
+      WHERE date = ? AND location_id = ?
+    `).all(date, locId);
+
+    let backupFile = null;
+
+    if (existingRoster.length > 0) {
+      // Create export directory for this location on server
+      const exportDir = path.join(EXPORT_DIR, location.code);
+      if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+      // Generate timestamp for filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const exportFilename = `roster_CLEARED_${location.code}_${date}_${timestamp}.json`;
+      const exportPath = path.join(exportDir, exportFilename);
+
+      // Save existing roster to JSON on server
+      fs.writeFileSync(exportPath, JSON.stringify({
+        location: location.name,
+        location_code: location.code,
+        date: date,
+        cleared_at: nowISO(),
+        count: existingRoster.length,
+        roster: existingRoster
+      }, null, 2), 'utf-8');
+
+      backupFile = `${location.code}/${exportFilename}`;
+      console.log(`[ADMIN CLEAR] Backed up ${existingRoster.length} swimmers to: ${backupFile}`);
+    }
+
+    // Delete all roster data for this location and date
+    const result = db.prepare(`
+      DELETE FROM roster WHERE date = ? AND location_id = ?
+    `).run(date, locId);
+
+    audit(req, "admin_clear_roster", {
+      location: location.name,
+      location_id: locId,
+      date: date,
+      deleted_count: result.changes,
+      backup_file: backupFile
+    });
+
+    console.log(`[ADMIN CLEAR] Deleted ${result.changes} swimmers for ${location.name} (${date})`);
+
+    res.json({
+      ok: true,
+      deleted_count: result.changes,
+      backup_file: backupFile,
+      location: location.name,
+      date: date
+    });
+
+  } catch (error) {
+    console.error("Clear roster error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Admin stats endpoint
 app.get("/api/admin/stats", (req, res) => {
   try {

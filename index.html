@@ -550,6 +550,11 @@
           <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📝 Instructor Observations</div>
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Generate evaluation forms and track progress</div>
         </div>
+
+        <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.3);" id="adminNavClearRoster">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🗑️ Clear Roster</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Remove all uploaded roster data for current location</div>
+        </div>
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
@@ -1441,6 +1446,45 @@
 
   el('adminNavObservations').addEventListener('click', () => {
     alert('Instructor Observations\n\nComing in Session 13 (Optional)!\n\nThis will generate evaluation forms for instructor observations.');
+  });
+
+  el('adminNavClearRoster').addEventListener('click', async () => {
+    const locationName = currentLocation?.name || 'Unknown';
+    const locationCode = currentLocation?.code || 'Unknown';
+
+    const confirmMsg = `⚠️ CLEAR ROSTER FOR ${locationName.toUpperCase()}\n\n` +
+      `This will permanently delete ALL uploaded roster data for ${locationName} (${locationCode}).\n\n` +
+      `• All swimmers will be removed\n` +
+      `• All attendance records will be deleted\n` +
+      `• All flags and notes will be lost\n\n` +
+      `The roster will be auto-exported as a backup before deletion.\n\n` +
+      `Type "DELETE" to confirm:`;
+
+    const userInput = prompt(confirmMsg);
+
+    if (userInput !== 'DELETE') {
+      if (userInput !== null) {
+        alert('Cancelled. Roster was NOT cleared.');
+      }
+      return;
+    }
+
+    try {
+      const resp = await api('/api/clear-roster', {
+        method: 'POST',
+        body: JSON.stringify({
+          location_id: currentLocation?.id || 1
+        })
+      });
+
+      if (resp.ok) {
+        alert(`✅ Roster Cleared!\n\nDeleted ${resp.deleted_count} swimmers for ${locationName}.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
+        await loadBlocks();
+        await loadRoster();
+      }
+    } catch (e) {
+      alert(`❌ Clear Failed\n\n${e.message}`);
+    }
   });
 
   el('settingsBtn').addEventListener('click', () => {
