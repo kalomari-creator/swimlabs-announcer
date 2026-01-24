@@ -112,6 +112,31 @@ function ensureSchema() {
     );
   `);
   db.exec(`CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT);`);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS trial_followups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      swimmer_name TEXT NOT NULL,
+      location_id INTEGER NOT NULL DEFAULT 1,
+      status TEXT DEFAULT 'new',
+      last_contact_at TEXT,
+      next_follow_up_at TEXT,
+      notes TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS safety_issues (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      location_id INTEGER NOT NULL DEFAULT 1,
+      note TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      UNIQUE(date, start_time, location_id)
+    );
+  `);
 
   // Locations table
   db.exec(`
@@ -163,6 +188,8 @@ function ensureSchema() {
   addIfMissing("balance_amount", `ALTER TABLE roster ADD COLUMN balance_amount REAL DEFAULT NULL;`);
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_key ON roster(date, start_time, swimmer_name);`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_trial_followup ON trial_followups(swimmer_name, location_id);`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_safety_issue ON safety_issues(date, start_time, location_id);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);`);
 }
@@ -172,6 +199,190 @@ ensureSchema();
 const ipAuthState = new Map();
 
 function nowISO() { return new Date().toISOString(); }
+
+function getLocationById(locId) {
+  return db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
+}
+
+function safeExportFilename(name) {
+  const filename = String(name || "");
+  if (!filename || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    return null;
+  }
+  return filename;
+}
+
+function isWestchester(location) {
+  if (!location) return false;
+  return location.code === "SLW" || String(location.name || "").toLowerCase().includes("westchester");
+}
+
+function getGuardChecklist(type) {
+  const weekdayOpening = {
+    title: "Opening Checklist (Weekdays - 2 Guards)",
+    groups: [
+      {
+        title: "Guard 1 (First Guard In)",
+        tasks: [
+          "Chemicals check",
+          "Make sure each pool has a bin",
+          "Vacuum pools"
+        ]
+      },
+      {
+        title: "Guard 2 (Second Guard In)",
+        tasks: [
+          "Cycle laundry",
+          "Empty dehumidifiers",
+          "Check playpen"
+        ]
+      },
+      {
+        title: "Front Desk",
+        tasks: [
+          "Set up lobby"
+        ]
+      },
+      {
+        title: "All Guards",
+        tasks: [
+          "Pick up a walkie"
+        ]
+      }
+    ]
+  };
+
+  const weekendOpening = {
+    title: "Opening Checklist (Weekends - 3 Guards)",
+    groups: [
+      {
+        title: "Guard 1",
+        tasks: [
+          "Chemicals check",
+          "Make sure each pool has a bin",
+          "Vacuum pools"
+        ]
+      },
+      {
+        title: "Guard 2",
+        tasks: [
+          "Set up lobby",
+          "Cycle laundry",
+          "Empty dehumidifiers"
+        ]
+      },
+      {
+        title: "Guard 3 (Up for first rotation)",
+        tasks: [
+          "Check playpen",
+          "Restock snack wall, fridge, and coffee station"
+        ]
+      },
+      {
+        title: "All Guards",
+        tasks: [
+          "Pick up a walkie"
+        ]
+      }
+    ]
+  };
+
+  const midday = {
+    title: "Midday Checklist (All Guards)",
+    tasks: [
+      "Check bathrooms during each rotation",
+      "Sweep/Mop, clean toilet, stock TP",
+      "Mirrors, hand railings, doorknob, walls",
+      "Sign bathroom log",
+      "Empty dehumidifiers",
+      "Midday chemical check",
+      "Laundry (client towels only)",
+      "Do not start washer with fewer than 5 towels",
+      "Do not change washer settings and use heavy duty setting for the dryer",
+      "Hand vacuum / Sweep / Dry Mop (lobby, bathrooms, staff room, locker rooms)",
+      "Deck windows when time allows"
+    ]
+  };
+
+  const weekdayClosing = {
+    title: "Closing Checklist (Weekdays - 2 Guards)",
+    groups: [
+      {
+        title: "Guard 1",
+        tasks: [
+          "Chemicals check",
+          "Clean pool deck and close deck doors",
+          "Empty dehumidifiers",
+          "Cycle laundry",
+          "Clean bathrooms and leave doors open"
+        ]
+      },
+      {
+        title: "Guard 2",
+        tasks: [
+          "Empty and change garbage bags",
+          "Vacuum facility (include playpen)",
+          "Mop floors"
+        ]
+      },
+      {
+        title: "All Guards",
+        tasks: [
+          "Return walkie"
+        ]
+      }
+    ]
+  };
+
+  const weekendClosing = {
+    title: "Closing Checklist (Weekends - 3 Guards)",
+    groups: [
+      {
+        title: "Guard 1",
+        tasks: [
+          "Chemicals check",
+          "Clean pool deck and close doors"
+        ]
+      },
+      {
+        title: "Guard 2",
+        tasks: [
+          "Empty dehumidifiers",
+          "Empty and change garbage bags",
+          "Clean bathrooms and leave doors open",
+          "Cycle laundry"
+        ]
+      },
+      {
+        title: "Guard 3 (Down for last rotation)",
+        tasks: [
+          "Vacuum facility / include playpen",
+          "Mop floors"
+        ]
+      },
+      {
+        title: "Front Desk",
+        tasks: [
+          "Tidy playpen / Close lobby"
+        ]
+      }
+    ]
+  };
+
+  return {
+    note: "If you are down and don't know what to work on or do, see Manager.",
+    opening: type === "weekend" ? weekendOpening : weekdayOpening,
+    midday,
+    closing: type === "weekend" ? weekendClosing : weekdayClosing
+  };
+}
+
+function normalizeAgeText(text) {
+  if (!text) return "";
+  const raw = String(text).trim();
+  const primary = raw.split("•")[0].trim();
+  return primary.replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, "").trim();
+}
 
 function getIP(req) {
   const xf = req.headers["x-forwarded-for"];
@@ -1156,24 +1367,120 @@ app.get("/api/export-attendance", (req, res) => {
   }
 });
 
+function importRosterRows({ date, locationId, rows, source }) {
+  if (!rows.length) return { imported: 0 };
+
+  setActiveDate(date);
+
+  db.prepare(`DELETE FROM roster WHERE date = ? AND location_id = ? AND is_addon = 0`).run(date, locationId);
+
+  const now = nowISO();
+  const ins = db.prepare(`
+    INSERT INTO roster (
+      date, start_time, swimmer_name,
+      instructor_name, substitute_instructor, zone, program, age_text,
+      attendance, attendance_at,
+      is_addon,
+      flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+      balance_amount,
+      created_at, updated_at,
+      zone_overridden, zone_override_at, zone_override_by,
+      location_id
+    ) VALUES (
+      ?, ?, ?,
+      ?, ?, ?, ?, ?,
+      ?, ?,
+      ?,
+      ?, ?, ?, ?, ?,
+      ?,
+      ?, ?,
+      ?, ?, ?,
+      ?
+    )
+    ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+      instructor_name=excluded.instructor_name,
+      substitute_instructor=excluded.substitute_instructor,
+      zone=excluded.zone,
+      program=excluded.program,
+      age_text=excluded.age_text,
+      attendance=excluded.attendance,
+      attendance_at=excluded.attendance_at,
+      is_addon=excluded.is_addon,
+      flag_new=excluded.flag_new,
+      flag_makeup=excluded.flag_makeup,
+      flag_policy=excluded.flag_policy,
+      flag_owes=excluded.flag_owes,
+      flag_trial=excluded.flag_trial,
+      balance_amount=excluded.balance_amount,
+      zone_overridden=excluded.zone_overridden,
+      zone_override_at=excluded.zone_override_at,
+      zone_override_by=excluded.zone_override_by,
+      updated_at=excluded.updated_at,
+      location_id=excluded.location_id
+  `);
+
+  const tx = db.transaction((arr) => {
+    for (const r of arr) {
+      const st = String(r.start_time || "").trim();
+      const sn = String(r.swimmer_name || "").trim();
+      if (!st || !sn) continue;
+      ins.run(
+        date,
+        st,
+        sn,
+        r.instructor_name || null,
+        r.substitute_instructor || null,
+        (r.zone === 0 || r.zone) ? r.zone : null,
+        r.program || null,
+        r.age_text || null,
+        (r.attendance === 0 || r.attendance === 1) ? r.attendance : null,
+        r.attendance_at || null,
+        r.is_addon ? 1 : 0,
+        r.flag_new ? 1 : 0,
+        r.flag_makeup ? 1 : 0,
+        r.flag_policy ? 1 : 0,
+        r.flag_owes ? 1 : 0,
+        r.flag_trial ? 1 : 0,
+        r.balance_amount !== undefined ? r.balance_amount : null,
+        r.created_at || now,
+        now,
+        r.zone_overridden ? 1 : 0,
+        r.zone_override_at || null,
+        r.zone_override_by || null,
+        locationId
+      );
+    }
+  });
+  tx(rows);
+
+  if (source) {
+    audit(source, "import_json", { date, count: rows.length });
+  }
+
+  return { imported: rows.length };
+}
+
 // Export JSON of active roster (backup/restore)
 app.get("/api/export-json", (req, res) => {
   try {
     const date = activeOrToday();
+    const locationId = Number(req.query.location_id || 1);
     const rows = db.prepare(`
       SELECT
-        date, start_time, swimmer_name, instructor_name, zone, program, age_text,
+        date, start_time, swimmer_name, instructor_name, substitute_instructor, zone, program, age_text,
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        balance_amount,
         zone_overridden, zone_override_at, zone_override_by,
-        created_at, updated_at
+        created_at, updated_at,
+        location_id
       FROM roster
-      WHERE date = ?
+      WHERE date = ? AND location_id = ?
       ORDER BY start_time ASC, instructor_name ASC, swimmer_name ASC
-    `).all(date);
+    `).all(date, locationId);
 
-    const payload = { ok: true, date, rows };
+    const payload = { ok: true, date, location_id: locationId, rows };
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="roster_${date}.json"`);
     res.send(JSON.stringify(payload, null, 2));
@@ -1187,85 +1494,210 @@ app.post("/api/import-json", (req, res) => {
     const payload = req.body || {};
     const date = (payload.date && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.date))) ? String(payload.date) : activeOrToday();
     const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    const locationId = payload.location_id ? Number(payload.location_id) : 1;
     if (!rows.length) return res.status(400).json({ ok: false, error: "No rows provided" });
 
-    setActiveDate(date);
+    const result = importRosterRows({ date, locationId, rows, source: req });
+    res.json({ ok: true, date, count: result.imported });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "import-json failed", details: String(e?.stack || e?.message || e) });
+  }
+});
 
-    db.prepare(`DELETE FROM roster WHERE date = ? AND is_addon = 0`).run(date);
+app.get("/api/server-exports", (req, res) => {
+  try {
+    const locationId = Number(req.query.location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
 
+    const exportDir = path.join(EXPORT_DIR, location.code);
+    if (!fs.existsSync(exportDir)) {
+      return res.json({ ok: true, exports: [] });
+    }
+
+    const files = fs.readdirSync(exportDir)
+      .filter((f) => f.endsWith(".json"))
+      .map((filename) => {
+        const stat = fs.statSync(path.join(exportDir, filename));
+        return {
+          filename,
+          size: stat.size,
+          modified_at: stat.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => new Date(b.modified_at) - new Date(a.modified_at));
+
+    res.json({ ok: true, exports: files });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "server-exports failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.get("/api/safety-issues", (req, res) => {
+  try {
+    const date = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
+      ? String(req.query.date)
+      : activeOrToday();
+    const locationId = Number(req.query.location_id || 1);
+
+    const issues = db.prepare(`
+      SELECT date, start_time, location_id, note, created_at, updated_at
+      FROM safety_issues
+      WHERE date = ? AND location_id = ?
+      ORDER BY start_time ASC
+    `).all(date, locationId);
+
+    res.json({ ok: true, date, location_id: locationId, issues });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "safety-issues failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/safety-issues", (req, res) => {
+  try {
+    const { date, start_time, location_id, note } = req.body || {};
+    if (!start_time) return res.status(400).json({ ok: false, error: "start_time required" });
+    const issueDate = date && /^\d{4}-\d{2}-\d{2}$/.test(String(date)) ? String(date) : activeOrToday();
+    const locationId = Number(location_id || 1);
     const now = nowISO();
-    const ins = db.prepare(`
-      INSERT INTO roster (
-        date, start_time, swimmer_name,
-        instructor_name, zone, program, age_text,
+
+    const noteValue = String(note || "").trim();
+    if (!noteValue) {
+      db.prepare(`
+        DELETE FROM safety_issues
+        WHERE date = ? AND start_time = ? AND location_id = ?
+      `).run(issueDate, start_time, locationId);
+      audit(req, "safety_issue_clear", { date: issueDate, start_time, location_id: locationId });
+      return res.json({ ok: true, cleared: true });
+    }
+
+    db.prepare(`
+      INSERT INTO safety_issues (date, start_time, location_id, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(date, start_time, location_id) DO UPDATE SET
+        note=excluded.note,
+        updated_at=excluded.updated_at
+    `).run(issueDate, start_time, locationId, noteValue, now, now);
+
+    audit(req, "safety_issue_add", { date: issueDate, start_time, location_id: locationId });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "safety-issues failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/export-server", (req, res) => {
+  try {
+    const { location_id, date } = req.body || {};
+    const locationId = Number(location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const exportDate = (date && /^\d{4}-\d{2}-\d{2}$/.test(String(date))) ? String(date) : activeOrToday();
+
+    const rows = db.prepare(`
+      SELECT
+        date, start_time, swimmer_name, instructor_name, substitute_instructor, zone, program, age_text,
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        balance_amount,
+        zone_overridden, zone_override_at, zone_override_by,
         created_at, updated_at,
-        zone_overridden, zone_override_at, zone_override_by
-      ) VALUES (
-        ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?,
-        ?,
-        ?, ?, ?, ?, ?,
-        ?, ?,
-        ?, ?, ?
-      )
-      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
-        instructor_name=excluded.instructor_name,
-        zone=excluded.zone,
-        program=excluded.program,
-        age_text=excluded.age_text,
-        attendance=excluded.attendance,
-        attendance_at=excluded.attendance_at,
-        is_addon=excluded.is_addon,
-        flag_new=excluded.flag_new,
-        flag_makeup=excluded.flag_makeup,
-        flag_policy=excluded.flag_policy,
-        flag_owes=excluded.flag_owes,
-        flag_trial=excluded.flag_trial,
-        zone_overridden=excluded.zone_overridden,
-        zone_override_at=excluded.zone_override_at,
-        zone_override_by=excluded.zone_override_by,
-        updated_at=excluded.updated_at
-    `);
+        location_id
+      FROM roster
+      WHERE date = ? AND location_id = ?
+      ORDER BY start_time ASC, instructor_name ASC, swimmer_name ASC
+    `).all(exportDate, locationId);
 
-    const tx = db.transaction((arr) => {
-      for (const r of arr) {
-        const st = String(r.start_time || "").trim();
-        const sn = String(r.swimmer_name || "").trim();
-        if (!st || !sn) continue;
-        ins.run(
-          date,
-          st,
-          sn,
-          r.instructor_name || null,
-          (r.zone === 0 || r.zone) ? r.zone : null,
-          r.program || null,
-          r.age_text || null,
-          (r.attendance === 0 || r.attendance === 1) ? r.attendance : null,
-          r.attendance_at || null,
-          r.is_addon ? 1 : 0,
-          r.flag_new ? 1 : 0,
-          r.flag_makeup ? 1 : 0,
-          r.flag_policy ? 1 : 0,
-          r.flag_owes ? 1 : 0,
-          r.flag_trial ? 1 : 0,
-          r.created_at || now,
-          now,
-          r.zone_overridden ? 1 : 0,
-          r.zone_override_at || null,
-          r.zone_override_by || null
-        );
-      }
+    const exportDir = path.join(EXPORT_DIR, location.code);
+    if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const exportFilename = `roster_${location.code}_${exportDate}_${timestamp}.json`;
+    const exportPath = path.join(exportDir, exportFilename);
+
+    const safetyIssues = db.prepare(`
+      SELECT date, start_time, location_id, note, created_at, updated_at
+      FROM safety_issues
+      WHERE date = ? AND location_id = ?
+      ORDER BY start_time ASC
+    `).all(exportDate, locationId);
+
+    const payload = {
+      ok: true,
+      location: location.name,
+      location_code: location.code,
+      location_id: locationId,
+      date: exportDate,
+      exported_at: nowISO(),
+      count: rows.length,
+      rows,
+      safety_issues: safetyIssues
+    };
+
+    fs.writeFileSync(exportPath, JSON.stringify(payload, null, 2), 'utf-8');
+
+    audit(req, "export_server", {
+      location: location.name,
+      location_id: locationId,
+      date: exportDate,
+      count: rows.length,
+      filename: exportFilename
     });
-    tx(rows);
 
-    audit(req, "import_json", { date, count: rows.length });
-    res.json({ ok: true, date, count: rows.length });
+    res.json({ ok: true, filename: exportFilename, count: rows.length });
   } catch (e) {
-    res.status(500).json({ ok: false, error: "import-json failed", details: String(e?.stack || e?.message || e) });
+    res.status(500).json({ ok: false, error: "export-server failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/import-server", (req, res) => {
+  try {
+    const { location_id, filename } = req.body || {};
+    const locationId = Number(location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const safeName = safeExportFilename(filename);
+    if (!safeName) {
+      return res.status(400).json({ ok: false, error: "Invalid filename" });
+    }
+
+    const exportPath = path.join(EXPORT_DIR, location.code, safeName);
+    if (!fs.existsSync(exportPath)) {
+      return res.status(404).json({ ok: false, error: "Export file not found" });
+    }
+
+    const payload = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
+    const rows = Array.isArray(payload.rows) ? payload.rows : (Array.isArray(payload.roster) ? payload.roster : []);
+    const importDate = (payload.date && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.date)))
+      ? String(payload.date)
+      : activeOrToday();
+
+    if (!rows.length) {
+      return res.status(400).json({ ok: false, error: "No rows in export file" });
+    }
+
+    const result = importRosterRows({ date: importDate, locationId, rows });
+
+    audit(req, "import_server", {
+      location: location.name,
+      location_id: locationId,
+      date: importDate,
+      count: result.imported,
+      filename: safeName
+    });
+
+    res.json({ ok: true, date: importDate, count: result.imported, filename: safeName });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "import-server failed", details: String(e?.stack || e?.message || e) });
   }
 });
 
@@ -1358,7 +1790,7 @@ function parseHTMLRoster(html) {
       if (nameEl.length === 0) return;
       
       const swimmerName = lastFirstToFirstLast(nameEl.text().trim());
-      const ageText = $row.find('.student-info').text().trim();
+      const ageText = normalizeAgeText($row.find('.student-info').text().trim());
       
       const flags = {
         flag_new: 0,
@@ -2002,6 +2434,213 @@ app.get("/api/admin/stats", (req, res) => {
 
   } catch (error) {
     console.error("Admin stats error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Trial follow-up report
+app.get("/api/trials", (req, res) => {
+  try {
+    const locationId = Number(req.query.location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const days = Math.max(1, Math.min(120, Number(req.query.days || 30)));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    const startISO = startDate.toISOString().split('T')[0];
+
+    const trials = db.prepare(`
+      SELECT
+        swimmer_name,
+        MAX(date) as last_date,
+        COUNT(*) as trial_visits,
+        MAX(program) as program,
+        MAX(instructor_name) as instructor_name,
+        MAX(balance_amount) as balance_amount
+      FROM roster
+      WHERE location_id = ? AND flag_trial = 1 AND date >= ?
+      GROUP BY swimmer_name
+      ORDER BY last_date DESC, swimmer_name ASC
+    `).all(locationId, startISO);
+
+    const followups = db.prepare(`
+      SELECT swimmer_name, status, last_contact_at, next_follow_up_at, notes, updated_at
+      FROM trial_followups
+      WHERE location_id = ?
+    `).all(locationId);
+
+    const followupMap = new Map(followups.map((f) => [f.swimmer_name, f]));
+    const results = trials.map((t) => {
+      const follow = followupMap.get(t.swimmer_name);
+      return {
+        swimmer_name: t.swimmer_name,
+        last_date: t.last_date,
+        trial_visits: t.trial_visits,
+        program: t.program,
+        instructor_name: t.instructor_name,
+        balance_amount: t.balance_amount,
+        follow_up: follow || {
+          status: "new",
+          last_contact_at: null,
+          next_follow_up_at: null,
+          notes: "",
+          updated_at: null
+        }
+      };
+    });
+
+    res.json({ ok: true, trials: results, days, start_date: startISO });
+  } catch (error) {
+    console.error("Trial report error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/trials/followup", (req, res) => {
+  try {
+    const { swimmer_name, location_id, status, last_contact_at, next_follow_up_at, notes } = req.body || {};
+    if (!swimmer_name) {
+      return res.status(400).json({ ok: false, error: "swimmer_name required" });
+    }
+
+    const locationId = Number(location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const now = nowISO();
+    db.prepare(`
+      INSERT INTO trial_followups (
+        swimmer_name, location_id, status, last_contact_at, next_follow_up_at, notes, created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?
+      )
+      ON CONFLICT(swimmer_name, location_id) DO UPDATE SET
+        status=excluded.status,
+        last_contact_at=excluded.last_contact_at,
+        next_follow_up_at=excluded.next_follow_up_at,
+        notes=excluded.notes,
+        updated_at=excluded.updated_at
+    `).run(
+      swimmer_name,
+      locationId,
+      status || "new",
+      last_contact_at || null,
+      next_follow_up_at || null,
+      notes || null,
+      now,
+      now
+    );
+
+    audit(req, "trial_followup_update", {
+      location_id: locationId,
+      swimmer_name,
+      status: status || "new"
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Trial follow-up update error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Guard checklist + rotation (SwimLabs Westchester only)
+app.get("/api/guard-checklist", (req, res) => {
+  try {
+    const locationId = Number(req.query.location_id || 1);
+    const type = req.query.type === "weekend" ? "weekend" : "weekday";
+    const location = getLocationById(locationId);
+    if (!location || !isWestchester(location)) {
+      return res.status(404).json({ ok: false, error: "Guard checklist not available for this location" });
+    }
+    const checklist = getGuardChecklist(type);
+    res.json({ ok: true, checklist, type });
+  } catch (error) {
+    console.error("Guard checklist error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/guard-rotation", (req, res) => {
+  try {
+    const locationId = Number(req.query.location_id || 1);
+    const type = req.query.type === "weekend" ? "weekend" : "weekday";
+    const date = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
+      ? String(req.query.date)
+      : activeOrToday();
+    const location = getLocationById(locationId);
+    if (!location || !isWestchester(location)) {
+      return res.status(404).json({ ok: false, error: "Guard rotation not available for this location" });
+    }
+
+    const schedDir = path.join(SCHEDULE_DIR, location.code);
+    if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
+    const filename = `guard_rotation_${location.code}_${date}_${type}.json`;
+    const filepath = path.join(schedDir, filename);
+
+    if (!fs.existsSync(filepath)) {
+      return res.json({ ok: true, date, type, blocks: [], filename });
+    }
+
+    const payload = JSON.parse(fs.readFileSync(filepath, "utf-8"));
+    res.json({ ok: true, ...payload, filename });
+  } catch (error) {
+    console.error("Guard rotation error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/guard-rotation", (req, res) => {
+  try {
+    const { location_id, date, type, blocks } = req.body || {};
+    const locationId = Number(location_id || 1);
+    const rotationType = type === "weekend" ? "weekend" : "weekday";
+    const rotationDate = date && /^\d{4}-\d{2}-\d{2}$/.test(String(date))
+      ? String(date)
+      : activeOrToday();
+
+    const location = getLocationById(locationId);
+    if (!location || !isWestchester(location)) {
+      return res.status(404).json({ ok: false, error: "Guard rotation not available for this location" });
+    }
+
+    const normalizedBlocks = Array.isArray(blocks) ? blocks.map((b) => ({
+      time: String(b.time || "").trim(),
+      guard: String(b.guard || "").trim(),
+      chores: String(b.chores || "").trim()
+    })).filter((b) => b.time) : [];
+
+    const schedDir = path.join(SCHEDULE_DIR, location.code);
+    if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
+    const filename = `guard_rotation_${location.code}_${rotationDate}_${rotationType}.json`;
+    const filepath = path.join(schedDir, filename);
+
+    const payload = {
+      ok: true,
+      location_id: locationId,
+      date: rotationDate,
+      type: rotationType,
+      saved_at: nowISO(),
+      blocks: normalizedBlocks
+    };
+
+    fs.writeFileSync(filepath, JSON.stringify(payload, null, 2), "utf-8");
+
+    audit(req, "guard_rotation_save", {
+      location_id: locationId,
+      date: rotationDate,
+      type: rotationType,
+      count: normalizedBlocks.length
+    });
+
+    res.json({ ok: true, filename, count: normalizedBlocks.length });
+  } catch (error) {
+    console.error("Guard rotation save error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
