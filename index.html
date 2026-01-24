@@ -910,7 +910,8 @@
   }
 
   async function loadBlocks(){
-    const b = await api('/api/blocks');
+    const locId = currentLocation?.id || 1;
+    const b = await api(`/api/blocks?location_id=${locId}`);
     const wrap = el('blocks');
     wrap.innerHTML = '';
 
@@ -1177,7 +1178,8 @@
       return;
     }
 
-    const data = await api(`/api/blocks/${encodeURIComponent(currentBlock)}`);
+    const locId = currentLocation?.id || 1;
+    const data = await api(`/api/blocks/${encodeURIComponent(currentBlock)}?location_id=${locId}`);
     let kids = sortKids(data.kids || []);
 
     // Apply search filter
@@ -1628,6 +1630,7 @@
           program: el('addProgram').value,
           instructor_name: el('addInstructor').value.trim() || null,
           zone: el('addZone').value || null,
+          location_id: currentLocation?.id || 1,
           device_mode: deviceMode
         })
       });
@@ -1698,13 +1701,13 @@
   });
 
   el('presetFrontDeck').addEventListener('click', () => {
-    el('customText').value = 'Front desk to deck. Please call the next swimmer.';
+    el('customText').value = 'Front desk to deck';
   });
   el('presetCodeGreen').addEventListener('click', () => {
-    el('customText').value = 'Code Green. Please clear the pool area and wait for instructions.';
+    el('customText').value = 'Code green';
   });
   el('presetCodeBrown').addEventListener('click', () => {
-    el('customText').value = 'Code Brown. Please clear the pool area immediately.';
+    el('customText').value = 'Code Brown';
   });
 
   // Search functionality

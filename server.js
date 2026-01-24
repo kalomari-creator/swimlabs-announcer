@@ -628,7 +628,14 @@ function speakWithPiper(text) {
     if (!fs.existsSync(PIPER_BIN)) return reject(new Error(`Piper binary not found: ${PIPER_BIN}`));
     if (!fs.existsSync(VOICE_MODEL)) return reject(new Error(`Voice model not found: ${VOICE_MODEL}`));
 
-    const p = spawn(PIPER_BIN, ["--model", VOICE_MODEL, "--output_file", TTS_OUT_WAV]);
+    // Set LD_LIBRARY_PATH to include the piper directory for shared libraries
+    const piperDir = path.dirname(PIPER_BIN);
+    const env = {
+      ...process.env,
+      LD_LIBRARY_PATH: piperDir + (process.env.LD_LIBRARY_PATH ? `:${process.env.LD_LIBRARY_PATH}` : '')
+    };
+
+    const p = spawn(PIPER_BIN, ["--model", VOICE_MODEL, "--output_file", TTS_OUT_WAV], { env });
     let err = "";
 
     p.stderr.on("data", (d) => (err += d.toString("utf8")));
@@ -768,12 +775,14 @@ app.post("/api/import-today", async (req, res) => {
 
 app.get("/api/blocks", (req, res) => {
   const date = activeOrToday();
+  const location_id = req.query.location_id || req.session?.location_id || 1;
+
   const rows = db.prepare(`
     SELECT DISTINCT start_time
     FROM roster
-    WHERE date = ?
+    WHERE date = ? AND location_id = ?
     ORDER BY start_time ASC
-  `).all(date);
+  `).all(date, location_id);
 
   res.json({ ok: true, blocks: rows.map(r => r.start_time) });
 });
@@ -781,6 +790,7 @@ app.get("/api/blocks", (req, res) => {
 app.get("/api/blocks/:start_time", (req, res) => {
   const date = activeOrToday();
   const start_time = req.params.start_time;
+  const location_id = req.query.location_id || req.session?.location_id || 1;
 
   const kids = db.prepare(`
     SELECT
@@ -794,8 +804,8 @@ app.get("/api/blocks/:start_time", (req, res) => {
       zone_overridden,
       flag_new, flag_makeup, flag_policy, flag_owes, flag_trial
     FROM roster
-    WHERE date = ? AND start_time = ?
-  `).all(date, start_time);
+    WHERE date = ? AND start_time = ? AND location_id = ?
+  `).all(date, start_time, location_id);
 
   res.json({ ok: true, kids });
 });
@@ -923,11 +933,12 @@ app.post("/api/update-zone", (req, res) => {
 // Add swimmer (add-on)
 app.post("/api/add-swimmer", (req, res) => {
   try {
-    const { start_time, swimmer_name, instructor_name, zone, program, age_text, device_mode } = req.body || {};
+    const { start_time, swimmer_name, instructor_name, zone, program, age_text, device_mode, location_id } = req.body || {};
     if (!start_time || !swimmer_name) return res.status(400).json({ ok: false, error: "missing fields" });
 
     const date = activeOrToday();
     const now = nowISO();
+    const locId = location_id || 1;
 
     const z = zone === "" || zone === undefined || zone === null ? null : parseInt(zone, 10);
     if (z !== null && ![1,2,3,4].includes(z)) return res.status(400).json({ ok: false, error: "invalid zone", details: { zone } });
@@ -939,6 +950,7 @@ app.post("/api/add-swimmer", (req, res) => {
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        location_id,
         created_at, updated_at,
         zone_overridden, zone_override_at, zone_override_by
       ) VALUES (
@@ -947,6 +959,7 @@ app.post("/api/add-swimmer", (req, res) => {
         NULL, NULL,
         1,
         0,0,0,0,0,
+        ?,
         ?, ?,
         0, NULL, NULL
       )
@@ -956,6 +969,7 @@ app.post("/api/add-swimmer", (req, res) => {
         program=excluded.program,
         age_text=excluded.age_text,
         is_addon=1,
+        location_id=excluded.location_id,
         updated_at=excluded.updated_at
     `).run(
       date, start_time, swimmer_name,
@@ -963,6 +977,7 @@ app.post("/api/add-swimmer", (req, res) => {
       z,
       program || null,
       age_text || null,
+      locId,
       now, now
     );
 
@@ -1333,7 +1348,15 @@ function parseHTMLRoster(html) {
           flags[flagName] = 1;
         }
       });
-      
+
+      // Check for pre-marked absence (X-modifier.png icon in attendance cell)
+      let attendance = null;
+      const attendanceCell = $row.find('td.date-time, td.cell-bordered');
+      const xModifier = attendanceCell.find('img[src*="X-modifier"]');
+      if (xModifier.length > 0) {
+        attendance = 0; // 0 = absent
+      }
+
       swimmers.push({
         start_time: startTime,
         swimmer_name: swimmerName,
@@ -1341,6 +1364,7 @@ function parseHTMLRoster(html) {
         instructor_name: instructorName,
         program: programText,
         zone: zone,
+        attendance: attendance,
         ...flags
       });
     });
@@ -1385,15 +1409,53 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
 
     setActiveDate(detectedDate);
 
-    // Save to location-specific folder
+    // Save to location-specific folder with descriptive filename
+    // Format: roll_sheet_{LOCATION_CODE}_{DATE}.html
+    // Example: roll_sheet_SLW_2026-01-24.html (SwimLabs Westchester)
+    //          roll_sheet_SSM_2026-01-24.html (SafeSplash Santa Monica)
     const locationDir = path.join(SCHEDULE_DIR, location.code);
     if (!fs.existsSync(locationDir)) fs.mkdirSync(locationDir, { recursive: true });
-    const htmlPath = path.join(locationDir, `${detectedDate}.html`);
+    const htmlFilename = `roll_sheet_${location.code}_${detectedDate}.html`;
+    const htmlPath = path.join(locationDir, htmlFilename);
     fs.writeFileSync(htmlPath, html, "utf-8");
 
     const swimmers = parseHTMLRoster(html);
     if (swimmers.length === 0) {
       return res.status(400).json({ ok: false, error: "No swimmers found in HTML file" });
+    }
+
+    // Auto-export existing roster before clearing (if any exists)
+    // Exports are stored on SERVER in subdirectories: exports/{LOCATION_CODE}/
+    // Example: exports/SLW/ for SwimLabs Westchester
+    //          exports/SSM/ for SafeSplash Santa Monica
+    const existingRoster = db.prepare(`
+      SELECT * FROM roster
+      WHERE date = ? AND location_id = ? AND is_addon = 0
+    `).all(detectedDate, locId);
+
+    if (existingRoster.length > 0) {
+      // Create export directory for this location on server
+      const exportDir = path.join(EXPORT_DIR, location.code);
+      if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+      // Generate timestamp for filename
+      // Format: roster_{LOCATION_CODE}_{DATE}_{TIMESTAMP}.json
+      // Example: roster_SLW_2026-01-24_2026-01-24T15-30-45-123Z.json
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const exportFilename = `roster_${location.code}_${detectedDate}_${timestamp}.json`;
+      const exportPath = path.join(exportDir, exportFilename);
+
+      // Save existing roster to JSON on server
+      fs.writeFileSync(exportPath, JSON.stringify({
+        location: location.name,
+        location_code: location.code,
+        date: detectedDate,
+        exported_at: nowISO(),
+        count: existingRoster.length,
+        roster: existingRoster
+      }, null, 2), 'utf-8');
+
+      console.log(`[AUTO-EXPORT] Saved ${existingRoster.length} swimmers to server: ${location.code}/${exportFilename}`);
     }
 
     // Delete existing roster for this location/date
@@ -1410,7 +1472,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
         location_id,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `);
 
@@ -1419,6 +1481,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
         ins.run(
           detectedDate, r.start_time, r.swimmer_name,
           r.instructor_name || null, r.zone || null, r.program || null, r.age_text || null,
+          r.attendance !== undefined ? r.attendance : null,
           r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
           locId,
           now, now
