@@ -532,8 +532,27 @@
         </div>
       </div>
 
+      <!-- Swimmer Details View -->
+      <div class="card" id="swimmerDetailsView">
+        <div class="row" style="margin-bottom:12px;">
+          <h3 style="margin:0; font-size:18px;">👥 Today's Swimmers - Detailed View</h3>
+          <div class="spacer"></div>
+          <select id="swimmerSortBy" style="padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+            <option value="name">Sort: Name A-Z</option>
+            <option value="time">Sort: Time</option>
+            <option value="instructor">Sort: Instructor</option>
+            <option value="attendance_rate">Sort: Attendance Rate</option>
+            <option value="missed">Sort: Missed Classes</option>
+            <option value="balance">Sort: Balance Status</option>
+          </select>
+          <button id="refreshSwimmers" class="secondary" style="padding:6px 12px; font-size:13px;">🔄 Refresh</button>
+        </div>
+
+        <div id="swimmerDetailsTable"></div>
+      </div>
+
       <!-- Navigation Cards -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px; margin-top:20px;">
         <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavAbsence">
           <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📊 Absence Tracker</div>
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Track multi-week absences and follow up with families</div>
@@ -728,6 +747,80 @@
     <div class="modalFooter">
       <button class="secondary" id="zoneCancel">Cancel</button>
       <button class="primary" id="zoneSave">Save zone</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Location Modal -->
+<div class="modalBackdrop" id="addLocationModal">
+  <div class="modal">
+    <h3>Add New Location</h3>
+
+    <div class="field">
+      <label>Location Name *</label>
+      <input type="text" id="newLocationName" placeholder="e.g., SwimLabs Westchester" />
+    </div>
+
+    <div class="field">
+      <label>Short Code</label>
+      <input type="text" id="newLocationShortCode" placeholder="e.g., SLW" maxlength="10" />
+    </div>
+
+    <div class="field">
+      <label>Brand</label>
+      <select id="newLocationBrand">
+        <option value="swimlabs">SwimLabs</option>
+        <option value="safesplash">SafeSplash</option>
+      </select>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="addLocationCancel">Cancel</button>
+      <button class="primary" id="addLocationSave">Add Location</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Staff Modal -->
+<div class="modalBackdrop" id="addStaffModal">
+  <div class="modal">
+    <h3>Add New Staff Member</h3>
+
+    <div class="grid2">
+      <div class="field">
+        <label>First Name *</label>
+        <input type="text" id="newStaffFirstName" placeholder="First name" />
+      </div>
+
+      <div class="field">
+        <label>Last Name *</label>
+        <input type="text" id="newStaffLastName" placeholder="Last name" />
+      </div>
+
+      <div class="field">
+        <label>Location *</label>
+        <select id="newStaffLocation">
+          <option value="New York">New York</option>
+          <option value="California">California</option>
+          <option value="Texas">Texas</option>
+          <option value="Nevada">Nevada</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Phone</label>
+        <input type="text" id="newStaffPhone" placeholder="1234567890" />
+      </div>
+
+      <div class="field">
+        <label>Birthday</label>
+        <input type="text" id="newStaffBirthday" placeholder="MM/DD/YY" />
+      </div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="addStaffCancel">Cancel</button>
+      <button class="primary" id="addStaffSave">Add Staff</button>
     </div>
   </div>
 </div>
@@ -1508,8 +1601,9 @@
     el('panelVirtualDesk').classList.remove('hidden');
     el('panelAdmin').classList.add('hidden');
 
-    // Load virtual desk stats
+    // Load virtual desk stats and swimmer details
     loadAdminStats();
+    loadSwimmerDetails();
   }
 
   function showAdminPanel() {
@@ -1646,6 +1740,205 @@
       alert(`Failed to remove staff: ${e.message}`);
     }
   }
+
+  // Load detailed swimmer information for Virtual Desk
+  async function loadSwimmerDetails() {
+    try {
+      const date = activeDateISO || new Date().toISOString().split('T')[0];
+      const location_id = currentLocation?.id || 1;
+
+      const resp = await api(`/api/virtual-desk/swimmers?date=${date}&location_id=${location_id}`);
+
+      if (!resp.ok || !resp.swimmers) {
+        el('swimmerDetailsTable').innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px;">No swimmers found for today.</p>';
+        return;
+      }
+
+      // Apply sorting
+      let swimmers = resp.swimmers;
+      const sortBy = el('swimmerSortBy').value;
+
+      if (sortBy === 'name') {
+        swimmers.sort((a, b) => a.swimmer_name.localeCompare(b.swimmer_name));
+      } else if (sortBy === 'time') {
+        swimmers.sort((a, b) => a.start_time.localeCompare(b.start_time));
+      } else if (sortBy === 'instructor') {
+        swimmers.sort((a, b) => (a.instructor_name || '').localeCompare(b.instructor_name || ''));
+      } else if (sortBy === 'attendance_rate') {
+        swimmers.sort((a, b) => (b.stats?.attendance_rate || 0) - (a.stats?.attendance_rate || 0));
+      } else if (sortBy === 'missed') {
+        swimmers.sort((a, b) => (b.stats?.missed || 0) - (a.stats?.missed || 0));
+      } else if (sortBy === 'balance') {
+        const statusOrder = { 'owes': 3, 'policy': 2, 'current': 1 };
+        swimmers.sort((a, b) => (statusOrder[b.balance_status] || 0) - (statusOrder[a.balance_status] || 0));
+      }
+
+      // Build table
+      let html = '<table><thead><tr>';
+      html += '<th>Swimmer</th>';
+      html += '<th>Time</th>';
+      html += '<th>Program</th>';
+      html += '<th>Instructor</th>';
+      html += '<th>Total Classes</th>';
+      html += '<th>Attended</th>';
+      html += '<th>Missed</th>';
+      html += '<th>Attendance %</th>';
+      html += '<th>Balance</th>';
+      html += '<th>Flags</th>';
+      html += '</tr></thead><tbody>';
+
+      swimmers.forEach(s => {
+        html += '<tr>';
+
+        // Swimmer name
+        html += `<td><strong>${s.swimmer_name}</strong>`;
+        if (s.age_text) html += `<br><span class="tiny" style="color:var(--muted);">${s.age_text}</span>`;
+        html += '</td>';
+
+        // Time
+        html += `<td>${fmtTime(s.start_time)}</td>`;
+
+        // Program
+        html += `<td><span class="tiny">${s.program || '—'}</span></td>`;
+
+        // Instructor
+        html += '<td>';
+        if (s.substitute_instructor) {
+          html += `<span style="font-weight:700;">${s.substitute_instructor}</span>`;
+          html += `<span class="badge" style="background:rgba(251,191,36,0.15); color:#fbbf24; border-color:rgba(251,191,36,0.3); margin-left:4px; font-size:10px;">SUB</span>`;
+          if (s.instructor_name) html += `<br><span class="tiny" style="color:var(--muted); text-decoration:line-through;">${s.instructor_name}</span>`;
+        } else {
+          html += s.instructor_name || '—';
+        }
+        html += '</td>';
+
+        // Stats
+        html += `<td style="text-align:center;">${s.stats?.total_classes || 0}</td>`;
+        html += `<td style="text-align:center; color:var(--good);">${s.stats?.attended || 0}</td>`;
+        html += `<td style="text-align:center; color:var(--bad);">${s.stats?.missed || 0}</td>`;
+
+        // Attendance rate with color
+        const rate = s.stats?.attendance_rate || 0;
+        let rateColor = 'var(--good)';
+        if (rate < 70) rateColor = 'var(--bad)';
+        else if (rate < 85) rateColor = 'var(--warn)';
+        html += `<td style="text-align:center; color:${rateColor}; font-weight:700;">${rate}%</td>`;
+
+        // Balance status
+        html += '<td>';
+        if (s.balance_status === 'owes') {
+          html += '<span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444; border-color:rgba(239,68,68,0.3);">Owes</span>';
+        } else if (s.balance_status === 'policy') {
+          html += '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.3);">Policy</span>';
+        } else {
+          html += '<span class="tiny" style="color:var(--muted);">Current</span>';
+        }
+        html += '</td>';
+
+        // Flags
+        html += '<td>';
+        const flags = [];
+        if (s.flags?.new) flags.push('<span class="badge" style="background:rgba(34,197,94,0.15); color:#22c55e;">New</span>');
+        if (s.flags?.makeup) flags.push('<span class="badge" style="background:rgba(59,130,246,0.15); color:#3b82f6;">Makeup</span>');
+        if (s.flags?.trial) flags.push('<span class="badge" style="background:rgba(234,179,8,0.15); color:#eab308;">Trial</span>');
+        if (s.is_addon) flags.push('<span class="badge addon">Add-on</span>');
+        html += flags.join(' ') || '—';
+        html += '</td>';
+
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+
+      el('swimmerDetailsTable').innerHTML = html;
+
+    } catch (e) {
+      console.error('Failed to load swimmer details:', e);
+      el('swimmerDetailsTable').innerHTML = `<p style="color:var(--bad); text-align:center; padding:20px;">Error: ${e.message}</p>`;
+    }
+  }
+
+  // Event handlers for swimmer details view
+  el('swimmerSortBy').addEventListener('change', loadSwimmerDetails);
+  el('refreshSwimmers').addEventListener('click', loadSwimmerDetails);
+
+  // Add Location Modal
+  el('addLocationBtn').addEventListener('click', () => {
+    el('newLocationName').value = '';
+    el('newLocationShortCode').value = '';
+    el('newLocationBrand').value = 'swimlabs';
+    showModal('addLocationModal', true);
+  });
+
+  el('addLocationCancel').addEventListener('click', () => showModal('addLocationModal', false));
+  el('addLocationModal').addEventListener('click', (e) => {
+    if (e.target === el('addLocationModal')) showModal('addLocationModal', false);
+  });
+
+  el('addLocationSave').addEventListener('click', async () => {
+    const name = el('newLocationName').value.trim();
+    const short_code = el('newLocationShortCode').value.trim();
+    const brand = el('newLocationBrand').value;
+
+    if (!name) {
+      alert('Location name is required');
+      return;
+    }
+
+    try {
+      await api('/api/admin/add-location', {
+        method: 'POST',
+        body: JSON.stringify({ name, short_code, brand })
+      });
+      alert(`Location "${name}" added successfully.`);
+      showModal('addLocationModal', false);
+      loadLocations();
+      // Reload location dropdown
+      await loadLocationsList();
+    } catch (e) {
+      alert(`Failed to add location: ${e.message}`);
+    }
+  });
+
+  // Add Staff Modal
+  el('addStaffBtn').addEventListener('click', () => {
+    el('newStaffFirstName').value = '';
+    el('newStaffLastName').value = '';
+    el('newStaffLocation').value = 'New York';
+    el('newStaffPhone').value = '';
+    el('newStaffBirthday').value = '';
+    showModal('addStaffModal', true);
+  });
+
+  el('addStaffCancel').addEventListener('click', () => showModal('addStaffModal', false));
+  el('addStaffModal').addEventListener('click', (e) => {
+    if (e.target === el('addStaffModal')) showModal('addStaffModal', false);
+  });
+
+  el('addStaffSave').addEventListener('click', async () => {
+    const firstName = el('newStaffFirstName').value.trim();
+    const lastName = el('newStaffLastName').value.trim();
+    const location = el('newStaffLocation').value;
+    const phone = el('newStaffPhone').value.trim();
+    const birthday = el('newStaffBirthday').value.trim();
+
+    if (!firstName || !lastName) {
+      alert('First name and last name are required');
+      return;
+    }
+
+    try {
+      await api('/api/admin/add-staff', {
+        method: 'POST',
+        body: JSON.stringify({ firstName, lastName, location, phone, birthday })
+      });
+      alert(`Staff member "${firstName} ${lastName}" added successfully.`);
+      showModal('addStaffModal', false);
+      loadStaff();
+    } catch (e) {
+      alert(`Failed to add staff: ${e.message}`);
+    }
+  });
 
   // PIN modal handlers
   el('pinCancel').addEventListener('click', () => {

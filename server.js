@@ -1631,6 +1631,148 @@ app.get("/api/staff", (req, res) => {
   }
 });
 
+// ==================== STAFF AND LOCATION MANAGEMENT ====================
+
+// Staff management endpoints
+app.post("/api/admin/remove-staff", (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ ok: false, error: 'Staff ID required' });
+    }
+
+    const configPath = path.join(__dirname, "config", "instructors.json");
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    }
+
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+    // Find and remove staff by ID (firstName_lastName format)
+    const [firstName, lastName] = id.split('_');
+    const originalCount = configData.instructors.length;
+    configData.instructors = configData.instructors.filter(i =>
+      !(i.firstName === firstName && i.lastName === lastName)
+    );
+
+    if (configData.instructors.length === originalCount) {
+      return res.status(404).json({ ok: false, error: 'Staff member not found' });
+    }
+
+    // Update timestamp
+    configData.last_updated = new Date().toISOString();
+
+    // Write back to file
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+    audit(req, "remove_staff", { id, firstName, lastName });
+
+    res.json({ ok: true, message: 'Staff member removed successfully' });
+  } catch (error) {
+    console.error("Remove staff error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/add-staff", (req, res) => {
+  try {
+    const { firstName, lastName, location, phone, birthday } = req.body;
+
+    if (!firstName || !lastName || !location) {
+      return res.status(400).json({ ok: false, error: 'First name, last name, and location are required' });
+    }
+
+    const configPath = path.join(__dirname, "config", "instructors.json");
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    }
+
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+    // Check if staff already exists
+    const exists = configData.instructors.some(i =>
+      i.firstName === firstName && i.lastName === lastName
+    );
+
+    if (exists) {
+      return res.status(400).json({ ok: false, error: 'Staff member already exists' });
+    }
+
+    // Add new staff
+    configData.instructors.push({
+      firstName,
+      lastName,
+      location,
+      phone: phone || '',
+      birthday: birthday || ''
+    });
+
+    // Sort by last name
+    configData.instructors.sort((a, b) => a.lastName.localeCompare(b.lastName));
+
+    // Update timestamp
+    configData.last_updated = new Date().toISOString();
+
+    // Write back to file
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+    audit(req, "add_staff", { firstName, lastName, location });
+
+    res.json({ ok: true, message: 'Staff member added successfully' });
+  } catch (error) {
+    console.error("Add staff error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Location management endpoints
+app.post("/api/admin/remove-location", (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ ok: false, error: 'Location ID required' });
+    }
+
+    // Set location as inactive instead of deleting
+    const result = db.prepare(`UPDATE locations SET active = 0 WHERE id = ?`).run(id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ ok: false, error: 'Location not found' });
+    }
+
+    audit(req, "remove_location", { location_id: id });
+    res.json({ ok: true, message: 'Location removed successfully' });
+  } catch (error) {
+    console.error("Remove location error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/add-location", (req, res) => {
+  try {
+    const { name, short_code, brand } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ ok: false, error: 'Location name is required' });
+    }
+
+    // Check if location already exists
+    const existing = db.prepare(`SELECT id FROM locations WHERE name = ?`).get(name);
+    if (existing) {
+      return res.status(400).json({ ok: false, error: 'Location already exists' });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO locations (name, short_code, brand, active)
+      VALUES (?, ?, ?, 1)
+    `).run(name, short_code || '', brand || 'swimlabs');
+
+    audit(req, "add_location", { name, short_code, brand });
+    res.json({ ok: true, message: 'Location added successfully', location_id: result.lastInsertRowid });
+  } catch (error) {
+    console.error("Add location error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // ==================== ADMIN PIN VERIFICATION ====================
 const pinAttempts = new Map(); // Track failed attempts by IP
 const pinLockouts = new Map(); // Track lockout expiry by IP
@@ -1828,6 +1970,98 @@ app.get("/api/admin/stats", (req, res) => {
 
   } catch (error) {
     console.error("Admin stats error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Virtual Desk: Detailed swimmer data
+app.get("/api/virtual-desk/swimmers", (req, res) => {
+  try {
+    const { date, location_id } = req.query;
+
+    if (!date || !location_id) {
+      return res.status(400).json({ ok: false, error: 'date and location_id required' });
+    }
+
+    // Get all swimmers for the specified date and location with detailed information
+    const swimmers = db.prepare(`
+      SELECT
+        swimmer_name,
+        age_text,
+        program,
+        instructor_name,
+        substitute_instructor,
+        zone,
+        start_time,
+        attendance,
+        is_addon,
+        flag_new,
+        flag_makeup,
+        flag_policy,
+        flag_owes,
+        flag_trial
+      FROM roster
+      WHERE date = ? AND location_id = ?
+      ORDER BY start_time, instructor_name, swimmer_name
+    `).all(date, location_id);
+
+    // Calculate attendance statistics for each swimmer
+    const swimmerDetails = swimmers.map(s => {
+      // Get historical attendance for this swimmer
+      const attendanceHistory = db.prepare(`
+        SELECT
+          date,
+          start_time,
+          attendance,
+          program,
+          instructor_name
+        FROM roster
+        WHERE swimmer_name = ? AND location_id = ?
+        ORDER BY date DESC, start_time DESC
+        LIMIT 30
+      `).all(s.swimmer_name, location_id);
+
+      const totalClasses = attendanceHistory.length;
+      const attendedCount = attendanceHistory.filter(a => a.attendance === 1).length;
+      const missedCount = attendanceHistory.filter(a => a.attendance === 0).length;
+      const attendanceRate = totalClasses > 0 ? Math.round((attendedCount / totalClasses) * 100) : 0;
+
+      // Determine balance status
+      let balanceStatus = 'current';
+      if (s.flag_owes) balanceStatus = 'owes';
+      else if (s.flag_policy) balanceStatus = 'policy';
+
+      return {
+        swimmer_name: s.swimmer_name,
+        age_text: s.age_text,
+        program: s.program,
+        instructor_name: s.instructor_name,
+        substitute_instructor: s.substitute_instructor,
+        zone: s.zone,
+        start_time: s.start_time,
+        attendance: s.attendance,
+        is_addon: s.is_addon,
+        flags: {
+          new: s.flag_new,
+          makeup: s.flag_makeup,
+          policy: s.flag_policy,
+          owes: s.flag_owes,
+          trial: s.flag_trial
+        },
+        stats: {
+          total_classes: totalClasses,
+          attended: attendedCount,
+          missed: missedCount,
+          attendance_rate: attendanceRate
+        },
+        balance_status: balanceStatus
+      };
+    });
+
+    res.json({ ok: true, swimmers: swimmerDetails, date, location_id });
+
+  } catch (error) {
+    console.error("Virtual desk swimmers error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
