@@ -159,6 +159,8 @@ function ensureSchema() {
   addIfMissing("zone_override_at", `ALTER TABLE roster ADD COLUMN zone_override_at TEXT;`);
   addIfMissing("zone_override_by", `ALTER TABLE roster ADD COLUMN zone_override_by TEXT;`);
   addIfMissing("location_id", `ALTER TABLE roster ADD COLUMN location_id INTEGER DEFAULT 1;`);
+  addIfMissing("substitute_instructor", `ALTER TABLE roster ADD COLUMN substitute_instructor TEXT;`);
+  addIfMissing("balance_amount", `ALTER TABLE roster ADD COLUMN balance_amount REAL DEFAULT NULL;`);
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_key ON roster(date, start_time, swimmer_name);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
@@ -796,6 +798,7 @@ app.get("/api/blocks/:start_time", (req, res) => {
     SELECT
       swimmer_name,
       instructor_name,
+      substitute_instructor,
       zone,
       program,
       age_text,
@@ -1294,9 +1297,33 @@ function parseHTMLRoster(html) {
     if (!startTime) return;
     
     let instructorName = null;
-    const instructorText = $section.find('th:contains("Instructors:")').next().find('li').first().text().trim();
-    if (instructorText) {
-      instructorName = lastFirstToFirstLast(instructorText);
+    let substituteInstructor = null;
+
+    // Get all instructor list items
+    const instructorItems = $section.find('th:contains("Instructors:")').next().find('li');
+
+    if (instructorItems.length > 0) {
+      instructorItems.each((idx, item) => {
+        const text = $(item).text().trim();
+        if (!text) return;
+
+        // Check if this instructor has an asterisk (indicates substitute)
+        if (text.includes('*')) {
+          // This is the substitute - remove asterisk and convert name
+          const cleanName = text.replace(/\*/g, '').trim();
+          substituteInstructor = lastFirstToFirstLast(cleanName);
+        } else if (idx === 0) {
+          // First instructor without asterisk is the original/regular instructor
+          instructorName = lastFirstToFirstLast(text);
+        }
+      });
+
+      // If no regular instructor was found but we have a substitute,
+      // use the substitute as the main instructor
+      if (!instructorName && substituteInstructor) {
+        instructorName = substituteInstructor;
+        substituteInstructor = null;
+      }
     }
     
     let programText = null;
@@ -1358,14 +1385,30 @@ function parseHTMLRoster(html) {
         attendance = 0; // 0 = absent
       }
 
+      // Extract balance amount from Details column
+      let balanceAmount = null;
+      const detailsText = $row.find('td').eq(3).text(); // Details is usually the 4th column (index 3)
+      const balanceMatch = detailsText.match(/Balance:\s*\$?([-\d,.]+)/i);
+      if (balanceMatch) {
+        // Clean up balance string and convert to number
+        const balanceStr = balanceMatch[1].replace(/,/g, '');
+        balanceAmount = parseFloat(balanceStr);
+        // If we found a balance, mark flag_owes
+        if (!isNaN(balanceAmount) && balanceAmount !== 0) {
+          flags.flag_owes = 1;
+        }
+      }
+
       swimmers.push({
         start_time: startTime,
         swimmer_name: swimmerName,
         age_text: ageText,
         instructor_name: instructorName,
+        substitute_instructor: substituteInstructor,
         program: programText,
         zone: zone,
         attendance: attendance,
+        balance_amount: balanceAmount,
         ...flags
       });
     });
@@ -1466,14 +1509,15 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     const ins = db.prepare(`
       INSERT INTO roster (
         date, start_time, swimmer_name,
-        instructor_name, zone, program, age_text,
+        instructor_name, substitute_instructor, zone, program, age_text,
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        balance_amount,
         location_id,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `);
 
@@ -1481,9 +1525,10 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       for (const r of rows) {
         ins.run(
           detectedDate, r.start_time, r.swimmer_name,
-          r.instructor_name || null, r.zone || null, r.program || null, r.age_text || null,
+          r.instructor_name || null, r.substitute_instructor || null, r.zone || null, r.program || null, r.age_text || null,
           r.attendance !== undefined ? r.attendance : null,
           r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
+          r.balance_amount !== undefined ? r.balance_amount : null,
           locId,
           now, now
         );
@@ -1571,6 +1616,177 @@ app.get("/api/instructors", (req, res) => {
     res.json({ ok: true, instructors: filtered, location: location.name, region });
   } catch (error) {
     console.error("Instructor fetch error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get all staff for admin panel (includes phone and birthday)
+app.get("/api/staff", (req, res) => {
+  try {
+    const configPath = path.join(__dirname, "config", "instructors.json");
+
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    }
+
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { instructors } = configData;
+
+    // Return all staff with phone and birthday
+    const staff = instructors.map(i => ({
+      id: `${i.firstName}_${i.lastName}`,
+      firstName: i.firstName,
+      lastName: i.lastName,
+      location: i.location,
+      phone: i.phone || '',
+      birthday: i.birthday || ''
+    })).sort((a, b) => a.lastName.localeCompare(b.lastName));
+
+    res.json({ ok: true, staff });
+  } catch (error) {
+    console.error("Staff fetch error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== STAFF AND LOCATION MANAGEMENT ====================
+
+// Staff management endpoints
+app.post("/api/admin/remove-staff", (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ ok: false, error: 'Staff ID required' });
+    }
+
+    const configPath = path.join(__dirname, "config", "instructors.json");
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    }
+
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+    // Find and remove staff by ID (firstName_lastName format)
+    const [firstName, lastName] = id.split('_');
+    const originalCount = configData.instructors.length;
+    configData.instructors = configData.instructors.filter(i =>
+      !(i.firstName === firstName && i.lastName === lastName)
+    );
+
+    if (configData.instructors.length === originalCount) {
+      return res.status(404).json({ ok: false, error: 'Staff member not found' });
+    }
+
+    // Update timestamp
+    configData.last_updated = new Date().toISOString();
+
+    // Write back to file
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+    audit(req, "remove_staff", { id, firstName, lastName });
+
+    res.json({ ok: true, message: 'Staff member removed successfully' });
+  } catch (error) {
+    console.error("Remove staff error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/add-staff", (req, res) => {
+  try {
+    const { firstName, lastName, location, phone, birthday } = req.body;
+
+    if (!firstName || !lastName || !location) {
+      return res.status(400).json({ ok: false, error: 'First name, last name, and location are required' });
+    }
+
+    const configPath = path.join(__dirname, "config", "instructors.json");
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    }
+
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+    // Check if staff already exists
+    const exists = configData.instructors.some(i =>
+      i.firstName === firstName && i.lastName === lastName
+    );
+
+    if (exists) {
+      return res.status(400).json({ ok: false, error: 'Staff member already exists' });
+    }
+
+    // Add new staff
+    configData.instructors.push({
+      firstName,
+      lastName,
+      location,
+      phone: phone || '',
+      birthday: birthday || ''
+    });
+
+    // Sort by last name
+    configData.instructors.sort((a, b) => a.lastName.localeCompare(b.lastName));
+
+    // Update timestamp
+    configData.last_updated = new Date().toISOString();
+
+    // Write back to file
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+    audit(req, "add_staff", { firstName, lastName, location });
+
+    res.json({ ok: true, message: 'Staff member added successfully' });
+  } catch (error) {
+    console.error("Add staff error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Location management endpoints
+app.post("/api/admin/remove-location", (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) {
+      return res.status(400).json({ ok: false, error: 'Location ID required' });
+    }
+
+    // Set location as inactive instead of deleting
+    const result = db.prepare(`UPDATE locations SET active = 0 WHERE id = ?`).run(id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ ok: false, error: 'Location not found' });
+    }
+
+    audit(req, "remove_location", { location_id: id });
+    res.json({ ok: true, message: 'Location removed successfully' });
+  } catch (error) {
+    console.error("Remove location error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/add-location", (req, res) => {
+  try {
+    const { name, short_code, brand } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ ok: false, error: 'Location name is required' });
+    }
+
+    // Check if location already exists
+    const existing = db.prepare(`SELECT id FROM locations WHERE name = ?`).get(name);
+    if (existing) {
+      return res.status(400).json({ ok: false, error: 'Location already exists' });
+    }
+
+    const result = db.prepare(`
+      INSERT INTO locations (name, short_code, brand, active)
+      VALUES (?, ?, ?, 1)
+    `).run(name, short_code || '', brand || 'swimlabs');
+
+    audit(req, "add_location", { name, short_code, brand });
+    res.json({ ok: true, message: 'Location added successfully', location_id: result.lastInsertRowid });
+  } catch (error) {
+    console.error("Add location error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -1772,6 +1988,101 @@ app.get("/api/admin/stats", (req, res) => {
 
   } catch (error) {
     console.error("Admin stats error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Virtual Desk: Detailed swimmer data
+app.get("/api/virtual-desk/swimmers", (req, res) => {
+  try {
+    const { date, location_id } = req.query;
+
+    if (!date || !location_id) {
+      return res.status(400).json({ ok: false, error: 'date and location_id required' });
+    }
+
+    // Get all swimmers for the specified date and location with detailed information
+    const swimmers = db.prepare(`
+      SELECT
+        swimmer_name,
+        age_text,
+        program,
+        instructor_name,
+        substitute_instructor,
+        zone,
+        start_time,
+        attendance,
+        is_addon,
+        flag_new,
+        flag_makeup,
+        flag_policy,
+        flag_owes,
+        flag_trial,
+        balance_amount
+      FROM roster
+      WHERE date = ? AND location_id = ?
+      ORDER BY start_time, instructor_name, swimmer_name
+    `).all(date, location_id);
+
+    // Calculate attendance statistics for each swimmer
+    const swimmerDetails = swimmers.map(s => {
+      // Get historical attendance for this swimmer
+      const attendanceHistory = db.prepare(`
+        SELECT
+          date,
+          start_time,
+          attendance,
+          program,
+          instructor_name
+        FROM roster
+        WHERE swimmer_name = ? AND location_id = ?
+        ORDER BY date DESC, start_time DESC
+        LIMIT 30
+      `).all(s.swimmer_name, location_id);
+
+      const totalClasses = attendanceHistory.length;
+      const attendedCount = attendanceHistory.filter(a => a.attendance === 1).length;
+      const missedCount = attendanceHistory.filter(a => a.attendance === 0).length;
+      const attendanceRate = totalClasses > 0 ? Math.round((attendedCount / totalClasses) * 100) : 0;
+
+      // Determine balance status
+      let balanceStatus = 'current';
+      if (s.flag_owes) balanceStatus = 'owes';
+      else if (s.flag_policy) balanceStatus = 'policy';
+
+      return {
+        swimmer_name: s.swimmer_name,
+        age_text: s.age_text,
+        program: s.program,
+        instructor_name: s.instructor_name,
+        substitute_instructor: s.substitute_instructor,
+        zone: s.zone,
+        start_time: s.start_time,
+        attendance: s.attendance,
+        is_addon: s.is_addon,
+        balance_amount: s.balance_amount,
+        flags: {
+          new: s.flag_new,
+          makeup: s.flag_makeup,
+          policy: s.flag_policy,
+          owes: s.flag_owes,
+          trial: s.flag_trial
+        },
+        stats: {
+          total_classes: totalClasses,
+          attended: attendedCount,
+          missed: missedCount,
+          attendance_rate: attendanceRate
+        },
+        attendance_history: attendanceHistory,
+        balance_status: balanceStatus
+      };
+    });
+
+    res.json({ ok: true, swimmers: swimmerDetails, date, location_id });
+
+  } catch (error) {
+    console.error("Virtual desk swimmers error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });

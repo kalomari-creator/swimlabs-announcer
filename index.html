@@ -388,21 +388,35 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer</h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.5.2</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
     <div class="right row">
-      <select id="locationSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+      <select id="locationSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
         <option value="">Loading locations...</option>
       </select>
-      <div class="tabs">
-        <button class="tab active" id="tabRoster">Roster</button>
-        <button class="tab" id="tabAnnouncements" style="display:none;">Announcements</button>
-        <button class="tab" id="tabAdmin">Admin</button>
-      </div>
+      <select id="viewSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); min-width: 150px;">
+        <option value="roster">Roster</option>
+        <option value="lifeguard">Lifeguard 🏊</option>
+        <option value="announcements">Announcements</option>
+        <option value="virtualDesk">Virtual Desk</option>
+        <option value="admin">⚙️ Admin</option>
+      </select>
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
       <button id="settingsBtn" title="Settings">⚙️</button>
+      <span class="pill">
+        <div style="line-height:1.3;">
+          <div style="font-size:11px; color:var(--muted);">Current Time</div>
+          <strong id="currentTime" style="color:#04D9FF; font-size:15px;">—</strong>
+        </div>
+      </span>
+      <span class="pill" id="nextAnnouncementPill">
+        <div style="line-height:1.3;">
+          <div style="font-size:11px; color:var(--muted);">Next Announcement</div>
+          <strong id="nextAnnouncementTimer" style="color:#04D9FF; font-size:15px;">—</strong>
+        </div>
+      </span>
       <span class="pill">Last: <strong id="lastAt">None</strong></span>
     </div>
   </div>
@@ -507,9 +521,9 @@
     </div>
   </div>
 
-  <div id="panelAdmin" class="hidden">
+  <div id="panelVirtualDesk" class="hidden">
     <div class="card">
-      <h2 style="margin:0 0 16px; font-size:20px;">Admin Dashboard</h2>
+      <h2 style="margin:0 0 16px; font-size:20px;">Virtual Desk Dashboard</h2>
 
       <!-- Quick Stats -->
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
@@ -529,8 +543,27 @@
         </div>
       </div>
 
+      <!-- Swimmer Details View -->
+      <div class="card" id="swimmerDetailsView">
+        <div class="row" style="margin-bottom:12px;">
+          <h3 style="margin:0; font-size:18px;">👥 Today's Swimmers - Detailed View</h3>
+          <div class="spacer"></div>
+          <select id="swimmerSortBy" style="padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+            <option value="name">Sort: Name A-Z</option>
+            <option value="time">Sort: Time</option>
+            <option value="instructor">Sort: Instructor</option>
+            <option value="attendance_rate">Sort: Attendance Rate</option>
+            <option value="missed">Sort: Missed Classes</option>
+            <option value="balance">Sort: Balance Status</option>
+          </select>
+          <button id="refreshSwimmers" class="secondary" style="padding:6px 12px; font-size:13px;">🔄 Refresh</button>
+        </div>
+
+        <div id="swimmerDetailsTable"></div>
+      </div>
+
       <!-- Navigation Cards -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px; margin-top:20px;">
         <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavAbsence">
           <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📊 Absence Tracker</div>
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Track multi-week absences and follow up with families</div>
@@ -558,7 +591,32 @@
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
-        Admin features are protected by PIN authentication. Session expires after 2 hours.
+        Virtual Desk features are protected by PIN authentication. Session expires after 2 hours.
+      </div>
+    </div>
+  </div>
+
+  <!-- System Admin Panel -->
+  <div id="panelAdmin" class="hidden">
+    <div class="card">
+      <h2 style="margin:0 0 16px; font-size:20px;">⚙️ System Administration</h2>
+
+      <!-- Location Management -->
+      <div class="card" style="margin-bottom:20px;">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900;">📍 Location Management</h3>
+        <div id="locationsList" style="margin-bottom:12px;"></div>
+        <button id="addLocationBtn" class="secondary">+ Add New Location</button>
+      </div>
+
+      <!-- Staff Management -->
+      <div class="card">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900;">👥 Staff Management</h3>
+        <div id="staffList" style="margin-bottom:12px;"></div>
+        <button id="addStaffBtn" class="secondary">+ Add New Staff</button>
+      </div>
+
+      <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
+        System administration features require elevated privileges. Changes affect all locations.
       </div>
     </div>
   </div>
@@ -704,6 +762,95 @@
   </div>
 </div>
 
+<!-- Add Location Modal -->
+<div class="modalBackdrop" id="addLocationModal">
+  <div class="modal">
+    <h3>Add New Location</h3>
+
+    <div class="field">
+      <label>Location Name *</label>
+      <input type="text" id="newLocationName" placeholder="e.g., SwimLabs Westchester" />
+    </div>
+
+    <div class="field">
+      <label>Short Code</label>
+      <input type="text" id="newLocationShortCode" placeholder="e.g., SLW" maxlength="10" />
+    </div>
+
+    <div class="field">
+      <label>Brand</label>
+      <select id="newLocationBrand">
+        <option value="swimlabs">SwimLabs</option>
+        <option value="safesplash">SafeSplash</option>
+      </select>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="addLocationCancel">Cancel</button>
+      <button class="primary" id="addLocationSave">Add Location</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Staff Modal -->
+<div class="modalBackdrop" id="addStaffModal">
+  <div class="modal">
+    <h3>Add New Staff Member</h3>
+
+    <div class="grid2">
+      <div class="field">
+        <label>First Name *</label>
+        <input type="text" id="newStaffFirstName" placeholder="First name" />
+      </div>
+
+      <div class="field">
+        <label>Last Name *</label>
+        <input type="text" id="newStaffLastName" placeholder="Last name" />
+      </div>
+
+      <div class="field">
+        <label>Location *</label>
+        <select id="newStaffLocation">
+          <option value="New York">New York</option>
+          <option value="California">California</option>
+          <option value="Texas">Texas</option>
+          <option value="Nevada">Nevada</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Phone</label>
+        <input type="text" id="newStaffPhone" placeholder="1234567890" />
+      </div>
+
+      <div class="field">
+        <label>Birthday</label>
+        <input type="text" id="newStaffBirthday" placeholder="MM/DD/YY" />
+      </div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="addStaffCancel">Cancel</button>
+      <button class="primary" id="addStaffSave">Add Staff</button>
+    </div>
+  </div>
+</div>
+
+<!-- Attendance History Modal -->
+<div class="modalBackdrop" id="attendanceHistoryModal">
+  <div class="modal" style="max-width:700px;">
+    <h3 id="attendanceHistoryTitle">Attendance History</h3>
+
+    <div id="attendanceHistoryContent" style="margin-top:12px; max-height:500px; overflow-y:auto;">
+      <!-- Content will be populated by JavaScript -->
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="attendanceHistoryClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let currentBlock = null;
   let zoneTarget = null;
@@ -714,6 +861,9 @@
   let currentLocation = null;
   let allLocations = [];
   let searchFilter = '';
+  let pendingPinPanel = null; // Track which panel requested PIN auth ('virtualDesk' or 'admin')
+  let nextAnnouncementTime = null; // Track next scheduled announcement
+  let countdownInterval = null; // Interval for countdown updates
 
   const el = (id) => document.getElementById(id);
 
@@ -954,7 +1104,13 @@
     autoTimers.forEach(id => clearTimeout(id));
     autoTimers = [];
 
-    if(!activeDateISO || !blocksList.length) return;
+    // Reset next announcement tracking
+    nextAnnouncementTime = null;
+
+    if(!activeDateISO || !blocksList.length) {
+      stopCountdown();
+      return;
+    }
 
     const now = new Date();
 
@@ -979,6 +1135,9 @@
 
           const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode }) });
           setLastAnnouncementUI(resp.lastAnnouncement);
+
+          // After announcement, reschedule to update next timer
+          setTimeout(() => scheduleAutoAnnouncements(), 1000);
         }catch(e){
           // don't spam alerts for background timers
           console.error('auto announcement failed', e);
@@ -986,7 +1145,92 @@
       }, delay);
 
       autoTimers.push(id);
+
+      // Track the earliest announcement time
+      if (!nextAnnouncementTime || announceAt < nextAnnouncementTime) {
+        nextAnnouncementTime = announceAt;
+      }
     });
+
+    // Start countdown if we have scheduled announcements
+    if (nextAnnouncementTime) {
+      startCountdown();
+    } else {
+      stopCountdown();
+    }
+  }
+
+  function startCountdown() {
+    // Clear existing interval
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+    }
+
+    // Update immediately
+    updateCountdown();
+
+    // Update every second
+    countdownInterval = setInterval(updateCountdown, 1000);
+  }
+
+  function stopCountdown() {
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+
+    // Show timer pill but with dash
+    el('nextAnnouncementTimer').textContent = '—';
+    el('nextAnnouncementPill').style.display = '';
+  }
+
+  function updateCountdown() {
+    const now = new Date();
+
+    // Update current time display
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = String(minutes).padStart(2, '0');
+    el('currentTime').textContent = `${displayHours}:${displayMinutes} ${ampm}`;
+
+    if (!nextAnnouncementTime) {
+      el('nextAnnouncementTimer').textContent = '—';
+      el('nextAnnouncementTimer').style.color = '#04D9FF';
+      el('nextAnnouncementPill').style.display = '';
+      return;
+    }
+
+    const diff = nextAnnouncementTime - now;
+
+    // If time has passed, show NOW for 3 seconds
+    if (diff <= 0) {
+      el('nextAnnouncementTimer').textContent = 'NOW';
+      el('nextAnnouncementTimer').style.color = '#22c55e';
+      setTimeout(() => {
+        stopCountdown();
+      }, 3000);
+      return;
+    }
+
+    // Calculate minutes and seconds
+    const totalSeconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    // Format as :MM or :SS
+    let display = '';
+    if (minutes > 0) {
+      display = `:${String(minutes).padStart(2, '0')}`;
+    } else {
+      display = `:${String(seconds).padStart(2, '0')}`;
+    }
+
+    // Update the display
+    el('nextAnnouncementTimer').textContent = display;
+    el('nextAnnouncementTimer').style.color = '#04D9FF';
+    el('nextAnnouncementPill').style.display = '';
   }
 
   function sortKids(kids){
@@ -1258,9 +1502,32 @@
       tdLevel.textContent = tl.level;
       tr.appendChild(tdLevel);
 
-      // Instructor
+      // Instructor (with substitute indicator if applicable)
       const tdInst = document.createElement('td');
-      tdInst.textContent = kid.instructor_name || '—';
+      if (kid.substitute_instructor) {
+        // Show substitute with indicator
+        const subName = document.createElement('span');
+        subName.style.fontWeight = '700';
+        subName.textContent = kid.substitute_instructor;
+
+        const subBadge = document.createElement('span');
+        subBadge.className = 'badge';
+        subBadge.style.cssText = 'background:rgba(251,191,36,0.15); color:#fbbf24; border-color:rgba(251,191,36,0.3); margin-left:6px; font-size:10px; padding:2px 6px;';
+        subBadge.textContent = 'SUB';
+
+        const originalName = document.createElement('div');
+        originalName.className = 'tiny';
+        originalName.style.cssText = 'color:var(--muted); margin-top:2px; text-decoration:line-through;';
+        originalName.textContent = kid.instructor_name || '';
+
+        tdInst.appendChild(subName);
+        tdInst.appendChild(subBadge);
+        if (kid.instructor_name) {
+          tdInst.appendChild(originalName);
+        }
+      } else {
+        tdInst.textContent = kid.instructor_name || '—';
+      }
       tr.appendChild(tdInst);
 
       // Zone
@@ -1319,54 +1586,79 @@
   }
 
   // ---- Wire up UI ----
-  el('tabRoster').addEventListener('click', () => {
-    el('tabRoster').classList.add('active');
-    el('tabAnnouncements').classList.remove('active');
-    el('tabAdmin').classList.remove('active');
-    el('panelRoster').classList.remove('hidden');
-    el('panelAnnouncements').classList.add('hidden');
-    el('panelAdmin').classList.add('hidden');
-  });
+  // View selector dropdown
+  el('viewSelect').addEventListener('change', async (e) => {
+    const view = e.target.value;
 
-  el('tabAnnouncements').addEventListener('click', () => {
-    el('tabAnnouncements').classList.add('active');
-    el('tabRoster').classList.remove('active');
-    el('tabAdmin').classList.remove('active');
+    // Hide all panels
     el('panelRoster').classList.add('hidden');
-    el('panelAnnouncements').classList.remove('hidden');
+    el('panelAnnouncements').classList.add('hidden');
+    el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.add('hidden');
-  });
 
-  // Admin tab with PIN protection
-  el('tabAdmin').addEventListener('click', async () => {
-    // Check if already authenticated
-    const pinAuth = sessionStorage.getItem('admin_pin_auth');
-    const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
+    if (view === 'roster') {
+      el('panelRoster').classList.remove('hidden');
+    } else if (view === 'lifeguard') {
+      alert('Lifeguard Tracker\n\nComing soon!\n\nThis will track lifeguard schedules and certifications.');
+      el('viewSelect').value = 'roster'; // Reset to roster
+      el('panelRoster').classList.remove('hidden');
+    } else if (view === 'announcements') {
+      el('panelAnnouncements').classList.remove('hidden');
+    } else if (view === 'virtualDesk') {
+      // Check PIN authentication
+      const pinAuth = sessionStorage.getItem('admin_pin_auth');
+      const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
 
-    if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
-      // Already authenticated and not expired
-      showAdminPanel();
-      return;
+      if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
+        showVirtualDeskPanel();
+      } else {
+        pendingPinPanel = 'virtualDesk';
+        showModal('pinModal', true);
+        el('pinInput').value = '';
+        el('pinError').style.display = 'none';
+        el('pinLockout').style.display = 'none';
+        el('pinInput').focus();
+      }
+    } else if (view === 'admin') {
+      // Check PIN authentication
+      const pinAuth = sessionStorage.getItem('admin_pin_auth');
+      const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
+
+      if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
+        showAdminPanel();
+      } else {
+        pendingPinPanel = 'admin';
+        showModal('pinModal', true);
+        el('pinInput').value = '';
+        el('pinError').style.display = 'none';
+        el('pinLockout').style.display = 'none';
+        el('pinInput').focus();
+      }
     }
-
-    // Need to authenticate
-    showModal('pinModal', true);
-    el('pinInput').value = '';
-    el('pinError').style.display = 'none';
-    el('pinLockout').style.display = 'none';
-    el('pinInput').focus();
   });
+
+  function showVirtualDeskPanel() {
+    el('viewSelect').value = 'virtualDesk';
+    el('panelRoster').classList.add('hidden');
+    el('panelAnnouncements').classList.add('hidden');
+    el('panelVirtualDesk').classList.remove('hidden');
+    el('panelAdmin').classList.add('hidden');
+
+    // Load virtual desk stats and swimmer details
+    loadAdminStats();
+    loadSwimmerDetails();
+  }
 
   function showAdminPanel() {
-    el('tabAdmin').classList.add('active');
-    el('tabRoster').classList.remove('active');
-    el('tabAnnouncements').classList.remove('active');
+    el('viewSelect').value = 'admin';
     el('panelRoster').classList.add('hidden');
     el('panelAnnouncements').classList.add('hidden');
+    el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.remove('hidden');
 
-    // Load admin stats
-    loadAdminStats();
+    // Load locations and staff
+    loadAdminLocations();
+    loadStaff();
   }
 
   async function loadAdminStats() {
@@ -1381,6 +1673,381 @@
       console.error('Failed to load admin stats:', e);
     }
   }
+
+  async function loadAdminLocations() {
+    try {
+      const resp = await api('/api/locations');
+      const list = el('locationsList');
+      list.innerHTML = '';
+
+      (resp.locations || []).forEach(loc => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; margin-bottom:6px; background:rgba(255,255,255,0.03); border-radius:8px;';
+
+        const info = document.createElement('div');
+        info.innerHTML = `<strong>${loc.name}</strong> (${loc.code}) <span class="tiny" style="color:var(--muted);">${loc.brand}</span>`;
+        item.appendChild(info);
+
+        const actions = document.createElement('div');
+        const delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.style.cssText = 'padding:4px 12px; font-size:12px;';
+        delBtn.textContent = 'Remove';
+        delBtn.addEventListener('click', () => removeLocation(loc.id, loc.name));
+        actions.appendChild(delBtn);
+        item.appendChild(actions);
+
+        list.appendChild(item);
+      });
+    } catch (e) {
+      console.error('Failed to load admin locations:', e);
+    }
+  }
+
+  async function loadStaff() {
+    try {
+      const resp = await api('/api/staff');
+      const list = el('staffList');
+      list.innerHTML = '';
+
+      (resp.staff || []).forEach(staff => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px; margin-bottom:6px; background:rgba(255,255,255,0.03); border-radius:8px;';
+
+        const info = document.createElement('div');
+
+        // Format birthday to show only month/day (remove year)
+        let birthdayDisplay = '';
+        if (staff.birthday) {
+          const parts = staff.birthday.split('/');
+          if (parts.length >= 2) {
+            birthdayDisplay = `${parts[0]}/${parts[1]}`; // MM/DD only
+          }
+        }
+
+        // Build info HTML with phone and birthday
+        let infoHTML = `<strong>${staff.firstName} ${staff.lastName}</strong>`;
+        infoHTML += ` <span class="tiny" style="color:var(--muted);">${staff.location}</span>`;
+        if (staff.phone) {
+          infoHTML += `<br><span class="tiny" style="color:var(--muted);">📞 ${staff.phone}</span>`;
+        }
+        if (birthdayDisplay) {
+          infoHTML += ` <span class="tiny" style="color:var(--muted);">🎂 ${birthdayDisplay}</span>`;
+        }
+
+        info.innerHTML = infoHTML;
+        item.appendChild(info);
+
+        const actions = document.createElement('div');
+        const delBtn = document.createElement('button');
+        delBtn.className = 'danger';
+        delBtn.style.cssText = 'padding:4px 12px; font-size:12px;';
+        delBtn.textContent = 'Remove';
+        delBtn.addEventListener('click', () => removeStaff(staff.id || `${staff.firstName}_${staff.lastName}`, `${staff.firstName} ${staff.lastName}`));
+        actions.appendChild(delBtn);
+        item.appendChild(actions);
+
+        list.appendChild(item);
+      });
+    } catch (e) {
+      console.error('Failed to load staff:', e);
+    }
+  }
+
+  async function removeLocation(id, name) {
+    if (!confirm(`Remove location: ${name}?\n\nThis will affect all rosters and settings for this location.`)) return;
+
+    try {
+      await api('/api/admin/remove-location', {
+        method: 'POST',
+        body: JSON.stringify({ id })
+      });
+      alert(`Location "${name}" removed successfully.`);
+      loadAdminLocations();
+      await loadLocations(); // Also update main dropdown
+    } catch (e) {
+      alert(`Failed to remove location: ${e.message}`);
+    }
+  }
+
+  async function removeStaff(id, name) {
+    if (!confirm(`Remove staff member: ${name}?`)) return;
+
+    try {
+      await api('/api/admin/remove-staff', {
+        method: 'POST',
+        body: JSON.stringify({ id })
+      });
+      alert(`Staff member "${name}" removed successfully.`);
+      loadStaff();
+    } catch (e) {
+      alert(`Failed to remove staff: ${e.message}`);
+    }
+  }
+
+  // Store swimmer data globally for attendance modal
+  let swimmersData = [];
+
+  // Load detailed swimmer information for Virtual Desk
+  async function loadSwimmerDetails() {
+    try {
+      const date = activeDateISO || new Date().toISOString().split('T')[0];
+      const location_id = currentLocation?.id || 1;
+
+      const resp = await api(`/api/virtual-desk/swimmers?date=${date}&location_id=${location_id}`);
+
+      if (!resp.ok || !resp.swimmers) {
+        el('swimmerDetailsTable').innerHTML = '<p style="color:var(--muted); text-align:center; padding:20px;">No swimmers found for today.</p>';
+        return;
+      }
+
+      // Store data globally
+      swimmersData = resp.swimmers;
+
+      // Apply sorting
+      let swimmers = swimmersData;
+      const sortBy = el('swimmerSortBy').value;
+
+      if (sortBy === 'name') {
+        swimmers.sort((a, b) => a.swimmer_name.localeCompare(b.swimmer_name));
+      } else if (sortBy === 'time') {
+        swimmers.sort((a, b) => a.start_time.localeCompare(b.start_time));
+      } else if (sortBy === 'instructor') {
+        swimmers.sort((a, b) => (a.instructor_name || '').localeCompare(b.instructor_name || ''));
+      } else if (sortBy === 'attendance_rate') {
+        swimmers.sort((a, b) => (b.stats?.attendance_rate || 0) - (a.stats?.attendance_rate || 0));
+      } else if (sortBy === 'missed') {
+        swimmers.sort((a, b) => (b.stats?.missed || 0) - (a.stats?.missed || 0));
+      } else if (sortBy === 'balance') {
+        const statusOrder = { 'owes': 3, 'policy': 2, 'current': 1 };
+        swimmers.sort((a, b) => (statusOrder[b.balance_status] || 0) - (statusOrder[a.balance_status] || 0));
+      }
+
+      // Build table
+      let html = '<table><thead><tr>';
+      html += '<th>Swimmer</th>';
+      html += '<th>Time</th>';
+      html += '<th>Program</th>';
+      html += '<th>Instructor</th>';
+      html += '<th>Total Classes</th>';
+      html += '<th>Attended</th>';
+      html += '<th>Missed</th>';
+      html += '<th>Attendance %</th>';
+      html += '<th>Balance</th>';
+      html += '<th>Flags</th>';
+      html += '</tr></thead><tbody>';
+
+      swimmers.forEach(s => {
+        html += '<tr>';
+
+        // Swimmer name
+        html += `<td><strong>${s.swimmer_name}</strong>`;
+        if (s.age_text) html += `<br><span class="tiny" style="color:var(--muted);">${s.age_text}</span>`;
+        html += '</td>';
+
+        // Time
+        html += `<td>${fmtTime(s.start_time)}</td>`;
+
+        // Program
+        html += `<td><span class="tiny">${s.program || '—'}</span></td>`;
+
+        // Instructor
+        html += '<td>';
+        if (s.substitute_instructor) {
+          html += `<span style="font-weight:700;">${s.substitute_instructor}</span>`;
+          html += `<span class="badge" style="background:rgba(251,191,36,0.15); color:#fbbf24; border-color:rgba(251,191,36,0.3); margin-left:4px; font-size:10px;">SUB</span>`;
+          if (s.instructor_name) html += `<br><span class="tiny" style="color:var(--muted); text-decoration:line-through;">${s.instructor_name}</span>`;
+        } else {
+          html += s.instructor_name || '—';
+        }
+        html += '</td>';
+
+        // Stats
+        html += `<td style="text-align:center;">${s.stats?.total_classes || 0}</td>`;
+        html += `<td style="text-align:center; color:var(--good);">${s.stats?.attended || 0}</td>`;
+        html += `<td style="text-align:center; color:var(--bad);">${s.stats?.missed || 0}</td>`;
+
+        // Attendance rate with color (clickable)
+        const rate = s.stats?.attendance_rate || 0;
+        let rateColor = 'var(--good)';
+        if (rate < 70) rateColor = 'var(--bad)';
+        else if (rate < 85) rateColor = 'var(--warn)';
+        const swimmerIndex = swimmers.indexOf(s);
+        html += `<td style="text-align:center;">`;
+        html += `<span onclick="showAttendanceHistory(${swimmerIndex})" style="color:${rateColor}; font-weight:700; cursor:pointer; text-decoration:underline; padding:4px 8px; border-radius:4px; background:rgba(255,255,255,0.05);">${rate}%</span>`;
+        html += `</td>`;
+
+        // Balance - show actual dollar amount or status
+        html += '<td style="text-align:center;">';
+        if (s.balance_amount !== null && s.balance_amount !== undefined) {
+          const balStr = s.balance_amount < 0 ? `-$${Math.abs(s.balance_amount).toFixed(2)}` : `$${s.balance_amount.toFixed(2)}`;
+          const balColor = s.balance_amount > 0 ? 'var(--bad)' : s.balance_amount < 0 ? 'var(--good)' : 'var(--muted)';
+          html += `<span style="color:${balColor}; font-weight:700;">${balStr}</span>`;
+        } else if (s.balance_status === 'owes') {
+          html += '<span class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444; border-color:rgba(239,68,68,0.3);">Owes</span>';
+        } else if (s.balance_status === 'policy') {
+          html += '<span class="badge" style="background:rgba(245,158,11,0.15); color:#f59e0b; border-color:rgba(245,158,11,0.3);">Policy</span>';
+        } else {
+          html += '<span class="tiny" style="color:var(--muted);">—</span>';
+        }
+        html += '</td>';
+
+        // Flags
+        html += '<td>';
+        const flags = [];
+        if (s.flags?.new) flags.push('<span class="badge" style="background:rgba(34,197,94,0.15); color:#22c55e;">New</span>');
+        if (s.flags?.makeup) flags.push('<span class="badge" style="background:rgba(59,130,246,0.15); color:#3b82f6;">Makeup</span>');
+        if (s.flags?.trial) flags.push('<span class="badge" style="background:rgba(234,179,8,0.15); color:#eab308;">Trial</span>');
+        if (s.is_addon) flags.push('<span class="badge addon">Add-on</span>');
+        html += flags.join(' ') || '—';
+        html += '</td>';
+
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+
+      el('swimmerDetailsTable').innerHTML = html;
+
+    } catch (e) {
+      console.error('Failed to load swimmer details:', e);
+      el('swimmerDetailsTable').innerHTML = `<p style="color:var(--bad); text-align:center; padding:20px;">Error: ${e.message}</p>`;
+    }
+  }
+
+  // Event handlers for swimmer details view
+  el('swimmerSortBy').addEventListener('change', loadSwimmerDetails);
+  el('refreshSwimmers').addEventListener('click', loadSwimmerDetails);
+
+  // Show attendance history modal
+  window.showAttendanceHistory = function(swimmerIndex) {
+    const swimmer = swimmersData[swimmerIndex];
+    if (!swimmer || !swimmer.attendance_history) return;
+
+    el('attendanceHistoryTitle').textContent = `Attendance History: ${swimmer.swimmer_name}`;
+
+    let html = '<table style="width:100%;"><thead><tr>';
+    html += '<th>Date</th>';
+    html += '<th>Time</th>';
+    html += '<th>Status</th>';
+    html += '<th>Program</th>';
+    html += '<th>Instructor</th>';
+    html += '</tr></thead><tbody>';
+
+    swimmer.attendance_history.forEach(record => {
+      const statusText = record.attendance === 1 ? 'Attended' : record.attendance === 0 ? 'Missed' : '—';
+      const statusColor = record.attendance === 1 ? 'var(--good)' : record.attendance === 0 ? 'var(--bad)' : 'var(--muted)';
+
+      html += '<tr>';
+      html += `<td>${record.date}</td>`;
+      html += `<td>${fmtTime(record.start_time)}</td>`;
+      html += `<td style="color:${statusColor}; font-weight:700;">${statusText}</td>`;
+      html += `<td><span class="tiny">${record.program || '—'}</span></td>`;
+      html += `<td>${record.instructor_name || '—'}</td>`;
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+
+    // Add summary
+    const attended = swimmer.stats?.attended || 0;
+    const missed = swimmer.stats?.missed || 0;
+    const rate = swimmer.stats?.attendance_rate || 0;
+
+    html += '<div style="margin-top:16px; padding:12px; background:rgba(255,255,255,0.05); border-radius:8px;">';
+    html += '<div style="display:flex; gap:20px; justify-content:center;">';
+    html += `<div><span class="tiny" style="color:var(--muted);">Total:</span> <strong>${swimmer.stats?.total_classes || 0}</strong></div>`;
+    html += `<div><span class="tiny" style="color:var(--muted);">Attended:</span> <strong style="color:var(--good);">${attended}</strong></div>`;
+    html += `<div><span class="tiny" style="color:var(--muted);">Missed:</span> <strong style="color:var(--bad);">${missed}</strong></div>`;
+    html += `<div><span class="tiny" style="color:var(--muted);">Rate:</span> <strong style="color:var(--good);">${rate}%</strong></div>`;
+    html += '</div></div>';
+
+    el('attendanceHistoryContent').innerHTML = html;
+    showModal('attendanceHistoryModal', true);
+  };
+
+  el('attendanceHistoryClose').addEventListener('click', () => showModal('attendanceHistoryModal', false));
+  el('attendanceHistoryModal').addEventListener('click', (e) => {
+    if (e.target === el('attendanceHistoryModal')) showModal('attendanceHistoryModal', false);
+  });
+
+  // Add Location Modal
+  el('addLocationBtn').addEventListener('click', () => {
+    el('newLocationName').value = '';
+    el('newLocationShortCode').value = '';
+    el('newLocationBrand').value = 'swimlabs';
+    showModal('addLocationModal', true);
+  });
+
+  el('addLocationCancel').addEventListener('click', () => showModal('addLocationModal', false));
+  el('addLocationModal').addEventListener('click', (e) => {
+    if (e.target === el('addLocationModal')) showModal('addLocationModal', false);
+  });
+
+  el('addLocationSave').addEventListener('click', async () => {
+    const name = el('newLocationName').value.trim();
+    const short_code = el('newLocationShortCode').value.trim();
+    const brand = el('newLocationBrand').value;
+
+    if (!name) {
+      alert('Location name is required');
+      return;
+    }
+
+    try {
+      await api('/api/admin/add-location', {
+        method: 'POST',
+        body: JSON.stringify({ name, short_code, brand })
+      });
+      alert(`Location "${name}" added successfully.`);
+      showModal('addLocationModal', false);
+      loadAdminLocations();
+      // Reload location dropdown
+      await loadLocations();
+    } catch (e) {
+      alert(`Failed to add location: ${e.message}`);
+    }
+  });
+
+  // Add Staff Modal
+  el('addStaffBtn').addEventListener('click', () => {
+    el('newStaffFirstName').value = '';
+    el('newStaffLastName').value = '';
+    el('newStaffLocation').value = 'New York';
+    el('newStaffPhone').value = '';
+    el('newStaffBirthday').value = '';
+    showModal('addStaffModal', true);
+  });
+
+  el('addStaffCancel').addEventListener('click', () => showModal('addStaffModal', false));
+  el('addStaffModal').addEventListener('click', (e) => {
+    if (e.target === el('addStaffModal')) showModal('addStaffModal', false);
+  });
+
+  el('addStaffSave').addEventListener('click', async () => {
+    const firstName = el('newStaffFirstName').value.trim();
+    const lastName = el('newStaffLastName').value.trim();
+    const location = el('newStaffLocation').value;
+    const phone = el('newStaffPhone').value.trim();
+    const birthday = el('newStaffBirthday').value.trim();
+
+    if (!firstName || !lastName) {
+      alert('First name and last name are required');
+      return;
+    }
+
+    try {
+      await api('/api/admin/add-staff', {
+        method: 'POST',
+        body: JSON.stringify({ firstName, lastName, location, phone, birthday })
+      });
+      alert(`Staff member "${firstName} ${lastName}" added successfully.`);
+      showModal('addStaffModal', false);
+      loadStaff();
+    } catch (e) {
+      alert(`Failed to add staff: ${e.message}`);
+    }
+  });
 
   // PIN modal handlers
   el('pinCancel').addEventListener('click', () => {
@@ -1408,7 +2075,14 @@
         sessionStorage.setItem('admin_pin_expiry', resp.expires_at.toString());
 
         showModal('pinModal', false);
-        showAdminPanel();
+
+        // Show the panel that requested auth
+        if (pendingPinPanel === 'admin') {
+          showAdminPanel();
+        } else {
+          showVirtualDeskPanel();
+        }
+        pendingPinPanel = null;
       }
     } catch (e) {
       if (e.message.includes('Too many failed attempts')) {
@@ -1782,6 +2456,8 @@
       await loadLocations();
       await loadStatus();
       await loadBlocks();
+      // Start clock update (runs independently of announcements)
+      startCountdown();
     }catch(e){
       setStatus(e.message || 'Failed to load', 'warn');
     }
