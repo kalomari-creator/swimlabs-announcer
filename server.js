@@ -125,18 +125,6 @@ function ensureSchema() {
       updated_at TEXT
     );
   `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS safety_issues (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      start_time TEXT NOT NULL,
-      location_id INTEGER NOT NULL DEFAULT 1,
-      note TEXT,
-      created_at TEXT,
-      updated_at TEXT,
-      UNIQUE(date, start_time, location_id)
-    );
-  `);
 
   // Locations table
   db.exec(`
@@ -189,7 +177,6 @@ function ensureSchema() {
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_key ON roster(date, start_time, swimmer_name);`);
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_trial_followup ON trial_followups(swimmer_name, location_id);`);
-  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_safety_issue ON safety_issues(date, start_time, location_id);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);`);
 }
@@ -210,178 +197,6 @@ function safeExportFilename(name) {
     return null;
   }
   return filename;
-}
-
-function isWestchester(location) {
-  if (!location) return false;
-  return location.code === "SLW" || String(location.name || "").toLowerCase().includes("westchester");
-}
-
-function getGuardChecklist(type) {
-  const weekdayOpening = {
-    title: "Opening Checklist (Weekdays - 2 Guards)",
-    groups: [
-      {
-        title: "Guard 1 (First Guard In)",
-        tasks: [
-          "Chemicals check",
-          "Make sure each pool has a bin",
-          "Vacuum pools"
-        ]
-      },
-      {
-        title: "Guard 2 (Second Guard In)",
-        tasks: [
-          "Cycle laundry",
-          "Empty dehumidifiers",
-          "Check playpen"
-        ]
-      },
-      {
-        title: "Front Desk",
-        tasks: [
-          "Set up lobby"
-        ]
-      },
-      {
-        title: "All Guards",
-        tasks: [
-          "Pick up a walkie"
-        ]
-      }
-    ]
-  };
-
-  const weekendOpening = {
-    title: "Opening Checklist (Weekends - 3 Guards)",
-    groups: [
-      {
-        title: "Guard 1",
-        tasks: [
-          "Chemicals check",
-          "Make sure each pool has a bin",
-          "Vacuum pools"
-        ]
-      },
-      {
-        title: "Guard 2",
-        tasks: [
-          "Set up lobby",
-          "Cycle laundry",
-          "Empty dehumidifiers"
-        ]
-      },
-      {
-        title: "Guard 3 (Up for first rotation)",
-        tasks: [
-          "Check playpen",
-          "Restock snack wall, fridge, and coffee station"
-        ]
-      },
-      {
-        title: "All Guards",
-        tasks: [
-          "Pick up a walkie"
-        ]
-      }
-    ]
-  };
-
-  const midday = {
-    title: "Midday Checklist (All Guards)",
-    tasks: [
-      "Check bathrooms during each rotation",
-      "Sweep/Mop, clean toilet, stock TP",
-      "Mirrors, hand railings, doorknob, walls",
-      "Sign bathroom log",
-      "Empty dehumidifiers",
-      "Midday chemical check",
-      "Laundry (client towels only)",
-      "Do not start washer with fewer than 5 towels",
-      "Do not change washer settings and use heavy duty setting for the dryer",
-      "Hand vacuum / Sweep / Dry Mop (lobby, bathrooms, staff room, locker rooms)",
-      "Deck windows when time allows"
-    ]
-  };
-
-  const weekdayClosing = {
-    title: "Closing Checklist (Weekdays - 2 Guards)",
-    groups: [
-      {
-        title: "Guard 1",
-        tasks: [
-          "Chemicals check",
-          "Clean pool deck and close deck doors",
-          "Empty dehumidifiers",
-          "Cycle laundry",
-          "Clean bathrooms and leave doors open"
-        ]
-      },
-      {
-        title: "Guard 2",
-        tasks: [
-          "Empty and change garbage bags",
-          "Vacuum facility (include playpen)",
-          "Mop floors"
-        ]
-      },
-      {
-        title: "All Guards",
-        tasks: [
-          "Return walkie"
-        ]
-      }
-    ]
-  };
-
-  const weekendClosing = {
-    title: "Closing Checklist (Weekends - 3 Guards)",
-    groups: [
-      {
-        title: "Guard 1",
-        tasks: [
-          "Chemicals check",
-          "Clean pool deck and close doors"
-        ]
-      },
-      {
-        title: "Guard 2",
-        tasks: [
-          "Empty dehumidifiers",
-          "Empty and change garbage bags",
-          "Clean bathrooms and leave doors open",
-          "Cycle laundry"
-        ]
-      },
-      {
-        title: "Guard 3 (Down for last rotation)",
-        tasks: [
-          "Vacuum facility / include playpen",
-          "Mop floors"
-        ]
-      },
-      {
-        title: "Front Desk",
-        tasks: [
-          "Tidy playpen / Close lobby"
-        ]
-      }
-    ]
-  };
-
-  return {
-    note: "If you are down and don't know what to work on or do, see Manager.",
-    opening: type === "weekend" ? weekendOpening : weekdayOpening,
-    midday,
-    closing: type === "weekend" ? weekendClosing : weekdayClosing
-  };
-}
-
-function normalizeAgeText(text) {
-  if (!text) return "";
-  const raw = String(text).trim();
-  const primary = raw.split("•")[0].trim();
-  return primary.replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, "").trim();
 }
 
 function getIP(req) {
@@ -1535,59 +1350,6 @@ app.get("/api/server-exports", (req, res) => {
   }
 });
 
-app.get("/api/safety-issues", (req, res) => {
-  try {
-    const date = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
-      ? String(req.query.date)
-      : activeOrToday();
-    const locationId = Number(req.query.location_id || 1);
-
-    const issues = db.prepare(`
-      SELECT date, start_time, location_id, note, created_at, updated_at
-      FROM safety_issues
-      WHERE date = ? AND location_id = ?
-      ORDER BY start_time ASC
-    `).all(date, locationId);
-
-    res.json({ ok: true, date, location_id: locationId, issues });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "safety-issues failed", details: String(e?.stack || e?.message || e) });
-  }
-});
-
-app.post("/api/safety-issues", (req, res) => {
-  try {
-    const { date, start_time, location_id, note } = req.body || {};
-    if (!start_time) return res.status(400).json({ ok: false, error: "start_time required" });
-    const issueDate = date && /^\d{4}-\d{2}-\d{2}$/.test(String(date)) ? String(date) : activeOrToday();
-    const locationId = Number(location_id || 1);
-    const now = nowISO();
-
-    const noteValue = String(note || "").trim();
-    if (!noteValue) {
-      db.prepare(`
-        DELETE FROM safety_issues
-        WHERE date = ? AND start_time = ? AND location_id = ?
-      `).run(issueDate, start_time, locationId);
-      audit(req, "safety_issue_clear", { date: issueDate, start_time, location_id: locationId });
-      return res.json({ ok: true, cleared: true });
-    }
-
-    db.prepare(`
-      INSERT INTO safety_issues (date, start_time, location_id, note, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(date, start_time, location_id) DO UPDATE SET
-        note=excluded.note,
-        updated_at=excluded.updated_at
-    `).run(issueDate, start_time, locationId, noteValue, now, now);
-
-    audit(req, "safety_issue_add", { date: issueDate, start_time, location_id: locationId });
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "safety-issues failed", details: String(e?.stack || e?.message || e) });
-  }
-});
-
 app.post("/api/export-server", (req, res) => {
   try {
     const { location_id, date } = req.body || {};
@@ -1621,13 +1383,6 @@ app.post("/api/export-server", (req, res) => {
     const exportFilename = `roster_${location.code}_${exportDate}_${timestamp}.json`;
     const exportPath = path.join(exportDir, exportFilename);
 
-    const safetyIssues = db.prepare(`
-      SELECT date, start_time, location_id, note, created_at, updated_at
-      FROM safety_issues
-      WHERE date = ? AND location_id = ?
-      ORDER BY start_time ASC
-    `).all(exportDate, locationId);
-
     const payload = {
       ok: true,
       location: location.name,
@@ -1636,8 +1391,7 @@ app.post("/api/export-server", (req, res) => {
       date: exportDate,
       exported_at: nowISO(),
       count: rows.length,
-      rows,
-      safety_issues: safetyIssues
+      rows
     };
 
     fs.writeFileSync(exportPath, JSON.stringify(payload, null, 2), 'utf-8');
@@ -2545,102 +2299,6 @@ app.post("/api/trials/followup", (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     console.error("Trial follow-up update error:", error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// Guard checklist + rotation (SwimLabs Westchester only)
-app.get("/api/guard-checklist", (req, res) => {
-  try {
-    const locationId = Number(req.query.location_id || 1);
-    const type = req.query.type === "weekend" ? "weekend" : "weekday";
-    const location = getLocationById(locationId);
-    if (!location || !isWestchester(location)) {
-      return res.status(404).json({ ok: false, error: "Guard checklist not available for this location" });
-    }
-    const checklist = getGuardChecklist(type);
-    res.json({ ok: true, checklist, type });
-  } catch (error) {
-    console.error("Guard checklist error:", error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-app.get("/api/guard-rotation", (req, res) => {
-  try {
-    const locationId = Number(req.query.location_id || 1);
-    const type = req.query.type === "weekend" ? "weekend" : "weekday";
-    const date = req.query.date && /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date))
-      ? String(req.query.date)
-      : activeOrToday();
-    const location = getLocationById(locationId);
-    if (!location || !isWestchester(location)) {
-      return res.status(404).json({ ok: false, error: "Guard rotation not available for this location" });
-    }
-
-    const schedDir = path.join(SCHEDULE_DIR, location.code);
-    if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
-    const filename = `guard_rotation_${location.code}_${date}_${type}.json`;
-    const filepath = path.join(schedDir, filename);
-
-    if (!fs.existsSync(filepath)) {
-      return res.json({ ok: true, date, type, blocks: [], filename });
-    }
-
-    const payload = JSON.parse(fs.readFileSync(filepath, "utf-8"));
-    res.json({ ok: true, ...payload, filename });
-  } catch (error) {
-    console.error("Guard rotation error:", error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-app.post("/api/guard-rotation", (req, res) => {
-  try {
-    const { location_id, date, type, blocks } = req.body || {};
-    const locationId = Number(location_id || 1);
-    const rotationType = type === "weekend" ? "weekend" : "weekday";
-    const rotationDate = date && /^\d{4}-\d{2}-\d{2}$/.test(String(date))
-      ? String(date)
-      : activeOrToday();
-
-    const location = getLocationById(locationId);
-    if (!location || !isWestchester(location)) {
-      return res.status(404).json({ ok: false, error: "Guard rotation not available for this location" });
-    }
-
-    const normalizedBlocks = Array.isArray(blocks) ? blocks.map((b) => ({
-      time: String(b.time || "").trim(),
-      guard: String(b.guard || "").trim(),
-      chores: String(b.chores || "").trim()
-    })).filter((b) => b.time) : [];
-
-    const schedDir = path.join(SCHEDULE_DIR, location.code);
-    if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
-    const filename = `guard_rotation_${location.code}_${rotationDate}_${rotationType}.json`;
-    const filepath = path.join(schedDir, filename);
-
-    const payload = {
-      ok: true,
-      location_id: locationId,
-      date: rotationDate,
-      type: rotationType,
-      saved_at: nowISO(),
-      blocks: normalizedBlocks
-    };
-
-    fs.writeFileSync(filepath, JSON.stringify(payload, null, 2), "utf-8");
-
-    audit(req, "guard_rotation_save", {
-      location_id: locationId,
-      date: rotationDate,
-      type: rotationType,
-      count: normalizedBlocks.length
-    });
-
-    res.json({ ok: true, filename, count: normalizedBlocks.length });
-  } catch (error) {
-    console.error("Guard rotation save error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
