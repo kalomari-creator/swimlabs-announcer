@@ -628,7 +628,14 @@ function speakWithPiper(text) {
     if (!fs.existsSync(PIPER_BIN)) return reject(new Error(`Piper binary not found: ${PIPER_BIN}`));
     if (!fs.existsSync(VOICE_MODEL)) return reject(new Error(`Voice model not found: ${VOICE_MODEL}`));
 
-    const p = spawn(PIPER_BIN, ["--model", VOICE_MODEL, "--output_file", TTS_OUT_WAV]);
+    // Set LD_LIBRARY_PATH to include the piper directory for shared libraries
+    const piperDir = path.dirname(PIPER_BIN);
+    const env = {
+      ...process.env,
+      LD_LIBRARY_PATH: piperDir + (process.env.LD_LIBRARY_PATH ? `:${process.env.LD_LIBRARY_PATH}` : '')
+    };
+
+    const p = spawn(PIPER_BIN, ["--model", VOICE_MODEL, "--output_file", TTS_OUT_WAV], { env });
     let err = "";
 
     p.stderr.on("data", (d) => (err += d.toString("utf8")));
