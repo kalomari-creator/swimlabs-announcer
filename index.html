@@ -473,9 +473,6 @@
         <tbody id="roster"></tbody>
       </table>
 
-      <div class="tiny" style="margin-top:10px; color: rgba(159,176,208,.92); line-height:1.4;">
-        Flags: ⭐ First time, 📋 Makeup, 📝 Missing waiver, 💲 Unpaid, 🅣 Trial. Click to toggle.
-      </div>
     </div>
   </div>
 
@@ -1046,63 +1043,58 @@
     row.style.display = 'flex';
     row.style.gap = '6px';
     row.style.alignItems = 'center';
-    
-    // Only show ACTIVE icons to save space
+
+    // Only show ACTIVE flags to save space
     if (kid.flag_new) {
-      const icon = document.createElement('img');
-      icon.src = '/public/icons/1st-ever.png';
-      icon.title = 'First time (click to remove)';
-      icon.style.width = '18px';
-      icon.style.height = '18px';
-      icon.style.cursor = 'pointer';
-      icon.addEventListener('click', () => toggleFlag(kid, 'flag_new'));
-      row.appendChild(icon);
+      const emoji = document.createElement('span');
+      emoji.textContent = '⭐';
+      emoji.title = 'First time (click to remove)';
+      emoji.style.fontSize = '18px';
+      emoji.style.cursor = 'pointer';
+      emoji.addEventListener('click', () => toggleFlag(kid, 'flag_new'));
+      row.appendChild(emoji);
     }
-    
+
     if (kid.flag_makeup) {
-      const icon = document.createElement('img');
-      icon.src = '/public/icons/makeup.png';
-      icon.title = 'Makeup (click to remove)';
-      icon.style.width = '18px';
-      icon.style.height = '18px';
-      icon.style.cursor = 'pointer';
-      icon.addEventListener('click', () => toggleFlag(kid, 'flag_makeup'));
-      row.appendChild(icon);
+      const emoji = document.createElement('span');
+      emoji.textContent = '🎁';
+      emoji.title = 'Makeup (click to remove)';
+      emoji.style.fontSize = '18px';
+      emoji.style.cursor = 'pointer';
+      emoji.addEventListener('click', () => toggleFlag(kid, 'flag_makeup'));
+      row.appendChild(emoji);
     }
-    
+
     if (kid.flag_policy) {
-      const icon = document.createElement('img');
-      icon.src = '/public/icons/policy.png';
-      icon.title = 'Policy (click to remove)';
-      icon.style.width = '18px';
-      icon.style.height = '18px';
-      icon.style.cursor = 'pointer';
-      icon.addEventListener('click', () => toggleFlag(kid, 'flag_policy'));
-      row.appendChild(icon);
+      const emoji = document.createElement('span');
+      emoji.textContent = '📜';
+      emoji.title = 'Policy (click to remove)';
+      emoji.style.fontSize = '18px';
+      emoji.style.cursor = 'pointer';
+      emoji.addEventListener('click', () => toggleFlag(kid, 'flag_policy'));
+      row.appendChild(emoji);
     }
-    
+
     if (kid.flag_owes) {
-      const icon = document.createElement('img');
-      icon.src = '/public/icons/balance.png';
-      icon.title = 'Balance due (click to remove)';
-      icon.style.width = '18px';
-      icon.style.height = '18px';
-      icon.style.cursor = 'pointer';
-      icon.addEventListener('click', () => toggleFlag(kid, 'flag_owes'));
-      row.appendChild(icon);
+      const emoji = document.createElement('span');
+      emoji.textContent = '💳';
+      emoji.title = 'Balance (click to remove)';
+      emoji.style.fontSize = '18px';
+      emoji.style.cursor = 'pointer';
+      emoji.addEventListener('click', () => toggleFlag(kid, 'flag_owes'));
+      row.appendChild(emoji);
     }
-    
+
     if (kid.flag_trial) {
-      const icon = document.createElement('img');
-      icon.src = '/public/icons/birthday.png';
-      icon.title = 'Trial (click to remove)';
-      icon.style.width = '18px';
-      icon.style.height = '18px';
-      icon.style.cursor = 'pointer';
-      icon.addEventListener('click', () => toggleFlag(kid, 'flag_trial'));
-      row.appendChild(icon);
+      const emoji = document.createElement('span');
+      emoji.textContent = '🧪';
+      emoji.title = 'Trial (click to remove)';
+      emoji.style.fontSize = '18px';
+      emoji.style.cursor = 'pointer';
+      emoji.addEventListener('click', () => toggleFlag(kid, 'flag_trial'));
+      row.appendChild(emoji);
     }
-    
+
     // Add edit button
     const editBtn = document.createElement('button');
     editBtn.textContent = '✏️';
@@ -1113,7 +1105,7 @@
     editBtn.style.cursor = 'pointer';
     editBtn.addEventListener('click', () => openEditModal(kid));
     row.appendChild(editBtn);
-    
+
     return row;
   }
 
