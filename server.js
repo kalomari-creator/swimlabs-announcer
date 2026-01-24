@@ -1409,10 +1409,14 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
 
     setActiveDate(detectedDate);
 
-    // Save to location-specific folder
+    // Save to location-specific folder with descriptive filename
+    // Format: roll_sheet_{LOCATION_CODE}_{DATE}.html
+    // Example: roll_sheet_SLW_2026-01-24.html (SwimLabs Westchester)
+    //          roll_sheet_SSM_2026-01-24.html (SafeSplash Santa Monica)
     const locationDir = path.join(SCHEDULE_DIR, location.code);
     if (!fs.existsSync(locationDir)) fs.mkdirSync(locationDir, { recursive: true });
-    const htmlPath = path.join(locationDir, `${detectedDate}.html`);
+    const htmlFilename = `roll_sheet_${location.code}_${detectedDate}.html`;
+    const htmlPath = path.join(locationDir, htmlFilename);
     fs.writeFileSync(htmlPath, html, "utf-8");
 
     const swimmers = parseHTMLRoster(html);
@@ -1421,22 +1425,27 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     }
 
     // Auto-export existing roster before clearing (if any exists)
+    // Exports are stored on SERVER in subdirectories: exports/{LOCATION_CODE}/
+    // Example: exports/SLW/ for SwimLabs Westchester
+    //          exports/SSM/ for SafeSplash Santa Monica
     const existingRoster = db.prepare(`
       SELECT * FROM roster
       WHERE date = ? AND location_id = ? AND is_addon = 0
     `).all(detectedDate, locId);
 
     if (existingRoster.length > 0) {
-      // Create export directory for this location
+      // Create export directory for this location on server
       const exportDir = path.join(EXPORT_DIR, location.code);
       if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
 
       // Generate timestamp for filename
+      // Format: roster_{LOCATION_CODE}_{DATE}_{TIMESTAMP}.json
+      // Example: roster_SLW_2026-01-24_2026-01-24T15-30-45-123Z.json
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const exportFilename = `roster_${detectedDate}_${timestamp}.json`;
+      const exportFilename = `roster_${location.code}_${detectedDate}_${timestamp}.json`;
       const exportPath = path.join(exportDir, exportFilename);
 
-      // Save existing roster to JSON
+      // Save existing roster to JSON on server
       fs.writeFileSync(exportPath, JSON.stringify({
         location: location.name,
         location_code: location.code,
@@ -1446,7 +1455,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
         roster: existingRoster
       }, null, 2), 'utf-8');
 
-      console.log(`Auto-exported ${existingRoster.length} swimmers to ${exportFilename}`);
+      console.log(`[AUTO-EXPORT] Saved ${existingRoster.length} swimmers to server: ${location.code}/${exportFilename}`);
     }
 
     // Delete existing roster for this location/date
