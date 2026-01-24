@@ -572,6 +572,11 @@
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Manage trial swimmers and conversion tracking</div>
         </div>
 
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavGuards">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
+        </div>
+
         <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavHistory">
           <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📅 Attendance History</div>
           <div class="tiny" style="color:var(--muted); line-height:1.4;">View 30-day attendance patterns and reports</div>
@@ -1004,6 +1009,7 @@
       
       // Show/hide announcements tab based on location
       updateAnnouncementsVisibility();
+      updateGuardTasksVisibility();
       
     } catch (e) {
       console.error('Failed to load locations:', e);
@@ -1036,6 +1042,19 @@
     }
   }
 
+  function isWestchesterLocation() {
+    if (!currentLocation) return false;
+    const code = String(currentLocation.code || '').toUpperCase();
+    const name = String(currentLocation.name || '').toLowerCase();
+    return code === 'SLW' || name.includes('westchester');
+  }
+
+  function updateGuardTasksVisibility() {
+    const guardCard = el('adminNavGuards');
+    if (!guardCard) return;
+    guardCard.style.display = isWestchesterLocation() ? '' : 'none';
+  }
+
   el('locationSelect').addEventListener('change', async (e) => {
     const locId = e.target.value;
     currentLocation = allLocations.find(l => l.id == locId);
@@ -1048,6 +1067,7 @@
       });
       
       updateAnnouncementsVisibility();
+      updateGuardTasksVisibility();
       await loadStatus();
       await loadBlocks();
       if (currentBlock) await loadRoster();
