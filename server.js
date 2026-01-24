@@ -1455,14 +1455,183 @@ app.post("/api/set-location", (req, res) => {
   }
 });
 
+// ==================== INSTRUCTOR MANAGEMENT ====================
+app.get("/api/instructors", (req, res) => {
+  try {
+    const configPath = path.join(__dirname, "config", "instructors.json");
+
+    if (!fs.existsSync(configPath)) {
+      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    }
+
+    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { instructors, locationMapping } = configData;
+
+    // Get current location from session/request (from location_id in query or default)
+    const location_id = req.query.location_id || req.session?.location_id || 1;
+    const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(location_id);
+
+    if (!location) {
+      return res.json({ ok: true, instructors: [] });
+    }
+
+    // Map location name to region
+    const region = locationMapping[location.name] || location.name;
+
+    // Filter instructors by region and format as "First L."
+    const filtered = instructors
+      .filter(i => i.location === region)
+      .map(i => ({
+        displayName: `${i.firstName} ${i.lastName.charAt(0)}.`,
+        fullName: `${i.firstName} ${i.lastName}`,
+        firstName: i.firstName,
+        lastName: i.lastName
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+    res.json({ ok: true, instructors: filtered, location: location.name, region });
+  } catch (error) {
+    console.error("Instructor fetch error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== ADMIN PIN VERIFICATION ====================
+const pinAttempts = new Map(); // Track failed attempts by IP
+const pinLockouts = new Map(); // Track lockout expiry by IP
+
+app.post("/api/verify-pin", (req, res) => {
+  try {
+    const { pin } = req.body;
+    const clientIp = req.ip || req.connection.remoteAddress;
+
+    // Load settings
+    const settingsPath = path.join(__dirname, "config", "settings.json");
+    if (!fs.existsSync(settingsPath)) {
+      return res.status(500).json({ ok: false, error: 'settings.json not found' });
+    }
+
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const correctPin = settings.admin_pin || "8118";
+
+    // Check if client is locked out
+    const lockoutUntil = pinLockouts.get(clientIp);
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      const remainingSeconds = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      return res.status(429).json({
+        ok: false,
+        error: 'Too many failed attempts',
+        locked_until: lockoutUntil,
+        remaining_seconds: remainingSeconds
+      });
+    }
+
+    // Verify PIN
+    if (pin === correctPin) {
+      // Success - clear attempts and lockout
+      pinAttempts.delete(clientIp);
+      pinLockouts.delete(clientIp);
+
+      audit(req, "admin_pin_success", { ip: clientIp });
+
+      return res.json({
+        ok: true,
+        authenticated: true,
+        expires_at: Date.now() + (2 * 60 * 60 * 1000) // 2 hours from now
+      });
+    }
+
+    // Failed attempt
+    const attempts = (pinAttempts.get(clientIp) || 0) + 1;
+    pinAttempts.set(clientIp, attempts);
+
+    audit(req, "admin_pin_failed", { ip: clientIp, attempts });
+
+    if (attempts >= 3) {
+      // Lockout for 2 minutes
+      const lockoutUntil = Date.now() + (2 * 60 * 1000);
+      pinLockouts.set(clientIp, lockoutUntil);
+      pinAttempts.delete(clientIp);
+
+      return res.status(429).json({
+        ok: false,
+        error: 'Too many failed attempts. Locked for 2 minutes.',
+        locked_until: lockoutUntil,
+        remaining_seconds: 120
+      });
+    }
+
+    return res.status(401).json({
+      ok: false,
+      error: 'Incorrect PIN',
+      attempts_remaining: 3 - attempts
+    });
+
+  } catch (error) {
+    console.error("PIN verification error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Admin stats endpoint
+app.get("/api/admin/stats", (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Get today's swimmer count
+    const swimmerCount = db.prepare(`
+      SELECT COUNT(DISTINCT swimmer_name) as count
+      FROM roster
+      WHERE date = ?
+    `).get(today);
+
+    // Get attendance rate for today
+    const attendanceStats = db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) as present
+      FROM roster
+      WHERE date = ? AND attendance IS NOT NULL
+    `).get(today);
+
+    const attendanceRate = attendanceStats.total > 0
+      ? Math.round((attendanceStats.present / attendanceStats.total) * 100)
+      : 0;
+
+    // Get trial count for this week
+    const startOfWeek = new Date();
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    const weekStart = startOfWeek.toISOString().split('T')[0];
+
+    const trialCount = db.prepare(`
+      SELECT COUNT(DISTINCT swimmer_name) as count
+      FROM roster
+      WHERE date >= ? AND flag_trial = 1
+    `).get(weekStart);
+
+    res.json({
+      ok: true,
+      stats: {
+        swimmers_today: swimmerCount.count || 0,
+        attendance_rate: attendanceRate,
+        trials_this_week: trialCount.count || 0
+      }
+    });
+
+  } catch (error) {
+    console.error("Admin stats error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.post("/api/add-location", (req, res) => {
   try {
     const { code, name, has_announcements, brand } = req.body;
-    
+
     if (!code || !name) {
       return res.status(400).json({ ok: false, error: 'code and name required' });
     }
-    
+
     // Create directories
     const schedDir = path.join(SCHEDULE_DIR, code);
     const expDir = path.join(EXPORT_DIR, code);
