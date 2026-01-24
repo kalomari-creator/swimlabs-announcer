@@ -388,7 +388,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.6.2</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.6.0</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -889,50 +889,6 @@
 
     <div class="modalFooter">
       <button class="secondary" id="serverImportClose">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- Guard Tasks Modal -->
-<div class="modalBackdrop" id="guardTasksModal">
-  <div class="modal" style="max-width:980px;">
-    <h3>🛟 Guard Tasks & Rotation (SwimLabs Westchester)</h3>
-
-    <div class="row" style="margin:10px 0 12px;">
-      <label class="tiny" style="color:var(--muted);">Day Type</label>
-      <select id="guardDayType" style="margin-left:8px; padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
-        <option value="weekday">Weekday (2 guards)</option>
-        <option value="weekend">Weekend (3 guards)</option>
-      </select>
-      <div class="spacer"></div>
-      <button class="secondary" id="guardRefreshBtn">Refresh</button>
-      <button class="primary" id="guardSaveBtn">Save Rotation</button>
-    </div>
-
-    <div class="tiny" id="guardNote" style="color:var(--muted); margin-bottom:10px;"></div>
-
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-bottom:16px;">
-      <div class="card" style="background: rgba(255,255,255,0.03);">
-        <div class="pill" style="margin-bottom:8px;">Opening</div>
-        <div id="guardOpeningList"></div>
-      </div>
-      <div class="card" style="background: rgba(255,255,255,0.03);">
-        <div class="pill" style="margin-bottom:8px;">Midday</div>
-        <div id="guardMiddayList"></div>
-      </div>
-      <div class="card" style="background: rgba(255,255,255,0.03);">
-        <div class="pill" style="margin-bottom:8px;">Closing</div>
-        <div id="guardClosingList"></div>
-      </div>
-    </div>
-
-    <div class="card" style="background: rgba(255,255,255,0.03);">
-      <div class="pill" style="margin-bottom:8px;">Rotation by Block</div>
-      <div id="guardRotationTable"></div>
-    </div>
-
-    <div class="modalFooter">
-      <button class="secondary" id="guardCloseBtn">Close</button>
     </div>
   </div>
 </div>
@@ -2335,127 +2291,11 @@
     });
   }
 
-  function renderChecklistSection(containerId, section) {
-    const container = el(containerId);
-    if (!container) return;
-    if (!section) {
-      container.innerHTML = '<div class="tiny" style="color:var(--muted);">No checklist found.</div>';
-      return;
-    }
-    let html = '';
-    if (section.groups) {
-      section.groups.forEach((group) => {
-        html += `<div style="margin-bottom:10px;"><div class="tiny" style="font-weight:900; margin-bottom:6px;">${escapeHtml(group.title)}</div>`;
-        html += '<ul class="tiny" style="margin:0 0 8px 18px; padding:0;">';
-        (group.tasks || []).forEach((task) => {
-          html += `<li style="margin-bottom:4px;">${escapeHtml(task)}</li>`;
-        });
-        html += '</ul></div>';
-      });
-    } else if (section.tasks) {
-      html += '<ul class="tiny" style="margin:0 0 8px 18px; padding:0;">';
-      section.tasks.forEach((task) => {
-        html += `<li style="margin-bottom:4px;">${escapeHtml(task)}</li>`;
-      });
-      html += '</ul>';
-    }
-    container.innerHTML = html;
-  }
-
-  function getGuardDayType() {
-    return el('guardDayType')?.value === 'weekend' ? 'weekend' : 'weekday';
-  }
-
-  function getDayTypeFromDate(dateStr) {
-    if (!dateStr) return 'weekday';
-    const date = new Date(`${dateStr}T00:00:00`);
-    const day = date.getDay();
-    return day === 0 || day === 6 ? 'weekend' : 'weekday';
-  }
-
-  async function loadGuardTasks() {
-    if (!isWestchesterLocation()) {
-      alert('Guard tasks are only available for SwimLabs Westchester.');
-      return;
-    }
-
-    const type = getGuardDayType();
-    const locId = currentLocation?.id || 1;
-    const date = activeDateISO || el('rosterDate')?.value || '';
-
-    const checklistResp = await api(`/api/guard-checklist?location_id=${locId}&type=${type}`);
-    const checklist = checklistResp.checklist;
-
-    el('guardNote').textContent = checklist?.note || '';
-    renderChecklistSection('guardOpeningList', checklist?.opening);
-    renderChecklistSection('guardMiddayList', checklist?.midday);
-    renderChecklistSection('guardClosingList', checklist?.closing);
-
-    const rotationResp = await api(`/api/guard-rotation?location_id=${locId}&type=${type}&date=${date || ''}`);
-    const rotationMap = new Map((rotationResp.blocks || []).map((b) => [b.time, b]));
-
-    if (!blocksList.length) {
-      el('guardRotationTable').innerHTML = '<div class="tiny" style="color:var(--muted); padding:8px;">No time blocks available yet.</div>';
-      return;
-    }
-
-    let html = '<table style="width:100%;"><thead><tr>';
-    html += '<th>Block</th><th>Chores / Notes</th><th>Guard Rotation</th>';
-    html += '</tr></thead><tbody>';
-    blocksList.forEach((time) => {
-      const rotation = rotationMap.get(time) || {};
-      html += '<tr>';
-      html += `<td><strong>${fmtTime(time)}</strong></td>`;
-      html += `<td><input type="text" data-chores-time="${escapeHtml(time)}" value="${escapeHtml(rotation.chores || '')}" placeholder="Chores or focus" /></td>`;
-      html += `<td><input type="text" data-guard-time="${escapeHtml(time)}" value="${escapeHtml(rotation.guard || '')}" placeholder="Guard on deck / rotation" /></td>`;
-      html += '</tr>';
-    });
-    html += '</tbody></table>';
-    el('guardRotationTable').innerHTML = html;
-  }
-
   el('trialCloseBtn').addEventListener('click', () => showModal('trialFollowupModal', false));
   el('trialFollowupModal').addEventListener('click', (e) => {
     if (e.target === el('trialFollowupModal')) showModal('trialFollowupModal', false);
   });
   el('trialRefreshBtn').addEventListener('click', loadTrialReport);
-
-  el('guardCloseBtn').addEventListener('click', () => showModal('guardTasksModal', false));
-  el('guardTasksModal').addEventListener('click', (e) => {
-    if (e.target === el('guardTasksModal')) showModal('guardTasksModal', false);
-  });
-  el('guardDayType').addEventListener('change', loadGuardTasks);
-  el('guardRefreshBtn').addEventListener('click', loadGuardTasks);
-  el('guardSaveBtn').addEventListener('click', async () => {
-    const locId = currentLocation?.id || 1;
-    const date = activeDateISO || el('rosterDate')?.value || '';
-    const type = getGuardDayType();
-    const rows = [];
-    el('guardRotationTable').querySelectorAll('tr').forEach((row) => {
-      const time = row.querySelector('[data-guard-time]')?.getAttribute('data-guard-time');
-      if (!time) return;
-      const guard = row.querySelector('[data-guard-time]')?.value || '';
-      const chores = row.querySelector('[data-chores-time]')?.value || '';
-      rows.push({ time, guard, chores });
-    });
-    try {
-      el('guardSaveBtn').disabled = true;
-      await api('/api/guard-rotation', {
-        method: 'POST',
-        body: JSON.stringify({
-          location_id: locId,
-          date,
-          type,
-          blocks: rows
-        })
-      });
-      toast('Guard rotation saved');
-    } catch (err) {
-      alert('Save failed: ' + (err.message || err));
-    } finally {
-      el('guardSaveBtn').disabled = false;
-    }
-  });
 
   el('serverImportClose').addEventListener('click', () => showModal('serverImportModal', false));
   el('serverImportModal').addEventListener('click', (e) => {
@@ -2605,13 +2445,6 @@
   el('adminNavTrials').addEventListener('click', () => {
     loadTrialReport();
     showModal('trialFollowupModal', true);
-  });
-
-  el('adminNavGuards').addEventListener('click', async () => {
-    const dayType = getDayTypeFromDate(activeDateISO || el('rosterDate')?.value);
-    el('guardDayType').value = dayType;
-    await loadGuardTasks();
-    showModal('guardTasksModal', true);
   });
 
   el('adminNavHistory').addEventListener('click', () => {
