@@ -423,11 +423,8 @@
         <button class="primary" id="importBtn">Import Today (PDF)</button>
         <button class="primary" id="uploadHtmlBtn">Upload HTML</button>
         <input type="file" id="htmlFileInput" accept=".html" style="display: none;">
-        <button class="secondary" id="exportJsonBtn" title="Download a JSON backup of the active roster">Export JSON</button>
         <button class="secondary" id="exportServerBtn" title="Save a JSON backup on the server">Export to Server</button>
         <button class="secondary" id="importServerBtn" title="Restore a roster from server backups">Import from Server</button>
-        <button class="secondary" id="importJsonBtn" title="Upload a JSON export to restore a roster">Import JSON</button>
-        <input type="file" id="jsonFileInput" accept="application/json,.json" style="display:none;">
 
         <div class="spacer"></div>
         <span class="pill tiny">Auto announcement runs about 3 minutes before each time block.</span>
@@ -2633,11 +2630,6 @@
     }
   });
 
-  el('exportJsonBtn').addEventListener('click', () => {
-    const locId = currentLocation?.id || 1;
-    window.location.href = `/api/export-json?location_id=${locId}`;
-  });
-
   el('exportServerBtn').addEventListener('click', async () => {
     try {
       el('exportServerBtn').disabled = true;
@@ -2660,26 +2652,6 @@
   el('importServerBtn').addEventListener('click', async () => {
     await loadServerExports();
     showModal('serverImportModal', true);
-  });
-
-  el('importJsonBtn').addEventListener('click', () => el('jsonFileInput').click());
-  el('jsonFileInput').addEventListener('change', async (e) => {
-      const f = e.target.files && e.target.files[0];
-      if (!f) return;
-      try{
-        const txt = await f.text();
-        const payload = JSON.parse(txt);
-        if (!payload.location_id) payload.location_id = currentLocation?.id || 1;
-        await api('/api/import-json', { method:'POST', body: JSON.stringify(payload) });
-        await loadStatus();
-        await loadBlocks();
-        await loadRoster();
-      toast('JSON import complete');
-    }catch(err){
-      alert('Import failed: ' + (err.message || err));
-    }finally{
-      e.target.value = '';
-    }
   });
 
   el('setDateBtn').addEventListener('click', async () => {
