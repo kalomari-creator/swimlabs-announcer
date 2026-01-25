@@ -868,7 +868,14 @@ app.get("/api/blocks/:start_time", (req, res) => {
 
   res.json({ ok: true, kids });
 });
-
+// Safety issues endpoint
+app.get("/api/safety-issues", (req, res) => {
+  try {
+    res.json({ ok: true, issues: [] });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 app.post("/api/update-flags", (req, res) => {
   try {
     const ip = getIP(req);
