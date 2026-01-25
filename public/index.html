@@ -1280,14 +1280,36 @@
     const metaBase = document.querySelector('meta[name="api-base"]')?.content?.trim();
     const base = (window.API_BASE || metaBase || '').trim();
     if (!base) return '';
-    return base.endsWith('/') ? base.slice(0, -1) : base;
+    let cleaned = base;
+    try {
+      const url = new URL(base, window.location.origin);
+      if (url.username || url.password) {
+        url.username = '';
+        url.password = '';
+        cleaned = `${url.origin}${url.pathname}${url.search}${url.hash}`;
+      }
+    } catch (err) {
+      // Leave base as-is if it cannot be parsed as a URL.
+    }
+    return cleaned.endsWith('/') ? cleaned.slice(0, -1) : cleaned;
   })();
 
   function apiUrl(path) {
-    if (!apiBase || !path) return path;
-    if (/^https?:\/\//i.test(path)) return path;
+    if (!path) return path;
+    const isAbsolute = /^https?:\/\//i.test(path);
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${apiBase}${normalizedPath}`;
+    const base = apiBase || window.location.origin;
+    const rawUrl = isAbsolute ? path : `${base}${normalizedPath}`;
+    try {
+      const url = new URL(rawUrl);
+      if (url.username || url.password) {
+        url.username = '';
+        url.password = '';
+      }
+      return url.toString();
+    } catch (err) {
+      return rawUrl;
+    }
   }
 
   async function api(path, opts={}){
