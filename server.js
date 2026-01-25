@@ -223,6 +223,8 @@ function ensureSchema() {
   addIfMissing("zone_override_by", `ALTER TABLE roster ADD COLUMN zone_override_by TEXT;`);
   addIfMissing("location_id", `ALTER TABLE roster ADD COLUMN location_id INTEGER DEFAULT 1;`);
   addIfMissing("substitute_instructor", `ALTER TABLE roster ADD COLUMN substitute_instructor TEXT;`);
+  addIfMissing("is_substitute", `ALTER TABLE roster ADD COLUMN is_substitute INTEGER DEFAULT 0;`);
+  addIfMissing("original_instructor", `ALTER TABLE roster ADD COLUMN original_instructor TEXT;`);
   addIfMissing("balance_amount", `ALTER TABLE roster ADD COLUMN balance_amount REAL DEFAULT NULL;`);
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_key ON roster(date, start_time, swimmer_name);`);
@@ -406,6 +408,125 @@ function normalizeTimeTo24h(raw) {
   if (ap === "am" && hh === 12) hh = 0;
 
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+function parseDateRangeFromSectionText(text) {
+  const t = String(text || "");
+  const rangeMatch = t.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s*(?:→|->|–|-)\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!rangeMatch) return null;
+
+  const startMonth = String(rangeMatch[1]).padStart(2, "0");
+  const startDay = String(rangeMatch[2]).padStart(2, "0");
+  const startYear = rangeMatch[3];
+  const endMonth = String(rangeMatch[4]).padStart(2, "0");
+  const endDay = String(rangeMatch[5]).padStart(2, "0");
+  const endYear = rangeMatch[6];
+
+  return {
+    start: `${startYear}-${startMonth}-${startDay}`,
+    end: `${endYear}-${endMonth}-${endDay}`,
+    startYear: Number(startYear),
+    endYear: Number(endYear),
+    startMonth: Number(startMonth),
+    startDay: Number(startDay)
+  };
+}
+
+function inferYearFromRange(month, day, range) {
+  const mm = Number(month);
+  const dd = Number(day);
+  if (!range || !range.startYear || !range.endYear) return new Date().getFullYear();
+  if (range.startYear === range.endYear) return range.startYear;
+
+  if (mm > range.startMonth || (mm === range.startMonth && dd >= range.startDay)) {
+    return range.startYear;
+  }
+  return range.endYear;
+}
+
+function extractDateTimeFromHeader(text, range, fallbackTime) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  const dateMatch = t.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/);
+  if (!dateMatch) return null;
+
+  const month = String(dateMatch[1]).padStart(2, "0");
+  const day = String(dateMatch[2]).padStart(2, "0");
+  const year = dateMatch[3] ? Number(dateMatch[3]) : inferYearFromRange(month, day, range);
+  const dateISO = `${year}-${month}-${day}`;
+
+  const timeMatch = t.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+  let startTime = fallbackTime || null;
+  if (timeMatch) {
+    const timeRaw = `${timeMatch[1]}:${timeMatch[2] || "00"} ${timeMatch[3]}`;
+    startTime = normalizeTimeTo24h(timeRaw) || startTime;
+  }
+
+  return { dateISO, startTime };
+}
+
+function parseRosterDateColumns($, $table, range, fallbackTime) {
+  const headerRows = $table.find("thead tr");
+  const rowsToScan = headerRows.length ? headerRows.toArray() : $table.find("tr").slice(0, 2).toArray();
+
+  for (const row of rowsToScan) {
+    const $row = $(row);
+    const columns = [];
+    let colIndex = 0;
+
+    $row.find("th, td").each((_, cell) => {
+      const $cell = $(cell);
+      const colSpan = parseInt($cell.attr("colspan") || "1", 10);
+      const info = extractDateTimeFromHeader($cell.text(), range, fallbackTime);
+
+      for (let i = 0; i < colSpan; i += 1) {
+        if (info && i === 0) {
+          columns.push({
+            index: colIndex,
+            date: info.dateISO,
+            start_time: info.startTime || fallbackTime || null
+          });
+        }
+        colIndex += 1;
+      }
+    });
+
+    if (columns.length > 0) return columns;
+  }
+
+  return [];
+}
+
+function isAbsentAttendanceCell($cell) {
+  if (!$cell || !$cell.length) return false;
+
+  const text = $cell.text().toLowerCase();
+  if (text.includes("absent") || text.includes("no show") || text.includes("noshow")) return true;
+  if (text.includes("ø") || text.includes("⌀") || text.includes("⊘")) return true;
+
+  const styleStrike = $cell.find('[style*="line-through"], [style*="line-through"]').length > 0;
+  if (styleStrike) return true;
+
+  const classStrike = $cell.find('[class*="absent"], [class*="no-show"], [class*="noshow"], [class*="strike"]').length > 0;
+  if (classStrike) return true;
+
+  let isAbsent = false;
+  $cell.find("img").each((_, img) => {
+    const src = String($(img).attr("src") || "").toLowerCase();
+    const alt = String($(img).attr("alt") || "").toLowerCase();
+    const title = String($(img).attr("title") || "").toLowerCase();
+    const blob = `${src} ${alt} ${title}`;
+    if (
+      blob.includes("x-modifier") ||
+      blob.includes("absent") ||
+      blob.includes("no-show") ||
+      blob.includes("noshow") ||
+      (blob.includes("circle") && (blob.includes("slash") || blob.includes("strike")))
+    ) {
+      isAbsent = true;
+    }
+  });
+
+  return isAbsent;
 }
 
 function formatTime12h(t) {
@@ -886,6 +1007,8 @@ app.get("/api/blocks/:start_time", (req, res) => {
       swimmer_name,
       instructor_name,
       substitute_instructor,
+      is_substitute,
+      original_instructor,
       zone,
       program,
       age_text,
@@ -1261,7 +1384,7 @@ function importRosterRows({ date, locationId, rows, source }) {
   const ins = db.prepare(`
     INSERT INTO roster (
       date, start_time, swimmer_name,
-      instructor_name, substitute_instructor, zone, program, age_text,
+      instructor_name, substitute_instructor, is_substitute, original_instructor, zone, program, age_text,
       attendance, attendance_at,
       is_addon,
       flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
@@ -1271,7 +1394,7 @@ function importRosterRows({ date, locationId, rows, source }) {
       location_id
     ) VALUES (
       ?, ?, ?,
-      ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?,
       ?, ?,
       ?,
       ?, ?, ?, ?, ?,
@@ -1283,6 +1406,8 @@ function importRosterRows({ date, locationId, rows, source }) {
     ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
       instructor_name=excluded.instructor_name,
       substitute_instructor=excluded.substitute_instructor,
+      is_substitute=excluded.is_substitute,
+      original_instructor=excluded.original_instructor,
       zone=excluded.zone,
       program=excluded.program,
       age_text=excluded.age_text,
@@ -1311,9 +1436,11 @@ function importRosterRows({ date, locationId, rows, source }) {
         date,
         st,
         sn,
-        r.instructor_name || null,
-        r.substitute_instructor || null,
-        (r.zone === 0 || r.zone) ? r.zone : null,
+      r.instructor_name || null,
+      r.substitute_instructor || null,
+      r.is_substitute ? 1 : 0,
+      r.original_instructor || null,
+      (r.zone === 0 || r.zone) ? r.zone : null,
         r.program || null,
         r.age_text || null,
         (r.attendance === 0 || r.attendance === 1) ? r.attendance : null,
@@ -1484,6 +1611,7 @@ app.post("/api/import-server", (req, res) => {
 function parseHTMLRoster(html) {
   const $ = cheerio.load(html);
   const swimmers = [];
+  const datesFound = new Set();
   
   const iconMap = {
     '1st-ever.png': 'flag_new',
@@ -1560,7 +1688,12 @@ function parseHTMLRoster(html) {
     if (zoneMatch) {
       zone = parseInt(zoneMatch[1]);
     }
-    
+
+    const $table = $section.find('table.table-roll-sheet').first();
+    const sectionText = $section.text();
+    const dateRange = parseDateRangeFromSectionText(sectionText);
+    const dateColumns = $table.length ? parseRosterDateColumns($, $table, dateRange, startTime) : [];
+
     $section.find('table.table-roll-sheet tbody tr').each((_, row) => {
       const $row = $(row);
       
@@ -1587,14 +1720,6 @@ function parseHTMLRoster(html) {
         }
       });
 
-      // Check for pre-marked absence (X-modifier.png icon in attendance cell)
-      let attendance = null;
-      const attendanceCell = $row.find('td.date-time, td.cell-bordered');
-      const xModifier = attendanceCell.find('img[src*="X-modifier"]');
-      if (xModifier.length > 0) {
-        attendance = 0; // 0 = absent
-      }
-
       // Extract balance amount from Details column
       let balanceAmount = null;
       const detailsText = $row.find('td').eq(3).text(); // Details is usually the 4th column (index 3)
@@ -1614,25 +1739,58 @@ function parseHTMLRoster(html) {
       const originalInstructor = substituteInstructor ? instructorName : null;
       const actualInstructor = substituteInstructor || instructorName;
 
-      swimmers.push({
-        start_time: startTime,
-        swimmer_name: swimmerName,
-        age_text: ageText,
-        instructor_name: actualInstructor,
-        substitute_instructor: substituteInstructor,
-        is_substitute: isSubstitute,
-        original_instructor: originalInstructor,
-        program: programText,
-        zone: zone,
-        attendance: attendance,
-        balance_amount: balanceAmount,
-        ...flags
-      });
+      if (dateColumns.length > 0) {
+        const rowCells = $row.find('td');
+        dateColumns.forEach((col) => {
+          const cell = rowCells.eq(col.index);
+          const attendance = isAbsentAttendanceCell(cell) ? 0 : null;
+          if (col.date) datesFound.add(col.date);
+
+          swimmers.push({
+            date: col.date || null,
+            start_time: col.start_time || startTime,
+            swimmer_name: swimmerName,
+            age_text: ageText,
+            instructor_name: actualInstructor,
+            substitute_instructor: substituteInstructor,
+            is_substitute: isSubstitute,
+            original_instructor: originalInstructor,
+            program: programText,
+            zone: zone,
+            attendance: attendance,
+            balance_amount: balanceAmount,
+            ...flags
+          });
+        });
+      } else {
+        // Fallback: single-date upload with absence detection on attendance cells
+        let attendance = null;
+        const attendanceCell = $row.find('td.date-time, td.cell-bordered');
+        if (isAbsentAttendanceCell(attendanceCell)) {
+          attendance = 0;
+        }
+
+        swimmers.push({
+          date: null,
+          start_time: startTime,
+          swimmer_name: swimmerName,
+          age_text: ageText,
+          instructor_name: actualInstructor,
+          substitute_instructor: substituteInstructor,
+          is_substitute: isSubstitute,
+          original_instructor: originalInstructor,
+          program: programText,
+          zone: zone,
+          attendance: attendance,
+          balance_amount: balanceAmount,
+          ...flags
+        });
+      }
     });
   });
   
   console.log(`HTML Parser: Found ${swimmers.length} swimmers`);
-  return swimmers;
+  return { swimmers, dates: Array.from(datesFound) };
 }
 
 app.post("/api/upload-html", upload.single('html'), async (req, res) => {
@@ -1668,8 +1826,6 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       parseDateFromHTML(html) ||
       todayISO();
 
-    setActiveDate(detectedDate);
-
     // Save to location-specific folder with descriptive filename
     // Format: roll_sheet_{LOCATION_NAME}_{DATE}.html
     const locationDir = getScheduleDir(location);
@@ -1682,15 +1838,40 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       return res.status(500).json({ ok: false, error: `Failed to save HTML: ${writeError.message}` });
     }
 
-    let swimmers = [];
+    let parsed = null;
     try {
-      swimmers = parseHTMLRoster(html);
+      parsed = parseHTMLRoster(html);
     } catch (parseError) {
       return res.status(400).json({ ok: false, error: `Failed to parse HTML: ${parseError.message}` });
     }
+    const swimmers = Array.isArray(parsed) ? parsed : (parsed?.swimmers || []);
     if (swimmers.length === 0) {
       return res.status(400).json({ ok: false, error: "No swimmers found in HTML file" });
     }
+
+    const today = todayISO();
+    const normalizedRows = swimmers.map((row) => ({
+      ...row,
+      date: row.date || detectedDate
+    }));
+
+    const dateList = Array.from(new Set(
+      normalizedRows.map((row) => row.date).filter(Boolean)
+    )).sort();
+    const dateStart = dateList[0] || detectedDate;
+    const dateEnd = dateList[dateList.length - 1] || dateStart;
+
+    const rowsToInsert = normalizedRows.filter((row) => row.date >= today);
+    if (rowsToInsert.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "No roster entries found for today or later.",
+        date_start: dateStart,
+        date_end: dateEnd
+      });
+    }
+    const activeDate = dateList.includes(today) ? today : dateStart;
+    setActiveDate(activeDate);
 
     // Auto-export existing roster before clearing (if any exists)
     // Exports are stored on SERVER in subdirectories: exports/{LOCATION_CODE}/
@@ -1698,8 +1879,8 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     //          exports/SSM/ for SafeSplash Santa Monica
     const existingRoster = db.prepare(`
       SELECT * FROM roster
-      WHERE date = ? AND location_id = ? AND is_addon = 0
-    `).all(detectedDate, locId);
+      WHERE date >= ? AND location_id = ? AND is_addon = 0
+    `).all(today, locId);
 
     if (existingRoster.length > 0) {
       // Create export directory for this location on server
@@ -1710,14 +1891,16 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       // Format: roster_{LOCATION_CODE}_{DATE}_{TIMESTAMP}.json
       // Example: roster_SLW_2026-01-24_2026-01-24T15-30-45-123Z.json
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const exportFilename = `roster_${location.code}_${detectedDate}_${timestamp}.json`;
+      const exportFilename = `roster_${location.code}_${today}_${timestamp}.json`;
       const exportPath = path.join(exportDir, exportFilename);
 
       // Save existing roster to JSON on server
       fs.writeFileSync(exportPath, JSON.stringify({
         location: location.name,
         location_code: location.code,
-        date: detectedDate,
+        date: today,
+        date_start: dateStart,
+        date_end: dateEnd,
         exported_at: nowISO(),
         count: existingRoster.length,
         roster: existingRoster
@@ -1726,14 +1909,14 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       console.log(`[AUTO-EXPORT] Saved ${existingRoster.length} swimmers to server: ${location.code}/${exportFilename}`);
     }
 
-    // Delete existing roster for this location/date
-    db.prepare(`DELETE FROM roster WHERE date = ? AND location_id = ? AND is_addon = 0`).run(detectedDate, locId);
+    // Delete existing roster from today forward for this location
+    db.prepare(`DELETE FROM roster WHERE date >= ? AND location_id = ? AND is_addon = 0`).run(today, locId);
 
     const now = nowISO();
     const ins = db.prepare(`
       INSERT INTO roster (
         date, start_time, swimmer_name,
-        instructor_name, substitute_instructor, zone, program, age_text,
+        instructor_name, substitute_instructor, is_substitute, original_instructor, zone, program, age_text,
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
@@ -1741,15 +1924,21 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
         location_id,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `);
 
     const tx = db.transaction((rows) => {
       for (const r of rows) {
         ins.run(
-          detectedDate, r.start_time, r.swimmer_name,
-          r.instructor_name || null, r.substitute_instructor || null, r.zone || null, r.program || null, r.age_text || null,
+          r.date, r.start_time, r.swimmer_name,
+          r.instructor_name || null,
+          r.substitute_instructor || null,
+          r.is_substitute || 0,
+          r.original_instructor || null,
+          r.zone || null,
+          r.program || null,
+          r.age_text || null,
           r.attendance !== undefined ? r.attendance : null,
           r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
           r.balance_amount !== undefined ? r.balance_amount : null,
@@ -1759,15 +1948,16 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       }
     });
 
-    tx(swimmers);
+    tx(rowsToInsert);
 
     audit(req, "html_upload", { 
       location: location.name,
-      date: detectedDate,
-      count: swimmers.length 
+      date_start: dateStart,
+      date_end: dateEnd,
+      count: rowsToInsert.length
     });
 
-    res.json({ ok: true, count: swimmers.length, date: detectedDate, location: location.name });
+    res.json({ ok: true, count: rowsToInsert.length, date_start: dateStart, date_end: dateEnd, location: location.name });
   } catch (error) {
     console.error("HTML upload error:", error);
     res.status(500).json({ ok: false, error: error.message });
@@ -2464,7 +2654,7 @@ app.post("/api/add-location", (req, res) => {
 });
 
 // =============================================================
-// ENHANCED REPORTING FEATURES (v4.6.x)
+// ENHANCED REPORTING FEATURES (v4.7.x)
 // =============================================================
 
 // Virtual Desk Export: Export swimmer details to CSV or JSON
