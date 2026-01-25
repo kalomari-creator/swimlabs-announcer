@@ -59,6 +59,16 @@ function sanitizeDirSegment(value) {
   return String(value || "").trim().replace(/[\\/]/g, "-");
 }
 
+function getScheduleDir(location) {
+  const name = location?.name || location?.code || "unknown";
+  return path.join(SCHEDULE_DIR, sanitizeDirSegment(name));
+}
+
+function getLocationFileTag(location) {
+  const tag = location?.code || location?.name || "location";
+  return sanitizeDirSegment(tag).replace(/\s+/g, "_");
+}
+
 // Create location-specific directories
 const LOCATION_NAMES = [
   'SwimLabs Westchester',
@@ -1283,50 +1293,6 @@ function importRosterRows({ date, locationId, rows, source }) {
 
   return { imported: rows.length };
 }
-
-// Export JSON of active roster (backup/restore)
-app.get("/api/export-json", (req, res) => {
-  try {
-    const date = activeOrToday();
-    const locationId = Number(req.query.location_id || 1);
-    const rows = db.prepare(`
-      SELECT
-        date, start_time, swimmer_name, instructor_name, substitute_instructor, zone, program, age_text,
-        attendance, attendance_at,
-        is_addon,
-        flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
-        balance_amount,
-        zone_overridden, zone_override_at, zone_override_by,
-        created_at, updated_at,
-        location_id
-      FROM roster
-      WHERE date = ? AND location_id = ?
-      ORDER BY start_time ASC, instructor_name ASC, swimmer_name ASC
-    `).all(date, locationId);
-
-    const payload = { ok: true, date, location_id: locationId, rows };
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="roster_${date}.json"`);
-    res.send(JSON.stringify(payload, null, 2));
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "export-json failed", details: String(e?.stack || e?.message || e) });
-  }
-});
-
-app.post("/api/import-json", (req, res) => {
-  try {
-    const payload = req.body || {};
-    const date = (payload.date && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.date))) ? String(payload.date) : activeOrToday();
-    const rows = Array.isArray(payload.rows) ? payload.rows : [];
-    const locationId = payload.location_id ? Number(payload.location_id) : 1;
-    if (!rows.length) return res.status(400).json({ ok: false, error: "No rows provided" });
-
-    const result = importRosterRows({ date, locationId, rows, source: req });
-    res.json({ ok: true, date, count: result.imported });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "import-json failed", details: String(e?.stack || e?.message || e) });
-  }
-});
 
 app.get("/api/server-exports", (req, res) => {
   try {
