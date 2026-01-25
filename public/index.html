@@ -727,10 +727,6 @@
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Remove all uploaded roster data for current location</div>
         </div>
 
-        <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.45);" id="adminNavClearAllRosters">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🧨 Master Delete All Rosters</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">Permanently delete all roster data for every location</div>
-        </div>
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
@@ -780,7 +776,7 @@
       </div>
 
       <div class="tiny" style="color:var(--muted); margin-bottom:16px;">
-        Manager: enter the guard names for the day. Weekdays have no rotation unless manually added. Weekends rotate Guard 2 + 3 first, then 3 + 1, then 1 + 2.
+        Manager: enter the guard names for the day. Guard numbers are randomized at the start of the day. Weekdays have no rotation unless manually updated. Weekends rotate Guard 2 + 3 first, then 3 + 1, then 1 + 2.
       </div>
       <div class="tiny" style="color:rgba(248,250,252,0.9); font-weight:700; margin-bottom:16px;">
         IF YOU ARE DOWN AND DON'T KNOW WHAT TO WORK ON OR DO, SEE MANAGER.
@@ -788,7 +784,7 @@
 
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;">
         <div class="guard-section">
-          <h4>🌅 Opening Checklist</h4>
+          <h4 id="guardOpeningTitle">🌅 Opening Checklist</h4>
           <div id="guardOpeningList"></div>
         </div>
 
@@ -798,7 +794,7 @@
         </div>
 
         <div class="guard-section">
-          <h4>🌙 Closing Checklist</h4>
+          <h4 id="guardClosingTitle">🌙 Closing Checklist</h4>
           <div id="guardClosingList"></div>
         </div>
       </div>
@@ -831,6 +827,23 @@
   <div id="panelAdmin" class="hidden">
     <div class="card">
       <h2 style="margin:0 0 16px; font-size:20px;">⚙️ System Administration</h2>
+
+      <!-- Roster Controls -->
+      <div class="card" style="margin-bottom:20px; border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.12);">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900; color:#ef4444;">🧨 Master Delete All Rosters</h3>
+        <div class="tiny" style="color:var(--muted); line-height:1.4; margin-bottom:12px;">Permanently delete roster data for every location within a date window.</div>
+        <div class="row" style="flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <div class="field">
+            <label>Start date</label>
+            <input type="date" id="adminClearAllStartDate" />
+          </div>
+          <div class="field">
+            <label>End date</label>
+            <input type="date" id="adminClearAllEndDate" />
+          </div>
+        </div>
+        <button class="danger" id="adminNavClearAllRosters">Full Clear (All Locations)</button>
+      </div>
 
       <!-- Location Management -->
       <div class="card" style="margin-bottom:20px;">
@@ -2344,7 +2357,7 @@
         { group: 'Guard 1', label: 'Chemicals check' },
         { group: 'Guard 1', label: 'Make sure each pool has a bin' },
         { group: 'Guard 1', label: 'Vacuum pools' },
-        { group: 'Guard 2', label: 'Set up lobby' },
+        { group: 'Front Desk', label: 'Set up lobby' },
         { group: 'Guard 2', label: 'Cycle laundry' },
         { group: 'Guard 2', label: 'Empty dehumidifiers' },
         { group: 'Guard 3 (Up for first rotation)', label: 'Check playpen' },
@@ -2428,7 +2441,8 @@
           midday: normalizeGuardTasks(parsed.midday || buildGuardTasks(guardTaskTemplates.midday)),
           closing: normalizeGuardTasks(parsed.closing || buildGuardTasks(guardTaskTemplates[dayType].closing)),
           rotation: parsed.rotation || [],
-          notes: parsed.notes || ''
+          notes: parsed.notes || '',
+          autoShuffleDone: parsed.autoShuffleDone || false
         };
       } catch (_) {}
     }
@@ -2442,13 +2456,51 @@
       midday: normalizeGuardTasks(buildGuardTasks(guardTaskTemplates.midday)),
       closing: normalizeGuardTasks(buildGuardTasks(guardTaskTemplates[dayType].closing)),
       rotation: [],
-      notes: ''
+      notes: '',
+      autoShuffleDone: false
     };
   }
 
   function saveGuardState() {
     if (!guardState?.date) return;
     localStorage.setItem(guardStorageKey(guardState.date), JSON.stringify(guardState));
+  }
+
+  function shuffleNames(list) {
+    const arr = [...list];
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function getGuardInputNames() {
+    return [
+      el('guardName1').value.trim(),
+      el('guardName2').value.trim(),
+      el('guardName3').value.trim()
+    ];
+  }
+
+  function applyGuardNames(names, autoShuffled = false) {
+    guardState.guardNames = {
+      1: names[0] || '',
+      2: names[1] || '',
+      3: names[2] || ''
+    };
+    if (autoShuffled) {
+      guardState.autoShuffleDone = true;
+    }
+    saveGuardState();
+    renderGuardTasks();
+  }
+
+  function maybeAutoShuffleGuards() {
+    if (!guardState || guardState.dayType !== 'weekend' || guardState.autoShuffleDone) return;
+    const names = getGuardInputNames();
+    if (names.filter(Boolean).length < 3) return;
+    applyGuardNames(shuffleNames(names), true);
   }
 
   function setGuardMeta() {
@@ -2484,7 +2536,9 @@
       const initials = document.createElement('input');
       initials.type = 'text';
       initials.maxLength = 4;
-      initials.placeholder = 'Init';
+      initials.placeholder = 'Initials';
+      initials.required = true;
+      initials.setAttribute('aria-label', 'Initials required to mark complete');
       initials.value = task.initials || '';
       initials.addEventListener('input', () => {
         task.initials = initials.value.toUpperCase();
@@ -2515,7 +2569,7 @@
     const weekend = guardState.dayType === 'weekend';
     const rotationHint = el('guardRotationHint');
     if (weekend) {
-      rotationHint.textContent = 'Weekend rotation starts with Guard 2 + 3, then 3 + 1, then 1 + 2 (repeat).';
+      rotationHint.textContent = 'Weekend rotation starts with Guard 2 + 3, then 3 + 1, then 1 + 2 (repeat). Example: Block 1 = 2+3, Block 2 = 3+1, Block 3 = 1+2, Block 4 = 2+3.';
       const guardLabels = {
         1: guardState.guardNames?.[1] ? `Guard 1 (${guardState.guardNames[1]})` : 'Guard 1',
         2: guardState.guardNames?.[2] ? `Guard 2 (${guardState.guardNames[2]})` : 'Guard 2',
@@ -2603,6 +2657,18 @@
 
   function renderGuardTasks() {
     if (!guardState) return;
+    const openingTitle = el('guardOpeningTitle');
+    const closingTitle = el('guardClosingTitle');
+    if (openingTitle) {
+      openingTitle.textContent = guardState.dayType === 'weekend'
+        ? '🌅 Opening Checklist (Weekends — 3 Guards)'
+        : '🌅 Opening Checklist (Weekdays — 2 Guards)';
+    }
+    if (closingTitle) {
+      closingTitle.textContent = guardState.dayType === 'weekend'
+        ? '🌙 Closing Checklist (Weekends — 3 Guards)'
+        : '🌙 Closing Checklist (Weekdays — 2 Guards)';
+    }
     renderGuardSection(guardState.opening, 'guardOpeningList', 'opening');
     renderGuardSection(guardState.midday, 'guardMiddayList', 'midday');
     renderGuardSection(guardState.closing, 'guardClosingList', 'closing');
@@ -3278,28 +3344,20 @@
       guardState.guardNames = guardState.guardNames || { 1: '', 2: '', 3: '' };
       guardState.guardNames[idx + 1] = el(id).value.trim();
       saveGuardState();
-      renderGuardRotation();
+      renderGuardTasks();
+      maybeAutoShuffleGuards();
     });
   });
 
   el('guardTasksShuffle').addEventListener('click', () => {
     if (!guardState) return;
-    const names = [el('guardName1').value.trim(), el('guardName2').value.trim(), el('guardName3').value.trim()].filter(Boolean);
-    if (names.length < 2) {
-      alert('Enter at least two guard names to randomize.');
+    const names = getGuardInputNames().filter(Boolean);
+    const minCount = guardState.dayType === 'weekend' ? 3 : 2;
+    if (names.length < minCount) {
+      alert(`Enter at least ${minCount} guard names to randomize.`);
       return;
     }
-    for (let i = names.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [names[i], names[j]] = [names[j], names[i]];
-    }
-    guardState.guardNames = {
-      1: names[0] || '',
-      2: names[1] || '',
-      3: names[2] || ''
-    };
-    saveGuardState();
-    renderGuardTasks();
+    applyGuardNames(shuffleNames(names), true);
   });
 
   el('guardRotationAdd').addEventListener('click', () => {
@@ -3699,7 +3757,8 @@
       `This will permanently delete ALL uploaded roster data for ${locationName} (${locationCode}).\n\n` +
       `• All swimmers will be removed\n` +
       `• All attendance records will be deleted\n` +
-      `• All flags and notes will be lost\n\n` +
+      `• All flags and notes will be lost\n` +
+      `• All future calendars will be deleted\n\n` +
       `The roster will be auto-exported as a backup before deletion.\n\n` +
       `Type "DELETE" to confirm:`;
 
@@ -3731,11 +3790,22 @@
   });
 
   el('adminNavClearAllRosters').addEventListener('click', async () => {
+    const startDate = el('adminClearAllStartDate')?.value || '';
+    const endDate = el('adminClearAllEndDate')?.value || '';
+    if ((startDate && !endDate) || (!startDate && endDate)) {
+      alert('Please set both a start and end date to delete a window.');
+      return;
+    }
+    const windowLabel = startDate && endDate
+      ? `Date window: ${startDate} → ${endDate}\n\n`
+      : 'Date window: ALL DATES\n\n';
     const confirmMsg = `⚠️ MASTER DELETE ALL ROSTERS\n\n` +
-      `This will permanently delete ALL roster data for EVERY location.\n\n` +
+      `This will permanently delete roster data for EVERY location.\n\n` +
+      windowLabel +
       `• All swimmers will be removed\n` +
       `• All attendance records will be deleted\n` +
-      `• All flags and notes will be lost\n\n` +
+      `• All flags and notes will be lost\n` +
+      `• All future calendars will be deleted\n\n` +
       `A full roster backup will be auto-exported before deletion.\n\n` +
       `Type "DELETE ALL" to confirm:`;
 
@@ -3750,11 +3820,18 @@
 
     try {
       const resp = await api('/api/clear-roster-all', {
-        method: 'POST'
+        method: 'POST',
+        body: JSON.stringify({
+          start_date: startDate || null,
+          end_date: endDate || null
+        })
       });
 
       if (resp.ok) {
-        alert(`✅ All Rosters Cleared!\n\nDeleted ${resp.deleted_count} total swimmers.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
+        const rangeNote = resp.start_date && resp.end_date
+          ? `Date window: ${resp.start_date} → ${resp.end_date}\n\n`
+          : '';
+        alert(`✅ All Rosters Cleared!\n\n${rangeNote}Deleted ${resp.deleted_count} total swimmers.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
         await loadBlocks();
         await loadRoster();
       }
