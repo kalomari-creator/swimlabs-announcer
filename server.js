@@ -2459,7 +2459,18 @@ app.post("/api/clear-roster", (req, res) => {
 app.post("/api/clear-roster-all", (req, res) => {
   try {
     const date = activeOrToday();
-    const existingRoster = db.prepare(`SELECT * FROM roster`).all();
+    const startDate = req.body?.start_date || null;
+    const endDate = req.body?.end_date || null;
+    if ((startDate && !endDate) || (!startDate && endDate)) {
+      return res.status(400).json({ ok: false, error: "Both start_date and end_date are required to clear a window." });
+    }
+    const hasRange = startDate && endDate;
+    const selectSql = hasRange
+      ? `SELECT * FROM roster WHERE date BETWEEN ? AND ?`
+      : `SELECT * FROM roster`;
+    const existingRoster = hasRange
+      ? db.prepare(selectSql).all(startDate, endDate)
+      : db.prepare(selectSql).all();
     let backupFile = null;
 
     if (existingRoster.length > 0) {
@@ -2472,6 +2483,8 @@ app.post("/api/clear-roster-all", (req, res) => {
 
       fs.writeFileSync(exportPath, JSON.stringify({
         date: date,
+        start_date: startDate,
+        end_date: endDate,
         cleared_at: nowISO(),
         count: existingRoster.length,
         roster: existingRoster
@@ -2481,10 +2494,17 @@ app.post("/api/clear-roster-all", (req, res) => {
       console.log(`[ADMIN CLEAR ALL] Backed up ${existingRoster.length} swimmers to: ${backupFile}`);
     }
 
-    const result = db.prepare(`DELETE FROM roster`).run();
+    const deleteSql = hasRange
+      ? `DELETE FROM roster WHERE date BETWEEN ? AND ?`
+      : `DELETE FROM roster`;
+    const result = hasRange
+      ? db.prepare(deleteSql).run(startDate, endDate)
+      : db.prepare(deleteSql).run();
 
     audit(req, "admin_clear_roster_all", {
       date: date,
+      start_date: startDate,
+      end_date: endDate,
       deleted_count: result.changes,
       backup_file: backupFile
     });
@@ -2495,7 +2515,9 @@ app.post("/api/clear-roster-all", (req, res) => {
       ok: true,
       deleted_count: result.changes,
       backup_file: backupFile,
-      date: date
+      date: date,
+      start_date: startDate,
+      end_date: endDate
     });
   } catch (error) {
     console.error("Clear all rosters error:", error);
