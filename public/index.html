@@ -1280,7 +1280,18 @@
     const metaBase = document.querySelector('meta[name="api-base"]')?.content?.trim();
     const base = (window.API_BASE || metaBase || '').trim();
     if (!base) return '';
-    return base.endsWith('/') ? base.slice(0, -1) : base;
+    let cleaned = base;
+    try {
+      const url = new URL(base, window.location.origin);
+      if (url.username || url.password) {
+        url.username = '';
+        url.password = '';
+        cleaned = `${url.origin}${url.pathname}${url.search}${url.hash}`;
+      }
+    } catch (err) {
+      // Leave base as-is if it cannot be parsed as a URL.
+    }
+    return cleaned.endsWith('/') ? cleaned.slice(0, -1) : cleaned;
   })();
 
   function apiUrl(path) {
