@@ -25,9 +25,12 @@ const db = new Database(dbPath);
 
 const SCHEDULE_DIR = path.join(__dirname, "schedules");
 const EXPORT_DIR = path.join(__dirname, "exports");
+const PUBLIC_DIR = path.join(__dirname, "public");
+const PIPER_DIR = path.join(__dirname, "assets", "piper", "piper");
+const TTS_MODEL_DIR = path.join(__dirname, "assets", "tts");
 
 // Piper TTS
-let PIPER_BIN = process.env.PIPER_BIN_PATH || path.join(__dirname, "bin", "piper", "piper");
+let PIPER_BIN = process.env.PIPER_BIN_PATH || path.join(PIPER_DIR, "piper");
 // Support layouts where bin/piper/piper is a directory containing the piper binary
 try {
   if (fs.existsSync(PIPER_BIN) && fs.statSync(PIPER_BIN).isDirectory()) {
@@ -37,7 +40,7 @@ try {
 } catch (e) { /* ignore */ }
 
 const VOICE_MODEL =
-  process.env.VOICE_MODEL_PATH || path.join(__dirname, "tts", "en_US-lessac-medium.onnx");
+  process.env.VOICE_MODEL_PATH || path.join(TTS_MODEL_DIR, "en_US-lessac-medium.onnx");
 
 const TTS_OUT_DIR = path.join(__dirname, "tts_out");
 const TTS_OUT_WAV = path.join(TTS_OUT_DIR, "last.wav");
@@ -47,9 +50,10 @@ const PING_WAV = path.join(TTS_OUT_DIR, "ping.wav");
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve index.html from project root + any assets in /public
-app.use("/public", express.static(path.join(__dirname, "public")));
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "index.html")));
+// Serve index.html + any assets in /public
+app.use("/public", express.static(PUBLIC_DIR));
+app.use(express.static(PUBLIC_DIR));
+app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 
 if (!fs.existsSync(TTS_OUT_DIR)) fs.mkdirSync(TTS_OUT_DIR, { recursive: true });
 if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
