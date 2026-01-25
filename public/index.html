@@ -409,7 +409,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.6.0</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.7.0</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -1866,51 +1866,43 @@
       tdLevel.textContent = tl.level;
       tr.appendChild(tdLevel);
 
-      // Instructor (with SUB badge if substitute)
+      // Instructor (show substitute name + original when applicable)
       const tdInst = document.createElement('td');
-      if (kid.is_substitute && kid.original_instructor) {
-        // This is a substitute instructor - show SUB badge
+      const hasSub = kid.is_substitute || kid.original_instructor || kid.substitute_instructor;
+      if (hasSub) {
         const instDiv = document.createElement('div');
         instDiv.style.display = 'flex';
         instDiv.style.alignItems = 'center';
         instDiv.style.gap = '8px';
         instDiv.style.flexWrap = 'wrap';
-        
-        // Instructor name
+
+        const subNameValue = kid.substitute_instructor || kid.instructor_name || '—';
+        const originalValue = kid.original_instructor ||
+          ((kid.substitute_instructor && kid.instructor_name && kid.substitute_instructor !== kid.instructor_name)
+            ? kid.instructor_name
+            : '');
+
         const instName = document.createElement('span');
-        instName.textContent = kid.instructor_name;
+        instName.textContent = `${subNameValue} (Sub)`;
         instName.style.fontWeight = '900';
-        
-        // SUB badge
+
         const subBadge = document.createElement('span');
         subBadge.className = 'badge sub';
         subBadge.textContent = 'SUB';
-        subBadge.title = `Subbing for ${kid.original_instructor}`;
-        
+        subBadge.title = originalValue ? `Subbing for ${originalValue}` : 'Substitute';
+
         instDiv.appendChild(instName);
         instDiv.appendChild(subBadge);
-        tdInst.appendChild(instDiv);
-      } else if (kid.substitute_instructor) {
-        // Legacy: Show substitute with indicator (old format)
-        const subName = document.createElement('span');
-        subName.style.fontWeight = '700';
-        subName.textContent = kid.substitute_instructor;
 
-        const subBadge = document.createElement('span');
-        subBadge.className = 'badge sub';
-        subBadge.textContent = 'SUB';
-        subBadge.title = kid.instructor_name ? `Subbing for ${kid.instructor_name}` : '';
-
-        const originalName = document.createElement('div');
-        originalName.className = 'tiny';
-        originalName.style.cssText = 'color:var(--muted); margin-top:2px; text-decoration:line-through;';
-        originalName.textContent = kid.instructor_name || '';
-
-        tdInst.appendChild(subName);
-        tdInst.appendChild(subBadge);
-        if (kid.instructor_name) {
-          tdInst.appendChild(originalName);
+        if (originalValue) {
+          const originalName = document.createElement('span');
+          originalName.className = 'tiny';
+          originalName.style.cssText = 'color:var(--muted);';
+          originalName.textContent = `(${originalValue})`;
+          instDiv.appendChild(originalName);
         }
+
+        tdInst.appendChild(instDiv);
       } else {
         // Regular instructor - no substitute
         tdInst.textContent = kid.instructor_name || '—';
