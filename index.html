@@ -552,9 +552,27 @@
             <option value="balance">Sort: Balance Status</option>
           </select>
           <button id="refreshSwimmers" class="secondary" style="padding:6px 12px; font-size:13px;">🔄 Refresh</button>
+          <button id="exportVirtualDeskBtn" class="secondary" style="padding:6px 12px; font-size:13px;">📥 Export</button>
         </div>
 
         <div id="swimmerDetailsTable"></div>
+      </div>
+
+      <!-- Reports Section -->
+      <div class="card" style="margin-top:20px;">
+        <div class="row" style="margin-bottom:12px;">
+          <h3 style="margin:0; font-size:18px;">📈 Reports & Analytics</h3>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+          <button id="openAttendanceReportBtn" class="secondary" style="padding:12px; text-align:left;">
+            <div style="font-weight:700;">📊 Attendance Report</div>
+            <div class="tiny" style="color:var(--muted); margin-top:4px;">Daily/weekly/monthly attendance analytics</div>
+          </button>
+          <button id="openInstructorReportBtn" class="secondary" style="padding:12px; text-align:left;">
+            <div style="font-weight:700;">👨‍🏫 Instructor Analytics</div>
+            <div class="tiny" style="color:var(--muted); margin-top:4px;">Performance metrics per instructor</div>
+          </button>
+        </div>
       </div>
 
       <!-- Navigation Cards -->
@@ -901,6 +919,72 @@
 
     <div class="modalFooter">
       <button class="secondary" id="serverImportClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Attendance Report Modal -->
+<div class="modalBackdrop" id="attendanceReportModal">
+  <div class="modal" style="max-width:900px;">
+    <h3>📊 Attendance Report</h3>
+
+    <div class="row" style="margin:10px 0 16px; flex-wrap:wrap; gap:10px;">
+      <div class="field" style="margin:0; flex:1; min-width:120px;">
+        <label style="font-size:12px;">Start Date</label>
+        <input type="date" id="attendanceReportStartDate" style="width:100%;">
+      </div>
+      <div class="field" style="margin:0; flex:1; min-width:120px;">
+        <label style="font-size:12px;">End Date</label>
+        <input type="date" id="attendanceReportEndDate" style="width:100%;">
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:8px;">
+        <button class="secondary" id="attendanceReportGenerate" style="padding:8px 16px;">Generate Report</button>
+      </div>
+    </div>
+
+    <div id="attendanceReportContent" style="max-height:450px; overflow-y:auto;">
+      <div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">
+        Select a date range and click "Generate Report" to view attendance analytics.
+      </div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="attendanceReportExportCSV">Export CSV</button>
+      <button class="secondary" id="attendanceReportExportJSON">Export JSON</button>
+      <button class="secondary" id="attendanceReportClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Instructor Report Modal -->
+<div class="modalBackdrop" id="instructorReportModal">
+  <div class="modal" style="max-width:900px;">
+    <h3>👨‍🏫 Instructor Performance Analytics</h3>
+
+    <div class="row" style="margin:10px 0 16px; flex-wrap:wrap; gap:10px;">
+      <div class="field" style="margin:0; flex:1; min-width:120px;">
+        <label style="font-size:12px;">Start Date</label>
+        <input type="date" id="instructorReportStartDate" style="width:100%;">
+      </div>
+      <div class="field" style="margin:0; flex:1; min-width:120px;">
+        <label style="font-size:12px;">End Date</label>
+        <input type="date" id="instructorReportEndDate" style="width:100%;">
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:8px;">
+        <button class="secondary" id="instructorReportGenerate" style="padding:8px 16px;">Generate Report</button>
+      </div>
+    </div>
+
+    <div id="instructorReportContent" style="max-height:450px; overflow-y:auto;">
+      <div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">
+        Select a date range and click "Generate Report" to view instructor analytics.
+      </div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="instructorReportExportCSV">Export CSV</button>
+      <button class="secondary" id="instructorReportExportJSON">Export JSON</button>
+      <button class="secondary" id="instructorReportClose">Close</button>
     </div>
   </div>
 </div>
@@ -2509,12 +2593,316 @@
   });
 
   el('adminNavHistory').addEventListener('click', () => {
-    alert('Attendance History\n\nComing in Session 12 (Optional)!\n\nThis will show 30-day attendance patterns and reports.');
+    openAttendanceReport();
   });
 
   el('adminNavObservations').addEventListener('click', () => {
-    alert('Instructor Observations\n\nComing in Session 13 (Optional)!\n\nThis will generate evaluation forms for instructor observations.');
+    openInstructorReport();
   });
+
+  // Virtual Desk Export
+  el('exportVirtualDeskBtn').addEventListener('click', async () => {
+    if (!currentLocation || !activeDateISO) {
+      alert('Please select a location and date first.');
+      return;
+    }
+    const format = prompt('Export format: Enter "csv" or "json" (default: csv)', 'csv');
+    if (format === null) return;
+    const fmt = format.toLowerCase() === 'json' ? 'json' : 'csv';
+    window.location.href = `/api/reports/virtual-desk/export?date=${activeDateISO}&location_id=${currentLocation.id}&format=${fmt}`;
+  });
+
+  // Open Attendance Report Modal
+  el('openAttendanceReportBtn').addEventListener('click', openAttendanceReport);
+  el('openInstructorReportBtn').addEventListener('click', openInstructorReport);
+
+  function openAttendanceReport() {
+    // Set default dates (last 30 days)
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    el('attendanceReportEndDate').value = today.toISOString().split('T')[0];
+    el('attendanceReportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    el('attendanceReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Select a date range and click "Generate Report" to view attendance analytics.</div>`;
+    showModal('attendanceReportModal', true);
+  }
+
+  function openInstructorReport() {
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    el('instructorReportEndDate').value = today.toISOString().split('T')[0];
+    el('instructorReportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    el('instructorReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Select a date range and click "Generate Report" to view instructor analytics.</div>`;
+    showModal('instructorReportModal', true);
+  }
+
+  // Attendance Report Handlers
+  el('attendanceReportGenerate').addEventListener('click', async () => {
+    const startDate = el('attendanceReportStartDate').value;
+    const endDate = el('attendanceReportEndDate').value;
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates.');
+      return;
+    }
+    if (!currentLocation) {
+      alert('Please select a location first.');
+      return;
+    }
+
+    el('attendanceReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Loading report...</div>`;
+
+    try {
+      const resp = await api(`/api/reports/attendance?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}`);
+      if (!resp.ok) throw new Error(resp.error || 'Failed to generate report');
+
+      const report = resp.report;
+      const summary = report.summary;
+
+      let html = `
+        <div style="margin-bottom:20px;">
+          <div class="row" style="gap:12px; flex-wrap:wrap;">
+            <div class="card" style="flex:1; min-width:140px; background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
+              <div class="tiny" style="color:var(--muted);">Attendance Rate</div>
+              <div style="font-size:24px; font-weight:900; color:#22c55e;">${summary.overall_attendance_rate}%</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);">
+              <div class="tiny" style="color:var(--muted);">Total Swimmers</div>
+              <div style="font-size:24px; font-weight:900; color:#3b82f6;">${summary.unique_swimmers}</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.2);">
+              <div class="tiny" style="color:var(--muted);">Class Entries</div>
+              <div style="font-size:24px; font-weight:900; color:#eab308;">${summary.total_entries}</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.2);">
+              <div class="tiny" style="color:var(--muted);">Days Tracked</div>
+              <div style="font-size:24px; font-weight:900; color:#a855f7;">${summary.days_with_classes}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#22c55e;">${summary.total_present}</div>
+            <div class="tiny" style="color:var(--muted);">Present</div>
+          </div>
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#ef4444;">${summary.total_absent}</div>
+            <div class="tiny" style="color:var(--muted);">Absent</div>
+          </div>
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#f97316;">${summary.total_trials}</div>
+            <div class="tiny" style="color:var(--muted);">Trials</div>
+          </div>
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#06b6d4;">${summary.total_new_swimmers}</div>
+            <div class="tiny" style="color:var(--muted);">New</div>
+          </div>
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#8b5cf6;">${summary.total_makeups}</div>
+            <div class="tiny" style="color:var(--muted);">Makeups</div>
+          </div>
+        </div>
+
+        <h4 style="margin:16px 0 8px; font-size:14px;">By Program</h4>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+              <tr style="background:rgba(255,255,255,0.05); text-align:left;">
+                <th style="padding:8px;">Program</th>
+                <th style="padding:8px;">Total</th>
+                <th style="padding:8px;">Present</th>
+                <th style="padding:8px;">Absent</th>
+                <th style="padding:8px;">Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${report.by_program.map(p => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                  <td style="padding:8px;">${p.program || 'Unknown'}</td>
+                  <td style="padding:8px;">${p.total}</td>
+                  <td style="padding:8px; color:#22c55e;">${p.present}</td>
+                  <td style="padding:8px; color:#ef4444;">${p.absent}</td>
+                  <td style="padding:8px;"><span style="color:${p.attendance_rate >= 80 ? '#22c55e' : p.attendance_rate >= 60 ? '#eab308' : '#ef4444'}">${p.attendance_rate}%</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        ${report.low_attendance_swimmers.length > 0 ? `
+          <h4 style="margin:16px 0 8px; font-size:14px; color:#ef4444;">Low Attendance Swimmers (&lt;70%)</h4>
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+              <thead>
+                <tr style="background:rgba(255,255,255,0.05); text-align:left;">
+                  <th style="padding:8px;">Swimmer</th>
+                  <th style="padding:8px;">Classes</th>
+                  <th style="padding:8px;">Attended</th>
+                  <th style="padding:8px;">Missed</th>
+                  <th style="padding:8px;">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${report.low_attendance_swimmers.map(s => `
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                    <td style="padding:8px;">${s.swimmer_name}</td>
+                    <td style="padding:8px;">${s.total_classes}</td>
+                    <td style="padding:8px; color:#22c55e;">${s.attended}</td>
+                    <td style="padding:8px; color:#ef4444;">${s.missed}</td>
+                    <td style="padding:8px; color:#ef4444;">${s.attendance_rate}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+      `;
+
+      el('attendanceReportContent').innerHTML = html;
+    } catch (e) {
+      el('attendanceReportContent').innerHTML = `<div class="tiny" style="color:#ef4444; text-align:center; padding:40px;">Error: ${e.message}</div>`;
+    }
+  });
+
+  el('attendanceReportExportCSV').addEventListener('click', () => {
+    const startDate = el('attendanceReportStartDate').value;
+    const endDate = el('attendanceReportEndDate').value;
+    if (!currentLocation || !startDate || !endDate) {
+      alert('Please generate a report first.');
+      return;
+    }
+    window.location.href = `/api/reports/attendance/export?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}&format=csv`;
+  });
+
+  el('attendanceReportExportJSON').addEventListener('click', () => {
+    const startDate = el('attendanceReportStartDate').value;
+    const endDate = el('attendanceReportEndDate').value;
+    if (!currentLocation || !startDate || !endDate) {
+      alert('Please generate a report first.');
+      return;
+    }
+    window.location.href = `/api/reports/attendance/export?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}&format=json`;
+  });
+
+  el('attendanceReportClose').addEventListener('click', () => showModal('attendanceReportModal', false));
+  el('attendanceReportModal').addEventListener('click', (e) => { if(e.target === el('attendanceReportModal')) showModal('attendanceReportModal', false); });
+
+  // Instructor Report Handlers
+  el('instructorReportGenerate').addEventListener('click', async () => {
+    const startDate = el('instructorReportStartDate').value;
+    const endDate = el('instructorReportEndDate').value;
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates.');
+      return;
+    }
+    if (!currentLocation) {
+      alert('Please select a location first.');
+      return;
+    }
+
+    el('instructorReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Loading report...</div>`;
+
+    try {
+      const resp = await api(`/api/reports/instructors?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}`);
+      if (!resp.ok) throw new Error(resp.error || 'Failed to generate report');
+
+      const report = resp.report;
+      const summary = report.summary;
+
+      let html = `
+        <div style="margin-bottom:20px;">
+          <div class="row" style="gap:12px; flex-wrap:wrap;">
+            <div class="card" style="flex:1; min-width:140px; background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);">
+              <div class="tiny" style="color:var(--muted);">Total Instructors</div>
+              <div style="font-size:24px; font-weight:900; color:#3b82f6;">${summary.total_instructors}</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
+              <div class="tiny" style="color:var(--muted);">Avg Attendance Rate</div>
+              <div style="font-size:24px; font-weight:900; color:#22c55e;">${summary.average_attendance_rate}%</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.2);">
+              <div class="tiny" style="color:var(--muted);">Total Class Entries</div>
+              <div style="font-size:24px; font-weight:900; color:#eab308;">${summary.total_class_entries}</div>
+            </div>
+          </div>
+        </div>
+
+        ${report.highlights.top_by_attendance.length > 0 ? `
+          <h4 style="margin:16px 0 8px; font-size:14px;">Top Performers (by Class Attendance Rate)</h4>
+          <div class="row" style="gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+            ${report.highlights.top_by_attendance.map((i, idx) => `
+              <div class="card" style="flex:1; min-width:150px; text-align:center; background: ${idx === 0 ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.05)'};">
+                <div style="font-size:11px; color:var(--muted);">#${idx + 1}</div>
+                <div style="font-weight:700; font-size:14px;">${i.name}</div>
+                <div style="font-size:20px; font-weight:900; color:#22c55e;">${i.attendance_rate}%</div>
+                <div class="tiny" style="color:var(--muted);">${i.total_entries} entries</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <h4 style="margin:16px 0 8px; font-size:14px;">All Instructors</h4>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+              <tr style="background:rgba(255,255,255,0.05); text-align:left;">
+                <th style="padding:8px;">Instructor</th>
+                <th style="padding:8px;">Days</th>
+                <th style="padding:8px;">Entries</th>
+                <th style="padding:8px;">Swimmers</th>
+                <th style="padding:8px;">Present</th>
+                <th style="padding:8px;">Absent</th>
+                <th style="padding:8px;">Rate</th>
+                <th style="padding:8px;">Programs</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${report.instructors.map(i => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                  <td style="padding:8px; font-weight:600;">${i.instructor_name}</td>
+                  <td style="padding:8px;">${i.days_worked}</td>
+                  <td style="padding:8px;">${i.total_class_entries}</td>
+                  <td style="padding:8px;">${i.unique_swimmers}</td>
+                  <td style="padding:8px; color:#22c55e;">${i.swimmers_present}</td>
+                  <td style="padding:8px; color:#ef4444;">${i.swimmers_absent}</td>
+                  <td style="padding:8px;"><span style="color:${i.class_attendance_rate >= 80 ? '#22c55e' : i.class_attendance_rate >= 60 ? '#eab308' : '#ef4444'}">${i.class_attendance_rate}%</span></td>
+                  <td style="padding:8px;">${i.programs_taught}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      el('instructorReportContent').innerHTML = html;
+    } catch (e) {
+      el('instructorReportContent').innerHTML = `<div class="tiny" style="color:#ef4444; text-align:center; padding:40px;">Error: ${e.message}</div>`;
+    }
+  });
+
+  el('instructorReportExportCSV').addEventListener('click', () => {
+    const startDate = el('instructorReportStartDate').value;
+    const endDate = el('instructorReportEndDate').value;
+    if (!currentLocation || !startDate || !endDate) {
+      alert('Please generate a report first.');
+      return;
+    }
+    window.location.href = `/api/reports/instructors/export?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}&format=csv`;
+  });
+
+  el('instructorReportExportJSON').addEventListener('click', () => {
+    const startDate = el('instructorReportStartDate').value;
+    const endDate = el('instructorReportEndDate').value;
+    if (!currentLocation || !startDate || !endDate) {
+      alert('Please generate a report first.');
+      return;
+    }
+    window.location.href = `/api/reports/instructors/export?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}&format=json`;
+  });
+
+  el('instructorReportClose').addEventListener('click', () => showModal('instructorReportModal', false));
+  el('instructorReportModal').addEventListener('click', (e) => { if(e.target === el('instructorReportModal')) showModal('instructorReportModal', false); });
 
   el('adminNavClearRoster').addEventListener('click', async () => {
     const locationName = currentLocation?.name || 'Unknown';
