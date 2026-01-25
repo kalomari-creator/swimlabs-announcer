@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="api-base" content="" />
   <title>SwimLabs Announcer</title>
   <style>
     :root{
@@ -1275,8 +1276,22 @@
     return '';
   }
 
+  const apiBase = (() => {
+    const metaBase = document.querySelector('meta[name="api-base"]')?.content?.trim();
+    const base = (window.API_BASE || metaBase || '').trim();
+    if (!base) return '';
+    return base.endsWith('/') ? base.slice(0, -1) : base;
+  })();
+
+  function apiUrl(path) {
+    if (!apiBase || !path) return path;
+    if (/^https?:\/\//i.test(path)) return path;
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${apiBase}${normalizedPath}`;
+  }
+
   async function api(path, opts={}){
-    const res = await fetch(path, {
+    const res = await fetch(apiUrl(path), {
       headers: { 'Content-Type': 'application/json' },
       ...opts
     });
@@ -3032,7 +3047,7 @@
       formData.append('html', file);
       formData.append('location_id', currentLocation?.id || 1);
 
-      const response = await fetch('/api/upload-html', {
+      const response = await fetch(apiUrl('/api/upload-html'), {
         method: 'POST',
         body: formData
         // No headers, no credentials - browser handles multipart automatically
