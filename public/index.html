@@ -728,8 +728,8 @@
         </div>
 
         <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.45);" id="adminNavClearAllRosters">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🧨 Master Clear All Uploads</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">Permanently delete all roster data + uploaded files for every location</div>
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🧨 Master Delete All Rosters</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Permanently delete all roster data for every location</div>
         </div>
       </div>
 
@@ -3732,11 +3732,10 @@
 
   el('adminNavClearAllRosters').addEventListener('click', async () => {
     const confirmMsg = `⚠️ MASTER DELETE ALL ROSTERS\n\n` +
-      `This will permanently delete ALL roster data and uploaded files for EVERY location.\n\n` +
+      `This will permanently delete ALL roster data for EVERY location.\n\n` +
       `• All swimmers will be removed\n` +
       `• All attendance records will be deleted\n` +
-      `• All flags and notes will be lost\n` +
-      `• All uploaded PDFs/HTML and server exports will be deleted\n\n` +
+      `• All flags and notes will be lost\n\n` +
       `A full roster backup will be auto-exported before deletion.\n\n` +
       `Type "DELETE ALL" to confirm:`;
 
