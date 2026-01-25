@@ -2455,6 +2455,54 @@ app.post("/api/clear-roster", (req, res) => {
   }
 });
 
+// ==================== ADMIN CLEAR ALL ROSTERS ====================
+app.post("/api/clear-roster-all", (req, res) => {
+  try {
+    const date = activeOrToday();
+    const existingRoster = db.prepare(`SELECT * FROM roster`).all();
+    let backupFile = null;
+
+    if (existingRoster.length > 0) {
+      const exportDir = path.join(EXPORT_DIR, "ALL");
+      if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const exportFilename = `roster_CLEARED_ALL_${date}_${timestamp}.json`;
+      const exportPath = path.join(exportDir, exportFilename);
+
+      fs.writeFileSync(exportPath, JSON.stringify({
+        date: date,
+        cleared_at: nowISO(),
+        count: existingRoster.length,
+        roster: existingRoster
+      }, null, 2), 'utf-8');
+
+      backupFile = `ALL/${exportFilename}`;
+      console.log(`[ADMIN CLEAR ALL] Backed up ${existingRoster.length} swimmers to: ${backupFile}`);
+    }
+
+    const result = db.prepare(`DELETE FROM roster`).run();
+
+    audit(req, "admin_clear_roster_all", {
+      date: date,
+      deleted_count: result.changes,
+      backup_file: backupFile
+    });
+
+    console.log(`[ADMIN CLEAR ALL] Deleted ${result.changes} roster rows`);
+
+    res.json({
+      ok: true,
+      deleted_count: result.changes,
+      backup_file: backupFile,
+      date: date
+    });
+  } catch (error) {
+    console.error("Clear all rosters error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Admin stats endpoint
 app.get("/api/admin/stats", (req, res) => {
   try {
