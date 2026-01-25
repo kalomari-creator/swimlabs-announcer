@@ -1654,9 +1654,18 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     if (!fs.existsSync(locationDir)) fs.mkdirSync(locationDir, { recursive: true });
     const htmlFilename = `roll_sheet_${getLocationFileTag(location)}_${detectedDate}.html`;
     const htmlPath = path.join(locationDir, htmlFilename);
-    fs.writeFileSync(htmlPath, html, "utf-8");
+    try {
+      fs.writeFileSync(htmlPath, html, "utf-8");
+    } catch (writeError) {
+      return res.status(500).json({ ok: false, error: `Failed to save HTML: ${writeError.message}` });
+    }
 
-    const swimmers = parseHTMLRoster(html);
+    let swimmers = [];
+    try {
+      swimmers = parseHTMLRoster(html);
+    } catch (parseError) {
+      return res.status(400).json({ ok: false, error: `Failed to parse HTML: ${parseError.message}` });
+    }
     if (swimmers.length === 0) {
       return res.status(400).json({ ok: false, error: "No swimmers found in HTML file" });
     }

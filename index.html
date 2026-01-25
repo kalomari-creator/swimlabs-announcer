@@ -2610,11 +2610,11 @@
         // No headers, no credentials - browser handles multipart automatically
       });
 
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
+      const result = await response.json().catch(() => ({}));
 
-      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `Upload failed: ${response.statusText}`);
+      }
 
       if (result.ok) {
         alert(`Success! Imported ${result.count} swimmers`);
