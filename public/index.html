@@ -831,21 +831,8 @@
       <!-- Roster Controls -->
       <div class="card" style="margin-bottom:20px; border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.12);">
         <h3 style="margin:0 0 12px; font-size:16px; font-weight:900; color:#ef4444;">🧨 Master Delete All Rosters</h3>
-        <div class="tiny" style="color:var(--muted); line-height:1.4; margin-bottom:12px;">Delete roster data for every location within a date window or clear everything.</div>
-        <div class="row" style="flex-wrap:wrap; gap:10px; margin-bottom:12px;">
-          <div class="field">
-            <label>Start date</label>
-            <input type="date" id="adminClearAllStartDate" />
-          </div>
-          <div class="field">
-            <label>End date</label>
-            <input type="date" id="adminClearAllEndDate" />
-          </div>
-        </div>
-        <div class="row" style="flex-wrap:wrap; gap:10px;">
-          <button class="danger" id="adminClearWindow">Clear Date Window</button>
-          <button class="danger" id="adminNavClearAllRosters">Full Clear (All Dates)</button>
-        </div>
+        <div class="tiny" style="color:var(--muted); line-height:1.4; margin-bottom:12px;">Permanently delete all roster data for every location</div>
+        <button class="danger" id="adminNavClearAllRosters">Full Clear (All Locations)</button>
       </div>
 
       <!-- Location Management -->
@@ -3792,8 +3779,16 @@
     }
   });
 
-  async function runAdminClearAll({ startDate = null, endDate = null, label = 'ALL DATES' }) {
-    const windowLabel = `Date window: ${label}\n\n`;
+  el('adminNavClearAllRosters').addEventListener('click', async () => {
+    const startDate = el('adminClearAllStartDate')?.value || '';
+    const endDate = el('adminClearAllEndDate')?.value || '';
+    if ((startDate && !endDate) || (!startDate && endDate)) {
+      alert('Please set both a start and end date to delete a window.');
+      return;
+    }
+    const windowLabel = startDate && endDate
+      ? `Date window: ${startDate} → ${endDate}\n\n`
+      : 'Date window: ALL DATES\n\n';
     const confirmMsg = `⚠️ MASTER DELETE ALL ROSTERS\n\n` +
       `This will permanently delete roster data for EVERY location.\n\n` +
       windowLabel +
@@ -3817,15 +3812,15 @@
       const resp = await api('/api/clear-roster-all', {
         method: 'POST',
         body: JSON.stringify({
-          start_date: startDate,
-          end_date: endDate
+          start_date: startDate || null,
+          end_date: endDate || null
         })
       });
 
       if (resp.ok) {
         const rangeNote = resp.start_date && resp.end_date
           ? `Date window: ${resp.start_date} → ${resp.end_date}\n\n`
-          : 'Date window: ALL DATES\n\n';
+          : '';
         alert(`✅ All Rosters Cleared!\n\n${rangeNote}Deleted ${resp.deleted_count} total swimmers.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
         await loadBlocks();
         await loadRoster();
