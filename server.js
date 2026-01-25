@@ -19,15 +19,42 @@ const MAX_FAILS = 3;
 const LOCKOUT_MS = 2 * 60 * 1000;
 
 // -------------------- Paths --------------------
-const dbPath = path.join(__dirname, "data", "app.db");
+const APP_ROOT = (() => {
+  if (process.env.APP_ROOT) return path.resolve(process.env.APP_ROOT);
+  let current = __dirname;
+  while (true) {
+    if (fs.existsSync(path.join(current, "package.json"))) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return __dirname;
+    current = parent;
+  }
+})();
+
+function resolveDir(envValue, candidates, fallback) {
+  if (envValue) return path.resolve(envValue);
+  for (const candidate of candidates) {
+    const resolved = path.resolve(APP_ROOT, candidate);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+  return path.resolve(APP_ROOT, fallback);
+}
+
+const DATA_DIR = resolveDir(process.env.DATA_DIR, ["data", "runtime/data", "runtime/db", "db"], "data");
+const dbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(DATA_DIR, "app.db");
 if (!fs.existsSync(path.dirname(dbPath))) fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new Database(dbPath);
 
-const SCHEDULE_DIR = path.join(__dirname, "schedules");
-const EXPORT_DIR = path.join(__dirname, "exports");
-const PUBLIC_DIR = path.join(__dirname, "public");
-const PIPER_DIR = path.join(__dirname, "assets", "piper", "piper");
-const TTS_MODEL_DIR = path.join(__dirname, "assets", "tts");
+const SCHEDULE_DIR = resolveDir(process.env.SCHEDULE_DIR, ["runtime/schedules", "schedules"], "schedules");
+const EXPORT_DIR = resolveDir(process.env.EXPORT_DIR, ["runtime/exports", "exports"], "exports");
+const PUBLIC_DIR = resolveDir(process.env.PUBLIC_DIR, ["public", "client/public", "app/public"], "public");
+const ASSETS_DIR = resolveDir(process.env.ASSETS_DIR, ["assets"], "assets");
+const CONFIG_DIR = resolveDir(process.env.CONFIG_DIR, ["config"], "config");
+const PIPER_DIR = process.env.PIPER_DIR
+  ? path.resolve(process.env.PIPER_DIR)
+  : path.join(ASSETS_DIR, "piper", "piper");
+const TTS_MODEL_DIR = process.env.TTS_MODEL_DIR
+  ? path.resolve(process.env.TTS_MODEL_DIR)
+  : path.join(ASSETS_DIR, "tts");
 
 // Piper TTS
 let PIPER_BIN = process.env.PIPER_BIN_PATH || path.join(PIPER_DIR, "piper");
@@ -42,7 +69,7 @@ try {
 const VOICE_MODEL =
   process.env.VOICE_MODEL_PATH || path.join(TTS_MODEL_DIR, "en_US-lessac-medium.onnx");
 
-const TTS_OUT_DIR = path.join(__dirname, "tts_out");
+const TTS_OUT_DIR = resolveDir(process.env.TTS_OUT_DIR, ["runtime/tts_out", "tts_out"], "tts_out");
 const TTS_OUT_WAV = path.join(TTS_OUT_DIR, "last.wav");
 const PING_WAV = path.join(TTS_OUT_DIR, "ping.wav");
 
@@ -1779,7 +1806,7 @@ app.post("/api/set-location", (req, res) => {
 // ==================== INSTRUCTOR MANAGEMENT ====================
 app.get("/api/instructors", (req, res) => {
   try {
-    const configPath = path.join(__dirname, "config", "instructors.json");
+    const configPath = path.join(CONFIG_DIR, "instructors.json");
 
     if (!fs.existsSync(configPath)) {
       return res.status(404).json({ ok: false, error: 'instructors.json not found' });
@@ -1834,7 +1861,7 @@ app.get("/api/instructors", (req, res) => {
 // Get all staff for admin panel (includes phone and birthday)
 app.get("/api/staff", (req, res) => {
   try {
-    const configPath = path.join(__dirname, "config", "instructors.json");
+    const configPath = path.join(CONFIG_DIR, "instructors.json");
 
     if (!fs.existsSync(configPath)) {
       return res.status(404).json({ ok: false, error: 'instructors.json not found' });
@@ -1870,7 +1897,7 @@ app.post("/api/admin/remove-staff", (req, res) => {
       return res.status(400).json({ ok: false, error: 'Staff ID required' });
     }
 
-    const configPath = path.join(__dirname, "config", "instructors.json");
+    const configPath = path.join(CONFIG_DIR, "instructors.json");
     if (!fs.existsSync(configPath)) {
       return res.status(404).json({ ok: false, error: 'instructors.json not found' });
     }
@@ -1910,7 +1937,7 @@ app.post("/api/admin/add-staff", (req, res) => {
       return res.status(400).json({ ok: false, error: 'First name, last name, and location are required' });
     }
 
-    const configPath = path.join(__dirname, "config", "instructors.json");
+    const configPath = path.join(CONFIG_DIR, "instructors.json");
     if (!fs.existsSync(configPath)) {
       return res.status(404).json({ ok: false, error: 'instructors.json not found' });
     }
@@ -2012,7 +2039,7 @@ app.post("/api/verify-pin", (req, res) => {
     const clientIp = req.ip || req.connection.remoteAddress;
 
     // Load settings
-    const settingsPath = path.join(__dirname, "config", "settings.json");
+    const settingsPath = path.join(CONFIG_DIR, "settings.json");
     if (!fs.existsSync(settingsPath)) {
       return res.status(500).json({ ok: false, error: 'settings.json not found' });
     }
