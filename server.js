@@ -408,6 +408,17 @@ function cleanAgeText(s) {
   return t;
 }
 
+function normalizeAgeText(s) {
+  const t = String(s || "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  const m = t.match(/(\d+)\s*(?:y|yr|yrs|year|years)(?:\s*(\d+)\s*(?:m|mo|mos|month|months))?/i);
+  if (m) {
+    const normalized = `${m[1]}y${m[2] ? ` ${m[2]}m` : ""}`;
+    return cleanAgeText(normalized);
+  }
+  return null;
+}
+
 function normalizeProgramNonGroup(rawProgram) {
   const p = String(rawProgram || "").replace(/\s+/g, " ").trim();
   if (!p) return null;
