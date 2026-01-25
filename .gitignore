@@ -1,21 +1,80 @@
-# Database files (contain sensitive swimmer data)
-data/app.db
-*.db
-
-# Generated audio files
-tts_out/*.wav
-
-# Node modules (reinstalled via npm)
+############################
+# Dependencies
+############################
 node_modules/
 
+############################
+# Runtime / Generated Output
+############################
+runtime/exports/*
+runtime/tts_out/*
+!runtime/exports/.gitkeep
+!runtime/tts_out/.gitkeep
+
+admin/exports/*
+admin/logs/*
+!admin/logs/.gitkeep
+
+############################
+# Backups / Local Safety Files
+############################
+backups/
+*.bak
+*.backup
+*~ 
+
+############################
+# Databases
+############################
+*.db
+*.sqlite
+*.sqlite3
+
+############################
 # Logs
+############################
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# OS files
+############################
+# Environment / Secrets
+############################
+.env
+.env.*
+*.key
+*.authkey
+*.pem
+*.crt
+
+############################
+# OS / Editor Junk
+############################
 .DS_Store
 Thumbs.db
-
-# IDE
-.vscode/
 .idea/
+.vscode/
+*.swp
+*.swo
+
+############################
+# Build / Temp
+############################
+dist/
+build/
+tmp/
+temp/
+
+############################
+# Archives
+############################
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+############################
+# Optional: Ignore local-only ops notes
+############################
+ops-notes/
