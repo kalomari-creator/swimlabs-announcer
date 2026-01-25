@@ -46,6 +46,11 @@ const db = new Database(dbPath);
 
 const SCHEDULE_DIR = resolveDir(process.env.SCHEDULE_DIR, ["runtime/schedules", "schedules"], "schedules");
 const EXPORT_DIR = resolveDir(process.env.EXPORT_DIR, ["runtime/exports", "exports"], "exports");
+const MANAGER_REPORTS_DIR = resolveDir(
+  process.env.MANAGER_REPORTS_DIR,
+  ["runtime/manager_reports", "manager_reports"],
+  "manager_reports"
+);
 const PUBLIC_DIR = resolveDir(process.env.PUBLIC_DIR, ["public", "client/public", "app/public"], "public");
 const ASSETS_DIR = resolveDir(process.env.ASSETS_DIR, ["assets"], "assets");
 const CONFIG_DIR = resolveDir(process.env.CONFIG_DIR, ["config"], "config");
@@ -85,6 +90,7 @@ app.get("/", (req, res) => res.sendFile(path.join(PUBLIC_DIR, "index.html")));
 if (!fs.existsSync(TTS_OUT_DIR)) fs.mkdirSync(TTS_OUT_DIR, { recursive: true });
 if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
 if (!fs.existsSync(SCHEDULE_DIR)) fs.mkdirSync(SCHEDULE_DIR, { recursive: true });
+if (!fs.existsSync(MANAGER_REPORTS_DIR)) fs.mkdirSync(MANAGER_REPORTS_DIR, { recursive: true });
 
 function sanitizeDirSegment(value) {
   return String(value || "").trim().replace(/[\\/]/g, "-");
@@ -93,6 +99,11 @@ function sanitizeDirSegment(value) {
 function getScheduleDir(location) {
   const name = location?.name || location?.code || "unknown";
   return path.join(SCHEDULE_DIR, sanitizeDirSegment(name));
+}
+
+function getManagerReportDir(location) {
+  const name = location?.code || location?.name || "unknown";
+  return path.join(MANAGER_REPORTS_DIR, sanitizeDirSegment(name));
 }
 
 function getLocationFileTag(location) {
@@ -176,6 +187,18 @@ function ensureSchema() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manager_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id INTEGER NOT NULL,
+      report_type TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      original_name TEXT,
+      uploaded_at TEXT,
+      size_bytes INTEGER
+    );
+  `);
+
   // Locations table
   db.exec(`
     CREATE TABLE IF NOT EXISTS locations (
@@ -231,6 +254,7 @@ function ensureSchema() {
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_trial_followup ON trial_followups(swimmer_name, location_id);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_manager_reports ON manager_reports(location_id, report_type, uploaded_at);`);
 }
 ensureSchema();
 
@@ -238,6 +262,8 @@ ensureSchema();
 const ipAuthState = new Map();
 
 function nowISO() { return new Date().toISOString(); }
+
+const MANAGER_REPORT_TYPES = new Set(["retention", "aged_accounts", "drop_list", "billing"]);
 
 function getLocationById(locId) {
   return db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
@@ -2046,6 +2072,109 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     res.json({ ok: true, count: rowsToInsert.length, date_start: dateStart, date_end: dateEnd, location: location.name });
   } catch (error) {
     console.error("HTML upload error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== MANAGER REPORTS ====================
+app.post("/api/manager-reports/upload", upload.single('report'), (req, res) => {
+  try {
+    const reportType = String(req.body?.report_type || "").toLowerCase();
+    if (!MANAGER_REPORT_TYPES.has(reportType)) {
+      return res.status(400).json({ ok: false, error: "Invalid report type" });
+    }
+    const locId = Number(req.body?.location_id || 0);
+    const location = getLocationById(locId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ ok: false, error: "No report file uploaded" });
+    }
+
+    const originalName = req.file.originalname || "report";
+    const ext = path.extname(originalName) || ".html";
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `${reportType}_${getLocationFileTag(location)}_${timestamp}${ext}`;
+    const reportDir = getManagerReportDir(location);
+    if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
+    const reportPath = path.join(reportDir, filename);
+
+    fs.writeFileSync(reportPath, req.file.buffer);
+
+    const now = nowISO();
+    db.prepare(`
+      INSERT INTO manager_reports (
+        location_id, report_type, filename, original_name, uploaded_at, size_bytes
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(locId, reportType, filename, originalName, now, req.file.size || req.file.buffer.length);
+
+    audit(req, "manager_report_upload", {
+      location_id: locId,
+      report_type: reportType,
+      filename
+    });
+
+    res.json({
+      ok: true,
+      report: {
+        location_id: locId,
+        report_type: reportType,
+        filename,
+        original_name: originalName,
+        uploaded_at: now,
+        size_bytes: req.file.size || req.file.buffer.length
+      }
+    });
+  } catch (error) {
+    console.error("Manager report upload error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/manager-reports", (req, res) => {
+  try {
+    const locId = Number(req.query?.location_id || 0);
+    if (!locId) {
+      return res.status(400).json({ ok: false, error: "location_id is required" });
+    }
+    const reports = db.prepare(`
+      SELECT * FROM manager_reports
+      WHERE location_id = ?
+      ORDER BY uploaded_at DESC
+    `).all(locId);
+    const latest = {};
+    for (const report of reports) {
+      if (!latest[report.report_type]) {
+        latest[report.report_type] = report;
+      }
+    }
+    res.json({ ok: true, reports, latest });
+  } catch (error) {
+    console.error("Manager report list error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/manager-reports/download", (req, res) => {
+  try {
+    const locId = Number(req.query?.location_id || 0);
+    const filename = safeExportFilename(req.query?.filename);
+    if (!locId || !filename) {
+      return res.status(400).json({ ok: false, error: "location_id and filename are required" });
+    }
+    const location = getLocationById(locId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+    const reportDir = getManagerReportDir(location);
+    const reportPath = path.join(reportDir, filename);
+    if (!fs.existsSync(reportPath)) {
+      return res.status(404).json({ ok: false, error: "Report not found" });
+    }
+    res.sendFile(reportPath);
+  } catch (error) {
+    console.error("Manager report download error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
