@@ -197,6 +197,42 @@
       display: none;
     }
 
+    .managerTabBtn{
+      padding:8px 14px;
+      border-radius:10px;
+      font-size:13px;
+      font-weight:700;
+      border:1px solid rgba(255,255,255,0.2);
+      background:rgba(255,255,255,0.08);
+      color:#fff;
+      cursor:pointer;
+    }
+    .managerTabBtn.active{
+      background:rgba(34,197,94,0.2);
+      border-color:rgba(34,197,94,0.4);
+      color:#d1fae5;
+    }
+
+    .guard-add-row{
+      display:flex;
+      justify-content:flex-end;
+      margin-top:8px;
+    }
+
+    .managerReportPreview{
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:14px;
+      overflow:hidden;
+      min-height:320px;
+      background:rgba(9,12,20,0.55);
+    }
+    .managerReportPreview iframe{
+      width:100%;
+      height:420px;
+      border:0;
+      background:#fff;
+    }
+
     table{
       width:100%;
       border-collapse:separate;
@@ -486,7 +522,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.7.0</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.8.0</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -618,115 +654,216 @@
     <div class="card">
       <h2 style="margin:0 0 16px; font-size:20px;">Manager Dashboard</h2>
 
-      <!-- Quick Stats -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
-        <div class="card" style="background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
-          <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Swimmers Today</div>
-          <div style="font-size:28px; font-weight:900; color:#22c55e;" id="adminStatSwimmers">—</div>
-        </div>
-
-        <div class="card" style="background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);">
-          <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Attendance Rate</div>
-          <div style="font-size:28px; font-weight:900; color:#3b82f6;" id="adminStatAttendance">—</div>
-        </div>
-
-        <div class="card" style="background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.2);">
-          <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Trials This Week</div>
-          <div style="font-size:28px; font-weight:900; color:#eab308;" id="adminStatTrials">—</div>
-        </div>
+      <div class="row" style="margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+        <button class="managerTabBtn active" id="managerTabOverviewBtn">Overview</button>
+        <button class="managerTabBtn" id="managerTabReportsBtn">Manager Reports</button>
       </div>
 
-      <div class="card" style="margin-bottom:20px;">
-        <h3 style="margin:0 0 12px; font-size:18px;">📅 Manager Date Brackets</h3>
-        <div class="grid2" style="margin-bottom:10px;">
-          <div class="field">
-            <label>Start date</label>
-            <input type="date" id="managerRangeStart" />
+      <div id="managerTabOverview">
+        <!-- Quick Stats -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
+          <div class="card" style="background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
+            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Swimmers Today</div>
+            <div style="font-size:28px; font-weight:900; color:#22c55e;" id="adminStatSwimmers">—</div>
           </div>
-          <div class="field">
-            <label>End date</label>
-            <input type="date" id="managerRangeEnd" />
+
+          <div class="card" style="background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);">
+            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Attendance Rate</div>
+            <div style="font-size:28px; font-weight:900; color:#3b82f6;" id="adminStatAttendance">—</div>
+          </div>
+
+          <div class="card" style="background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.2);">
+            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Trials This Week</div>
+            <div style="font-size:28px; font-weight:900; color:#eab308;" id="adminStatTrials">—</div>
           </div>
         </div>
-        <div class="row" style="flex-wrap:wrap; gap:8px;">
-          <button class="secondary" id="managerRangeWeek">This Week</button>
-          <button class="secondary" id="managerRangeNextTwo">Next 14 Days</button>
-          <button class="secondary" id="managerRangeMonth">This Month</button>
-          <div class="spacer"></div>
-          <button class="primary" id="managerRangeSave">Save Brackets</button>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h3 style="margin:0 0 12px; font-size:18px;">📅 Manager Date Brackets</h3>
+          <div class="grid2" style="margin-bottom:10px;">
+            <div class="field">
+              <label>Start date</label>
+              <input type="date" id="managerRangeStart" />
+            </div>
+            <div class="field">
+              <label>End date</label>
+              <input type="date" id="managerRangeEnd" />
+            </div>
+          </div>
+          <div class="row" style="flex-wrap:wrap; gap:8px;">
+            <button class="secondary" id="managerRangeWeek">This Week</button>
+            <button class="secondary" id="managerRangeNextTwo">Next 14 Days</button>
+            <button class="secondary" id="managerRangeMonth">This Month</button>
+            <div class="spacer"></div>
+            <button class="primary" id="managerRangeSave">Save Brackets</button>
+          </div>
+          <div class="tiny" style="margin-top:8px; color:var(--muted);" id="managerRangeHint">Saved range syncs report defaults and guard tasks.</div>
         </div>
-        <div class="tiny" style="margin-top:8px; color:var(--muted);" id="managerRangeHint">Saved range syncs report defaults and guard tasks.</div>
+
+        <!-- Swimmer Details View -->
+        <div class="card" id="swimmerDetailsView">
+          <div class="row" style="margin-bottom:12px;">
+            <h3 style="margin:0; font-size:18px;">👥 Today's Swimmers - Detailed View</h3>
+            <div class="spacer"></div>
+            <select id="swimmerSortBy" style="padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+              <option value="name">Sort: Name A-Z</option>
+              <option value="time">Sort: Time</option>
+              <option value="instructor">Sort: Instructor</option>
+              <option value="attendance_rate">Sort: Attendance Rate</option>
+              <option value="missed">Sort: Missed Classes</option>
+              <option value="balance">Sort: Balance Status</option>
+            </select>
+            <button id="refreshSwimmers" class="secondary" style="padding:6px 12px; font-size:13px;">🔄 Refresh</button>
+            <button id="exportVirtualDeskBtn" class="secondary" style="padding:6px 12px; font-size:13px;">📥 Export</button>
+          </div>
+
+          <div id="swimmerDetailsTable"></div>
+        </div>
+
+        <!-- Reports Section -->
+        <div class="card" style="margin-top:20px;">
+          <div class="row" style="margin-bottom:12px;">
+            <h3 style="margin:0; font-size:18px;">📈 Reports & Analytics</h3>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+            <button id="openAttendanceReportBtn" class="secondary" style="padding:12px; text-align:left;">
+              <div style="font-weight:700;">📊 Attendance Report</div>
+              <div class="tiny" style="color:var(--muted); margin-top:4px;">Daily/weekly/monthly attendance analytics</div>
+            </button>
+            <button id="openInstructorReportBtn" class="secondary" style="padding:12px; text-align:left;">
+              <div style="font-weight:700;">👨‍🏫 Instructor Analytics</div>
+              <div class="tiny" style="color:var(--muted); margin-top:4px;">Performance metrics per instructor</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Navigation Cards -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px; margin-top:20px;">
+          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavAbsence">
+            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📊 Absence Tracker</div>
+            <div class="tiny" style="color:var(--muted); line-height:1.4;">Track multi-week absences and follow up with families</div>
+          </div>
+
+          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavTrials">
+            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🧪 Trial Follow-up</div>
+            <div class="tiny" style="color:var(--muted); line-height:1.4;">Manage trial swimmers and conversion tracking</div>
+          </div>
+
+          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavGuards">
+            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
+            <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
+          </div>
+
+          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavHistory">
+            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📅 Attendance History</div>
+            <div class="tiny" style="color:var(--muted); line-height:1.4;">View 30-day attendance patterns and reports</div>
+          </div>
+
+          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavObservations">
+            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📝 Instructor Observations</div>
+            <div class="tiny" style="color:var(--muted); line-height:1.4;">Generate evaluation forms and track progress</div>
+          </div>
+
+          <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.3);" id="adminNavClearRoster">
+            <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🗑️ Clear Roster</div>
+            <div class="tiny" style="color:var(--muted); line-height:1.4;">Remove all uploaded roster data for current location</div>
+          </div>
+
+          <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(249,115,22,0.08); border-color: rgba(249,115,22,0.3);" id="adminNavClearFutureRoster">
+            <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#f97316;">🧹 Clear Future Roster</div>
+            <div class="tiny" style="color:var(--muted); line-height:1.4;">Delete all roster data from today forward for current location</div>
+          </div>
+        </div>
       </div>
 
-      <!-- Swimmer Details View -->
-      <div class="card" id="swimmerDetailsView">
-        <div class="row" style="margin-bottom:12px;">
-          <h3 style="margin:0; font-size:18px;">👥 Today's Swimmers - Detailed View</h3>
-          <div class="spacer"></div>
-          <select id="swimmerSortBy" style="padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
-            <option value="name">Sort: Name A-Z</option>
-            <option value="time">Sort: Time</option>
-            <option value="instructor">Sort: Instructor</option>
-            <option value="attendance_rate">Sort: Attendance Rate</option>
-            <option value="missed">Sort: Missed Classes</option>
-            <option value="balance">Sort: Balance Status</option>
-          </select>
-          <button id="refreshSwimmers" class="secondary" style="padding:6px 12px; font-size:13px;">🔄 Refresh</button>
-          <button id="exportVirtualDeskBtn" class="secondary" style="padding:6px 12px; font-size:13px;">📥 Export</button>
-        </div>
+      <div id="managerTabReports" class="hidden">
+        <div class="card" style="margin-bottom:16px;">
+          <h3 style="margin:0 0 8px; font-size:18px;">📁 Manager Reports</h3>
+          <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track instructor retention, retention, billing, aged accounts, and drop list reports per location.</div>
 
-        <div id="swimmerDetailsTable"></div>
-      </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+            <div class="card" style="background: rgba(255,255,255,0.04);">
+              <div class="row" style="gap:10px;">
+                <div>
+                  <div style="font-weight:800;">🧑‍🏫 Instructor Retention</div>
+                  <div class="tiny" id="reportMetaInstructorRetention">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <button class="secondary reportPreviewBtn hidden" data-report-type="instructor_retention">Preview</button>
+                <a class="secondary hidden" id="reportDownloadInstructorRetention" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="instructor_retention">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="instructor_retention" accept=".html,.pdf,.csv,.xls,.xlsx" />
+              </div>
+            </div>
 
-      <!-- Reports Section -->
-      <div class="card" style="margin-top:20px;">
-        <div class="row" style="margin-bottom:12px;">
-          <h3 style="margin:0; font-size:18px;">📈 Reports & Analytics</h3>
-        </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
-          <button id="openAttendanceReportBtn" class="secondary" style="padding:12px; text-align:left;">
-            <div style="font-weight:700;">📊 Attendance Report</div>
-            <div class="tiny" style="color:var(--muted); margin-top:4px;">Daily/weekly/monthly attendance analytics</div>
-          </button>
-          <button id="openInstructorReportBtn" class="secondary" style="padding:12px; text-align:left;">
-            <div style="font-weight:700;">👨‍🏫 Instructor Analytics</div>
-            <div class="tiny" style="color:var(--muted); margin-top:4px;">Performance metrics per instructor</div>
-          </button>
-        </div>
-      </div>
+            <div class="card" style="background: rgba(255,255,255,0.04);">
+              <div class="row" style="gap:10px;">
+                <div>
+                  <div style="font-weight:800;">📈 Retention Report</div>
+                  <div class="tiny" id="reportMetaRetention">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <button class="secondary reportPreviewBtn hidden" data-report-type="retention">Preview</button>
+                <a class="secondary hidden" id="reportDownloadRetention" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="retention">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="retention" accept=".html,.pdf,.csv,.xls,.xlsx" />
+              </div>
+            </div>
 
-      <!-- Navigation Cards -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px; margin-top:20px;">
-        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavAbsence">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📊 Absence Tracker</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">Track multi-week absences and follow up with families</div>
-        </div>
+            <div class="card" style="background: rgba(255,255,255,0.04);">
+              <div class="row" style="gap:10px;">
+                <div>
+                  <div style="font-weight:800;">🧾 Aged Accounts</div>
+                  <div class="tiny" id="reportMetaAgedAccounts">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <button class="secondary reportPreviewBtn hidden" data-report-type="aged_accounts">Preview</button>
+                <a class="secondary hidden" id="reportDownloadAgedAccounts" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="aged_accounts">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="aged_accounts" accept=".html,.pdf,.csv,.xls,.xlsx" />
+              </div>
+            </div>
 
-        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavTrials">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🧪 Trial Follow-up</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">Manage trial swimmers and conversion tracking</div>
-        </div>
+            <div class="card" style="background: rgba(255,255,255,0.04);">
+              <div class="row" style="gap:10px;">
+                <div>
+                  <div style="font-weight:800;">📉 Drop List</div>
+                  <div class="tiny" id="reportMetaDropList">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <button class="secondary reportPreviewBtn hidden" data-report-type="drop_list">Preview</button>
+                <a class="secondary hidden" id="reportDownloadDropList" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="drop_list">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="drop_list" accept=".html,.pdf,.csv,.xls,.xlsx" />
+              </div>
+            </div>
 
-        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavGuards">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
-        </div>
+            <div class="card" style="background: rgba(255,255,255,0.04);">
+              <div class="row" style="gap:10px;">
+                <div>
+                  <div style="font-weight:800;">💳 Billing Snapshot</div>
+                  <div class="tiny" id="reportMetaBilling">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <button class="secondary reportPreviewBtn hidden" data-report-type="billing">Preview</button>
+                <a class="secondary hidden" id="reportDownloadBilling" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="billing">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="billing" accept=".html,.pdf,.csv,.xls,.xlsx" />
+              </div>
+            </div>
+          </div>
 
-        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavHistory">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📅 Attendance History</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">View 30-day attendance patterns and reports</div>
+          <div class="card" style="margin-top:16px;">
+            <div class="row" style="margin-bottom:8px;">
+              <div class="pill">Latest report preview</div>
+              <div class="spacer"></div>
+              <span class="tiny" id="managerReportPreviewMeta">Select a report to preview the latest upload.</span>
+            </div>
+            <div class="managerReportPreview" id="managerReportPreview">
+              <iframe id="managerReportPreviewFrame" title="Manager report preview"></iframe>
+            </div>
+          </div>
         </div>
-
-        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavObservations">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📝 Instructor Observations</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">Generate evaluation forms and track progress</div>
-        </div>
-
-        <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.3);" id="adminNavClearRoster">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🗑️ Clear Roster</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">Remove all uploaded roster data for current location</div>
-        </div>
-
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
@@ -786,16 +923,25 @@
         <div class="guard-section">
           <h4 id="guardOpeningTitle">🌅 Opening Checklist</h4>
           <div id="guardOpeningList"></div>
+          <div class="guard-add-row">
+            <button class="secondary miniBtn guardAddTask" data-section="opening">+ Add task</button>
+          </div>
         </div>
 
         <div class="guard-section">
           <h4>🌤️ Midday Checklist</h4>
           <div id="guardMiddayList"></div>
+          <div class="guard-add-row">
+            <button class="secondary miniBtn guardAddTask" data-section="midday">+ Add task</button>
+          </div>
         </div>
 
         <div class="guard-section">
           <h4 id="guardClosingTitle">🌙 Closing Checklist</h4>
           <div id="guardClosingList"></div>
+          <div class="guard-add-row">
+            <button class="secondary miniBtn guardAddTask" data-section="closing">+ Add task</button>
+          </div>
         </div>
       </div>
 
@@ -1205,6 +1351,14 @@
   let nextAnnouncementTime = null; // Track next scheduled announcement
   let countdownInterval = null; // Interval for countdown updates
   let lastPanel = 'roster';
+  const managerReportTypes = [
+    { type: 'instructor_retention', metaId: 'reportMetaInstructorRetention', downloadId: 'reportDownloadInstructorRetention', label: 'Instructor retention report' },
+    { type: 'retention', metaId: 'reportMetaRetention', downloadId: 'reportDownloadRetention', label: 'Retention report' },
+    { type: 'aged_accounts', metaId: 'reportMetaAgedAccounts', downloadId: 'reportDownloadAgedAccounts', label: 'Aged accounts' },
+    { type: 'drop_list', metaId: 'reportMetaDropList', downloadId: 'reportDownloadDropList', label: 'Drop list' },
+    { type: 'billing', metaId: 'reportMetaBilling', downloadId: 'reportDownloadBilling', label: 'Billing snapshot' }
+  ];
+  let managerReportLatest = {};
 
   const el = (id) => document.getElementById(id);
   const escapeSelector = (value) => {
@@ -1309,9 +1463,60 @@
       // Show/hide announcements tab based on location
       updateAnnouncementsVisibility();
       updateGuardTasksVisibility();
+      await loadManagerReports();
       
     } catch (e) {
       console.error('Failed to load locations:', e);
+    }
+  }
+
+  function setManagerTab(tab) {
+    const overviewBtn = el('managerTabOverviewBtn');
+    const reportsBtn = el('managerTabReportsBtn');
+    const overviewPanel = el('managerTabOverview');
+    const reportsPanel = el('managerTabReports');
+    const isReports = tab === 'reports';
+    if (overviewBtn) overviewBtn.classList.toggle('active', !isReports);
+    if (reportsBtn) reportsBtn.classList.toggle('active', isReports);
+    if (overviewPanel) overviewPanel.classList.toggle('hidden', isReports);
+    if (reportsPanel) reportsPanel.classList.toggle('hidden', !isReports);
+    if (isReports) loadManagerReports();
+  }
+
+  async function loadManagerReports() {
+    if (!currentLocation) return;
+    try {
+      const resp = await api(`/api/manager-reports?location_id=${currentLocation.id}`);
+      if (!resp.ok) throw new Error(resp.error || 'Failed to load manager reports');
+      managerReportLatest = resp.latest || {};
+      managerReportTypes.forEach((report) => {
+        const metaEl = el(report.metaId);
+        const linkEl = el(report.downloadId);
+        const previewBtn = document.querySelector(`.reportPreviewBtn[data-report-type="${report.type}"]`);
+        const latest = managerReportLatest?.[report.type] || null;
+        if (latest) {
+          const uploaded = formatShortDate(latest.uploaded_at);
+          const size = formatBytes(latest.size_bytes);
+          const name = latest.original_name || latest.filename;
+          if (metaEl) metaEl.textContent = `Last upload ${uploaded} • ${size} • ${name}`;
+          if (linkEl) {
+            linkEl.href = `/api/manager-reports/download?location_id=${currentLocation.id}&filename=${encodeURIComponent(latest.filename)}`;
+            linkEl.classList.remove('hidden');
+          }
+          if (previewBtn) previewBtn.classList.remove('hidden');
+        } else {
+          if (metaEl) metaEl.textContent = 'No report uploaded yet.';
+          if (linkEl) linkEl.classList.add('hidden');
+          if (previewBtn) previewBtn.classList.add('hidden');
+        }
+      });
+      const frame = el('managerReportPreviewFrame');
+      if (frame && (!frame.src || frame.src === 'about:blank')) {
+        const defaultType = Object.keys(managerReportLatest || {})[0];
+        if (defaultType) setManagerReportPreview(defaultType);
+      }
+    } catch (e) {
+      console.error('Failed to load manager reports:', e);
     }
   }
 
@@ -1375,6 +1580,7 @@
       
       updateAnnouncementsVisibility();
       updateGuardTasksVisibility();
+      await loadManagerReports();
       await loadStatus();
       await loadBlocks();
       if (currentBlock) await loadRoster();
@@ -2337,7 +2543,7 @@
         { group: 'Guard 1', label: 'Cycle laundry' },
         { group: 'Guard 1', label: 'Clean bathrooms and leave doors open' },
         { group: 'Guard 2', label: 'Empty and change garbage bags' },
-        { group: 'Guard 2', label: 'Vacuum facility (include playpen)' },
+        { group: 'Guard 2', label: 'Vacuum facility including playpen' },
         { group: 'Guard 2', label: 'Mop floors' },
         { group: 'All Guards', label: 'Return walkie' }
       ]
@@ -2347,37 +2553,44 @@
         { group: 'Guard 1', label: 'Chemicals check' },
         { group: 'Guard 1', label: 'Make sure each pool has a bin' },
         { group: 'Guard 1', label: 'Vacuum pools' },
-        { group: 'Front Desk', label: 'Set up lobby' },
+        { group: 'Guard 2', label: 'Set up lobby' },
         { group: 'Guard 2', label: 'Cycle laundry' },
         { group: 'Guard 2', label: 'Empty dehumidifiers' },
-        { group: 'Guard 3 (Up for first rotation)', label: 'Check playpen' },
-        { group: 'Guard 3 (Up for first rotation)', label: 'Restock snack wall, fridge, and coffee station' },
+        { group: 'Guard 3 (Up for First Rotation)', label: 'Check playpen' },
+        { group: 'Guard 3 (Up for First Rotation)', label: 'Restock snack wall, fridge, and coffee station' },
         { group: 'All Guards', label: 'Pick up a walkie' }
       ],
       closing: [
         { group: 'Guard 1', label: 'Chemicals check' },
-        { group: 'Guard 1', label: 'Clean pool deck and close doors' },
+        { group: 'Guard 1', label: 'Clean pool deck and close deck doors' },
         { group: 'Guard 2', label: 'Empty dehumidifiers' },
         { group: 'Guard 2', label: 'Empty and change garbage bags' },
         { group: 'Guard 2', label: 'Clean bathrooms and leave doors open' },
         { group: 'Guard 2', label: 'Cycle laundry' },
-        { group: 'Guard 3 (Down for last rotation)', label: 'Vacuum facility/ include playpen' },
-        { group: 'Guard 3 (Down for last rotation)', label: 'Mop floors' },
-        { group: 'Front Desk', label: 'Tidy playpen / Close lobby' }
+        { group: 'Guard 3 (Down for Last Rotation)', label: 'Vacuum facility including playpen' },
+        { group: 'Guard 3 (Down for Last Rotation)', label: 'Mop floors' },
+        { group: 'Front Desk', label: 'Tidy playpen' },
+        { group: 'Front Desk', label: 'Close lobby' }
       ]
     },
     midday: [
       { group: 'All Guards', label: 'Check bathrooms during each rotation' },
-      { group: 'All Guards', label: 'Sweep/Mop, clean toilet, stock TP' },
-      { group: 'All Guards', label: 'Mirrors, hand railings, doorknob, walls' },
+      { group: 'All Guards', label: 'Sweep and mop' },
+      { group: 'All Guards', label: 'Clean toilet' },
+      { group: 'All Guards', label: 'Stock toilet paper' },
+      { group: 'All Guards', label: 'Clean mirrors, hand railings, doorknobs, and walls' },
       { group: 'All Guards', label: 'Sign bathroom log' },
       { group: 'All Guards', label: 'Empty dehumidifiers' },
       { group: 'All Guards', label: 'Midday chemical check' },
       { group: 'All Guards', label: 'Laundry (client towels only)' },
       { group: 'All Guards', label: 'Do not start washer with fewer than 5 towels' },
-      { group: 'All Guards', label: 'Do not change washer settings and use heavy duty setting for the dryer' },
-      { group: 'All Guards', label: 'Hand vacuum / Sweep / Dry Mop' },
-      { group: 'All Guards', label: 'Lobby, bathrooms, staff room, locker rooms' },
+      { group: 'All Guards', label: 'Do not change washer settings' },
+      { group: 'All Guards', label: 'Use heavy duty setting for the dryer' },
+      { group: 'All Guards', label: 'Hand vacuum, sweep, or dry mop' },
+      { group: 'All Guards', label: 'Lobby' },
+      { group: 'All Guards', label: 'Bathrooms' },
+      { group: 'All Guards', label: 'Staff room' },
+      { group: 'All Guards', label: 'Locker rooms' },
       { group: 'All Guards', label: 'Deck windows when time allows' }
     ]
   };
@@ -2551,6 +2764,23 @@
 
       container.appendChild(row);
     });
+  }
+
+  function addCustomGuardTask(sectionKey) {
+    if (!guardState || !guardState[sectionKey]) return;
+    const groupInput = prompt('Task group (optional):', '');
+    if (groupInput === null) return;
+    const labelInput = prompt('Task label:');
+    if (!labelInput) return;
+    guardState[sectionKey].push({
+      id: `task_custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      label: labelInput.trim(),
+      group: groupInput.trim() || null,
+      initials: '',
+      custom: true
+    });
+    saveGuardState();
+    renderGuardTasks();
   }
 
   function renderGuardRotation() {
@@ -3003,6 +3233,64 @@
     return `${parts[1]}/${parts[2]}/${parts[0]}`;
   }
 
+  async function uploadManagerReport(reportType, file) {
+    if (!currentLocation) {
+      alert('Select a location before uploading a report.');
+      return;
+    }
+    const button = document.querySelector(`.reportUploadBtn[data-report-type="${reportType}"]`);
+    const originalLabel = button ? button.textContent : null;
+    try {
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Uploading...';
+      }
+      const formData = new FormData();
+      formData.append('report', file);
+      formData.append('report_type', reportType);
+      formData.append('location_id', currentLocation.id);
+      const response = await fetch(apiUrl('/api/manager-reports/upload'), {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || 'Report upload failed');
+      }
+      await loadManagerReports();
+      alert('Report uploaded successfully.');
+    } catch (e) {
+      alert(`Upload failed: ${e.message}`);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel || 'Upload';
+      }
+    }
+  }
+
+  function setManagerReportPreview(reportType) {
+    const previewMeta = el('managerReportPreviewMeta');
+    const frame = el('managerReportPreviewFrame');
+    const latest = managerReportLatest?.[reportType];
+    if (!latest || !currentLocation) {
+      if (previewMeta) previewMeta.textContent = 'No report uploaded yet.';
+      if (frame) frame.src = 'about:blank';
+      return;
+    }
+    const name = latest.original_name || latest.filename;
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    const isHtml = ext === 'html' || ext === 'htm';
+    const url = `/api/manager-reports/download?location_id=${currentLocation.id}&filename=${encodeURIComponent(latest.filename)}`;
+    if (!isHtml) {
+      if (previewMeta) previewMeta.textContent = `Preview unavailable for ${name}. Use the View button to download.`;
+      if (frame) frame.src = 'about:blank';
+      return;
+    }
+    if (previewMeta) previewMeta.textContent = `Showing ${name} (uploaded ${formatShortDate(latest.uploaded_at)})`;
+    if (frame) frame.src = url;
+  }
+
   async function loadServerExports() {
     const locId = currentLocation?.id || 1;
     const resp = await api(`/api/server-exports?location_id=${locId}`);
@@ -3372,6 +3660,13 @@
     renderGuardTasks();
   });
 
+  document.querySelectorAll('.guardAddTask').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const section = btn.dataset.section;
+      addCustomGuardTask(section);
+    });
+  });
+
   // Virtual Desk Export
   el('exportVirtualDeskBtn').addEventListener('click', async () => {
     if (!currentLocation || !activeDateISO) {
@@ -3471,6 +3766,9 @@
       alert('Save failed: ' + (err.message || err));
     }
   });
+
+  el('managerTabOverviewBtn').addEventListener('click', () => setManagerTab('overview'));
+  el('managerTabReportsBtn').addEventListener('click', () => setManagerTab('reports'));
 
   // Attendance Report Handlers
   el('attendanceReportGenerate').addEventListener('click', async () => {
@@ -3779,15 +4077,51 @@
     }
   });
 
-  el('adminNavClearAllRosters').addEventListener('click', async () => {
-    const startDate = el('adminClearAllStartDate')?.value || '';
-    const endDate = el('adminClearAllEndDate')?.value || '';
+  el('adminNavClearFutureRoster').addEventListener('click', async () => {
+    const locationName = currentLocation?.name || 'Unknown';
+    const locationCode = currentLocation?.code || 'Unknown';
+    const confirmMsg = `⚠️ CLEAR FUTURE ROSTER FOR ${locationName.toUpperCase()}\n\n` +
+      `This will permanently delete ALL roster data from today forward for ${locationName} (${locationCode}).\n\n` +
+      `• All future swimmers will be removed\n` +
+      `• All future attendance records will be deleted\n` +
+      `• All future flags and notes will be lost\n\n` +
+      `A roster backup will be auto-exported before deletion.\n\n` +
+      `Type "DELETE FUTURE" to confirm:`;
+
+    const userInput = prompt(confirmMsg);
+    if (userInput !== 'DELETE FUTURE') {
+      if (userInput !== null) {
+        alert('Cancelled. Future roster was NOT cleared.');
+      }
+      return;
+    }
+
+    try {
+      const resp = await api('/api/clear-roster-future', {
+        method: 'POST',
+        body: JSON.stringify({
+          location_id: currentLocation?.id || 1
+        })
+      });
+
+      if (resp.ok) {
+        alert(`✅ Future Roster Cleared!\n\nDeleted ${resp.deleted_count} future swimmers for ${locationName}.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
+        await loadBlocks();
+        await loadRoster();
+      }
+    } catch (e) {
+      alert(`❌ Clear Failed\n\n${e.message}`);
+    }
+  });
+
+  async function runAdminClearAll({ startDate, endDate, label }) {
     if ((startDate && !endDate) || (!startDate && endDate)) {
       alert('Please set both a start and end date to delete a window.');
       return;
     }
-    const windowLabel = startDate && endDate
-      ? `Date window: ${startDate} → ${endDate}\n\n`
+    const hasWindow = Boolean(startDate && endDate);
+    const windowLabel = hasWindow
+      ? `Date window: ${label || `${startDate} → ${endDate}`}\n\n`
       : 'Date window: ALL DATES\n\n';
     const confirmMsg = `⚠️ MASTER DELETE ALL ROSTERS\n\n` +
       `This will permanently delete roster data for EVERY location.\n\n` +
@@ -3830,19 +4164,22 @@
     }
   }
 
-  el('adminClearWindow').addEventListener('click', async () => {
-    const startDate = el('adminClearAllStartDate')?.value || '';
-    const endDate = el('adminClearAllEndDate')?.value || '';
-    if (!startDate || !endDate) {
-      alert('Please set both a start and end date to clear a window.');
-      return;
-    }
-    await runAdminClearAll({
-      startDate,
-      endDate,
-      label: `${startDate} → ${endDate}`
+  const adminClearWindowBtn = el('adminClearWindow');
+  if (adminClearWindowBtn) {
+    adminClearWindowBtn.addEventListener('click', async () => {
+      const startDate = el('adminClearAllStartDate')?.value || '';
+      const endDate = el('adminClearAllEndDate')?.value || '';
+      if (!startDate || !endDate) {
+        alert('Please set both a start and end date to clear a window.');
+        return;
+      }
+      await runAdminClearAll({
+        startDate,
+        endDate,
+        label: `${startDate} → ${endDate}`
+      });
     });
-  });
+  }
 
   el('adminNavClearAllRosters').addEventListener('click', async () => {
     await runAdminClearAll({ startDate: null, endDate: null, label: 'ALL DATES' });
@@ -3874,6 +4211,31 @@
     }finally{
       el('importBtn').disabled = false;
     }
+  });
+
+  document.querySelectorAll('.reportUploadBtn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const reportType = btn.dataset.reportType;
+      const input = document.querySelector(`.reportFileInput[data-report-type="${reportType}"]`);
+      if (input) input.click();
+    });
+  });
+
+  document.querySelectorAll('.reportPreviewBtn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const reportType = btn.dataset.reportType;
+      setManagerReportPreview(reportType);
+    });
+  });
+
+  document.querySelectorAll('.reportFileInput').forEach((input) => {
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reportType = input.dataset.reportType;
+      await uploadManagerReport(reportType, file);
+      input.value = '';
+    });
   });
 
   // HTML Upload handlers
