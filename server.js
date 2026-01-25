@@ -496,7 +496,7 @@ function parseRosterDateColumns($, $table, range, fallbackTime) {
   return [];
 }
 
-function isAbsentAttendanceCell($cell) {
+function isAbsentAttendanceCell($cell, $) {
   if (!$cell || !$cell.length) return false;
 
   const text = $cell.text().toLowerCase();
@@ -1743,7 +1743,7 @@ function parseHTMLRoster(html) {
         const rowCells = $row.find('td');
         dateColumns.forEach((col) => {
           const cell = rowCells.eq(col.index);
-          const attendance = isAbsentAttendanceCell(cell) ? 0 : null;
+          const attendance = isAbsentAttendanceCell(cell, $) ? 0 : null;
           if (col.date) datesFound.add(col.date);
 
           swimmers.push({
@@ -1766,7 +1766,7 @@ function parseHTMLRoster(html) {
         // Fallback: single-date upload with absence detection on attendance cells
         let attendance = null;
         const attendanceCell = $row.find('td.date-time, td.cell-bordered');
-        if (isAbsentAttendanceCell(attendanceCell)) {
+        if (isAbsentAttendanceCell(attendanceCell, $)) {
           attendance = 0;
         }
 
@@ -1926,6 +1926,25 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
+      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+        instructor_name=excluded.instructor_name,
+        substitute_instructor=excluded.substitute_instructor,
+        is_substitute=excluded.is_substitute,
+        original_instructor=excluded.original_instructor,
+        zone=excluded.zone,
+        program=excluded.program,
+        age_text=excluded.age_text,
+        attendance=excluded.attendance,
+        attendance_at=excluded.attendance_at,
+        is_addon=excluded.is_addon,
+        flag_new=excluded.flag_new,
+        flag_makeup=excluded.flag_makeup,
+        flag_policy=excluded.flag_policy,
+        flag_owes=excluded.flag_owes,
+        flag_trial=excluded.flag_trial,
+        balance_amount=excluded.balance_amount,
+        location_id=excluded.location_id,
+        updated_at=excluded.updated_at
     `);
 
     const tx = db.transaction((rows) => {
