@@ -3780,11 +3780,22 @@
   });
 
   el('adminNavClearAllRosters').addEventListener('click', async () => {
+    const startDate = el('adminClearAllStartDate')?.value || '';
+    const endDate = el('adminClearAllEndDate')?.value || '';
+    if ((startDate && !endDate) || (!startDate && endDate)) {
+      alert('Please set both a start and end date to delete a window.');
+      return;
+    }
+    const windowLabel = startDate && endDate
+      ? `Date window: ${startDate} → ${endDate}\n\n`
+      : 'Date window: ALL DATES\n\n';
     const confirmMsg = `⚠️ MASTER DELETE ALL ROSTERS\n\n` +
-      `This will permanently delete ALL roster data for EVERY location.\n\n` +
+      `This will permanently delete roster data for EVERY location.\n\n` +
+      windowLabel +
       `• All swimmers will be removed\n` +
       `• All attendance records will be deleted\n` +
-      `• All flags and notes will be lost\n\n` +
+      `• All flags and notes will be lost\n` +
+      `• All future calendars will be deleted\n\n` +
       `A full roster backup will be auto-exported before deletion.\n\n` +
       `Type "DELETE ALL" to confirm:`;
 
@@ -3799,11 +3810,18 @@
 
     try {
       const resp = await api('/api/clear-roster-all', {
-        method: 'POST'
+        method: 'POST',
+        body: JSON.stringify({
+          start_date: startDate || null,
+          end_date: endDate || null
+        })
       });
 
       if (resp.ok) {
-        alert(`✅ All Rosters Cleared!\n\nDeleted ${resp.deleted_count} total swimmers.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
+        const rangeNote = resp.start_date && resp.end_date
+          ? `Date window: ${resp.start_date} → ${resp.end_date}\n\n`
+          : '';
+        alert(`✅ All Rosters Cleared!\n\n${rangeNote}Deleted ${resp.deleted_count} total swimmers.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
         await loadBlocks();
         await loadRoster();
       }
