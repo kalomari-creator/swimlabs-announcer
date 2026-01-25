@@ -496,7 +496,7 @@ function parseRosterDateColumns($, $table, range, fallbackTime) {
   return [];
 }
 
-function isAbsentAttendanceCell($, $cell) {
+function isAbsentAttendanceCell($cell) {
   if (!$cell || !$cell.length) return false;
 
   const text = $cell.text().toLowerCase();
@@ -511,10 +511,9 @@ function isAbsentAttendanceCell($, $cell) {
 
   let isAbsent = false;
   $cell.find("img").each((_, img) => {
-    const $img = $(img);
-    const src = String($img.attr("src") || "").toLowerCase();
-    const alt = String($img.attr("alt") || "").toLowerCase();
-    const title = String($img.attr("title") || "").toLowerCase();
+    const src = String($(img).attr("src") || "").toLowerCase();
+    const alt = String($(img).attr("alt") || "").toLowerCase();
+    const title = String($(img).attr("title") || "").toLowerCase();
     const blob = `${src} ${alt} ${title}`;
     if (
       blob.includes("x-modifier") ||
@@ -1744,7 +1743,7 @@ function parseHTMLRoster(html) {
         const rowCells = $row.find('td');
         dateColumns.forEach((col) => {
           const cell = rowCells.eq(col.index);
-          const attendance = isAbsentAttendanceCell($, cell) ? 0 : null;
+          const attendance = isAbsentAttendanceCell(cell) ? 0 : null;
           if (col.date) datesFound.add(col.date);
 
           swimmers.push({
@@ -1767,7 +1766,7 @@ function parseHTMLRoster(html) {
         // Fallback: single-date upload with absence detection on attendance cells
         let attendance = null;
         const attendanceCell = $row.find('td.date-time, td.cell-bordered');
-        if (isAbsentAttendanceCell($, attendanceCell)) {
+        if (isAbsentAttendanceCell(attendanceCell)) {
           attendance = 0;
         }
 
