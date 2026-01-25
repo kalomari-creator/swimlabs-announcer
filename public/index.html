@@ -1295,10 +1295,21 @@
   })();
 
   function apiUrl(path) {
-    if (!apiBase || !path) return path;
-    if (/^https?:\/\//i.test(path)) return path;
+    if (!path) return path;
+    const isAbsolute = /^https?:\/\//i.test(path);
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${apiBase}${normalizedPath}`;
+    const base = apiBase || window.location.origin;
+    const rawUrl = isAbsolute ? path : `${base}${normalizedPath}`;
+    try {
+      const url = new URL(rawUrl);
+      if (url.username || url.password) {
+        url.username = '';
+        url.password = '';
+      }
+      return url.toString();
+    } catch (err) {
+      return rawUrl;
+    }
   }
 
   async function api(path, opts={}){
