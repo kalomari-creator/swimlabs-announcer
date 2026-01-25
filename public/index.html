@@ -3828,6 +3828,24 @@
     } catch (e) {
       alert(`❌ Clear Failed\n\n${e.message}`);
     }
+  }
+
+  el('adminClearWindow').addEventListener('click', async () => {
+    const startDate = el('adminClearAllStartDate')?.value || '';
+    const endDate = el('adminClearAllEndDate')?.value || '';
+    if (!startDate || !endDate) {
+      alert('Please set both a start and end date to clear a window.');
+      return;
+    }
+    await runAdminClearAll({
+      startDate,
+      endDate,
+      label: `${startDate} → ${endDate}`
+    });
+  });
+
+  el('adminNavClearAllRosters').addEventListener('click', async () => {
+    await runAdminClearAll({ startDate: null, endDate: null, label: 'ALL DATES' });
   });
 
   el('settingsBtn').addEventListener('click', () => {
