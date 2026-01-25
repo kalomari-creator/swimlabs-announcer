@@ -55,13 +55,32 @@ if (!fs.existsSync(TTS_OUT_DIR)) fs.mkdirSync(TTS_OUT_DIR, { recursive: true });
 if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
 if (!fs.existsSync(SCHEDULE_DIR)) fs.mkdirSync(SCHEDULE_DIR, { recursive: true });
 
+function sanitizeDirSegment(value) {
+  return String(value || "").trim().replace(/[\\/]/g, "-");
+}
+
+function getScheduleDir(location) {
+  const name = location?.name || location?.code || "unknown";
+  return path.join(SCHEDULE_DIR, sanitizeDirSegment(name));
+}
+
+function getLocationFileTag(location) {
+  const tag = location?.code || location?.name || "location";
+  return sanitizeDirSegment(tag).replace(/\s+/g, "_");
+}
+
 // Create location-specific directories
-const LOCATION_CODES = ['SLW', 'SLX', 'SSR', 'SSM', 'SST', 'SSS'];
-LOCATION_CODES.forEach(code => {
-  const schedDir = path.join(SCHEDULE_DIR, code);
-  const expDir = path.join(EXPORT_DIR, code);
+const LOCATION_NAMES = [
+  'SwimLabs Westchester',
+  'SwimLabs Woodlands',
+  'SafeSplash Riverdale',
+  'SafeSplash Santa Monica',
+  'SafeSplash Torrance',
+  'SafeSplash Summerlin'
+];
+LOCATION_NAMES.forEach(name => {
+  const schedDir = path.join(SCHEDULE_DIR, sanitizeDirSegment(name));
   if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
-  if (!fs.existsSync(expDir)) fs.mkdirSync(expDir, { recursive: true });
 });
 
 // -------------------- DB schema / migration --------------------
@@ -112,6 +131,19 @@ function ensureSchema() {
     );
   `);
   db.exec(`CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT);`);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS trial_followups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      swimmer_name TEXT NOT NULL,
+      location_id INTEGER NOT NULL DEFAULT 1,
+      status TEXT DEFAULT 'new',
+      last_contact_at TEXT,
+      next_follow_up_at TEXT,
+      notes TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+  `);
 
   // Locations table
   db.exec(`
@@ -163,6 +195,7 @@ function ensureSchema() {
   addIfMissing("balance_amount", `ALTER TABLE roster ADD COLUMN balance_amount REAL DEFAULT NULL;`);
 
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_roster_key ON roster(date, start_time, swimmer_name);`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_trial_followup ON trial_followups(swimmer_name, location_id);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);`);
 }
@@ -172,6 +205,18 @@ ensureSchema();
 const ipAuthState = new Map();
 
 function nowISO() { return new Date().toISOString(); }
+
+function getLocationById(locId) {
+  return db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
+}
+
+function safeExportFilename(name) {
+  const filename = String(name || "");
+  if (!filename || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    return null;
+  }
+  return filename;
+}
 
 function getIP(req) {
   const xf = req.headers["x-forwarded-for"];
@@ -361,6 +406,17 @@ function cleanAgeText(s) {
     return `${y}y ${mo}m`;
   }
   return t;
+}
+
+function normalizeAgeText(s) {
+  const t = String(s || "").replace(/\s+/g, " ").trim();
+  if (!t) return null;
+  const m = t.match(/(\d+)\s*(?:y|yr|yrs|year|years)(?:\s*(\d+)\s*(?:m|mo|mos|month|months))?/i);
+  if (m) {
+    const normalized = `${m[1]}y${m[2] ? ` ${m[2]}m` : ""}`;
+    return cleanAgeText(normalized);
+  }
+  return null;
 }
 
 function normalizeProgramNonGroup(rawProgram) {
@@ -1156,116 +1212,232 @@ app.get("/api/export-attendance", (req, res) => {
   }
 });
 
-// Export JSON of active roster (backup/restore)
-app.get("/api/export-json", (req, res) => {
-  try {
-    const date = activeOrToday();
-    const rows = db.prepare(`
-      SELECT
-        date, start_time, swimmer_name, instructor_name, zone, program, age_text,
-        attendance, attendance_at,
-        is_addon,
-        flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
-        zone_overridden, zone_override_at, zone_override_by,
-        created_at, updated_at
-      FROM roster
-      WHERE date = ?
-      ORDER BY start_time ASC, instructor_name ASC, swimmer_name ASC
-    `).all(date);
+function importRosterRows({ date, locationId, rows, source }) {
+  if (!rows.length) return { imported: 0 };
 
-    const payload = { ok: true, date, rows };
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="roster_${date}.json"`);
-    res.send(JSON.stringify(payload, null, 2));
+  setActiveDate(date);
+
+  db.prepare(`DELETE FROM roster WHERE date = ? AND location_id = ? AND is_addon = 0`).run(date, locationId);
+
+  const now = nowISO();
+  const ins = db.prepare(`
+    INSERT INTO roster (
+      date, start_time, swimmer_name,
+      instructor_name, substitute_instructor, zone, program, age_text,
+      attendance, attendance_at,
+      is_addon,
+      flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+      balance_amount,
+      created_at, updated_at,
+      zone_overridden, zone_override_at, zone_override_by,
+      location_id
+    ) VALUES (
+      ?, ?, ?,
+      ?, ?, ?, ?, ?,
+      ?, ?,
+      ?,
+      ?, ?, ?, ?, ?,
+      ?,
+      ?, ?,
+      ?, ?, ?,
+      ?
+    )
+    ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+      instructor_name=excluded.instructor_name,
+      substitute_instructor=excluded.substitute_instructor,
+      zone=excluded.zone,
+      program=excluded.program,
+      age_text=excluded.age_text,
+      attendance=excluded.attendance,
+      attendance_at=excluded.attendance_at,
+      is_addon=excluded.is_addon,
+      flag_new=excluded.flag_new,
+      flag_makeup=excluded.flag_makeup,
+      flag_policy=excluded.flag_policy,
+      flag_owes=excluded.flag_owes,
+      flag_trial=excluded.flag_trial,
+      balance_amount=excluded.balance_amount,
+      zone_overridden=excluded.zone_overridden,
+      zone_override_at=excluded.zone_override_at,
+      zone_override_by=excluded.zone_override_by,
+      updated_at=excluded.updated_at,
+      location_id=excluded.location_id
+  `);
+
+  const tx = db.transaction((arr) => {
+    for (const r of arr) {
+      const st = String(r.start_time || "").trim();
+      const sn = String(r.swimmer_name || "").trim();
+      if (!st || !sn) continue;
+      ins.run(
+        date,
+        st,
+        sn,
+        r.instructor_name || null,
+        r.substitute_instructor || null,
+        (r.zone === 0 || r.zone) ? r.zone : null,
+        r.program || null,
+        r.age_text || null,
+        (r.attendance === 0 || r.attendance === 1) ? r.attendance : null,
+        r.attendance_at || null,
+        r.is_addon ? 1 : 0,
+        r.flag_new ? 1 : 0,
+        r.flag_makeup ? 1 : 0,
+        r.flag_policy ? 1 : 0,
+        r.flag_owes ? 1 : 0,
+        r.flag_trial ? 1 : 0,
+        r.balance_amount !== undefined ? r.balance_amount : null,
+        r.created_at || now,
+        now,
+        r.zone_overridden ? 1 : 0,
+        r.zone_override_at || null,
+        r.zone_override_by || null,
+        locationId
+      );
+    }
+  });
+  tx(rows);
+
+  if (source) {
+    audit(source, "import_json", { date, count: rows.length });
+  }
+
+  return { imported: rows.length };
+}
+
+app.get("/api/server-exports", (req, res) => {
+  try {
+    const locationId = Number(req.query.location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const exportDir = path.join(EXPORT_DIR, location.code);
+    if (!fs.existsSync(exportDir)) {
+      return res.json({ ok: true, exports: [] });
+    }
+
+    const files = fs.readdirSync(exportDir)
+      .filter((f) => f.endsWith(".json"))
+      .map((filename) => {
+        const stat = fs.statSync(path.join(exportDir, filename));
+        return {
+          filename,
+          size: stat.size,
+          modified_at: stat.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => new Date(b.modified_at) - new Date(a.modified_at));
+
+    res.json({ ok: true, exports: files });
   } catch (e) {
-    res.status(500).json({ ok: false, error: "export-json failed", details: String(e?.stack || e?.message || e) });
+    res.status(500).json({ ok: false, error: "server-exports failed", details: String(e?.stack || e?.message || e) });
   }
 });
 
-app.post("/api/import-json", (req, res) => {
+app.post("/api/export-server", (req, res) => {
   try {
-    const payload = req.body || {};
-    const date = (payload.date && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.date))) ? String(payload.date) : activeOrToday();
-    const rows = Array.isArray(payload.rows) ? payload.rows : [];
-    if (!rows.length) return res.status(400).json({ ok: false, error: "No rows provided" });
+    const { location_id, date } = req.body || {};
+    const locationId = Number(location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
 
-    setActiveDate(date);
+    const exportDate = (date && /^\d{4}-\d{2}-\d{2}$/.test(String(date))) ? String(date) : activeOrToday();
 
-    db.prepare(`DELETE FROM roster WHERE date = ? AND is_addon = 0`).run(date);
-
-    const now = nowISO();
-    const ins = db.prepare(`
-      INSERT INTO roster (
-        date, start_time, swimmer_name,
-        instructor_name, zone, program, age_text,
+    const rows = db.prepare(`
+      SELECT
+        date, start_time, swimmer_name, instructor_name, substitute_instructor, zone, program, age_text,
         attendance, attendance_at,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
+        balance_amount,
+        zone_overridden, zone_override_at, zone_override_by,
         created_at, updated_at,
-        zone_overridden, zone_override_at, zone_override_by
-      ) VALUES (
-        ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?,
-        ?,
-        ?, ?, ?, ?, ?,
-        ?, ?,
-        ?, ?, ?
-      )
-      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
-        instructor_name=excluded.instructor_name,
-        zone=excluded.zone,
-        program=excluded.program,
-        age_text=excluded.age_text,
-        attendance=excluded.attendance,
-        attendance_at=excluded.attendance_at,
-        is_addon=excluded.is_addon,
-        flag_new=excluded.flag_new,
-        flag_makeup=excluded.flag_makeup,
-        flag_policy=excluded.flag_policy,
-        flag_owes=excluded.flag_owes,
-        flag_trial=excluded.flag_trial,
-        zone_overridden=excluded.zone_overridden,
-        zone_override_at=excluded.zone_override_at,
-        zone_override_by=excluded.zone_override_by,
-        updated_at=excluded.updated_at
-    `);
+        location_id
+      FROM roster
+      WHERE date = ? AND location_id = ?
+      ORDER BY start_time ASC, instructor_name ASC, swimmer_name ASC
+    `).all(exportDate, locationId);
 
-    const tx = db.transaction((arr) => {
-      for (const r of arr) {
-        const st = String(r.start_time || "").trim();
-        const sn = String(r.swimmer_name || "").trim();
-        if (!st || !sn) continue;
-        ins.run(
-          date,
-          st,
-          sn,
-          r.instructor_name || null,
-          (r.zone === 0 || r.zone) ? r.zone : null,
-          r.program || null,
-          r.age_text || null,
-          (r.attendance === 0 || r.attendance === 1) ? r.attendance : null,
-          r.attendance_at || null,
-          r.is_addon ? 1 : 0,
-          r.flag_new ? 1 : 0,
-          r.flag_makeup ? 1 : 0,
-          r.flag_policy ? 1 : 0,
-          r.flag_owes ? 1 : 0,
-          r.flag_trial ? 1 : 0,
-          r.created_at || now,
-          now,
-          r.zone_overridden ? 1 : 0,
-          r.zone_override_at || null,
-          r.zone_override_by || null
-        );
-      }
+    const exportDir = path.join(EXPORT_DIR, location.code);
+    if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const exportFilename = `roster_${location.code}_${exportDate}_${timestamp}.json`;
+    const exportPath = path.join(exportDir, exportFilename);
+
+    const payload = {
+      ok: true,
+      location: location.name,
+      location_code: location.code,
+      location_id: locationId,
+      date: exportDate,
+      exported_at: nowISO(),
+      count: rows.length,
+      rows
+    };
+
+    fs.writeFileSync(exportPath, JSON.stringify(payload, null, 2), 'utf-8');
+
+    audit(req, "export_server", {
+      location: location.name,
+      location_id: locationId,
+      date: exportDate,
+      count: rows.length,
+      filename: exportFilename
     });
-    tx(rows);
 
-    audit(req, "import_json", { date, count: rows.length });
-    res.json({ ok: true, date, count: rows.length });
+    res.json({ ok: true, filename: exportFilename, count: rows.length });
   } catch (e) {
-    res.status(500).json({ ok: false, error: "import-json failed", details: String(e?.stack || e?.message || e) });
+    res.status(500).json({ ok: false, error: "export-server failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/import-server", (req, res) => {
+  try {
+    const { location_id, filename } = req.body || {};
+    const locationId = Number(location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const safeName = safeExportFilename(filename);
+    if (!safeName) {
+      return res.status(400).json({ ok: false, error: "Invalid filename" });
+    }
+
+    const exportPath = path.join(EXPORT_DIR, location.code, safeName);
+    if (!fs.existsSync(exportPath)) {
+      return res.status(404).json({ ok: false, error: "Export file not found" });
+    }
+
+    const payload = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
+    const rows = Array.isArray(payload.rows) ? payload.rows : (Array.isArray(payload.roster) ? payload.roster : []);
+    const importDate = (payload.date && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.date)))
+      ? String(payload.date)
+      : activeOrToday();
+
+    if (!rows.length) {
+      return res.status(400).json({ ok: false, error: "No rows in export file" });
+    }
+
+    const result = importRosterRows({ date: importDate, locationId, rows });
+
+    audit(req, "import_server", {
+      location: location.name,
+      location_id: locationId,
+      date: importDate,
+      count: result.imported,
+      filename: safeName
+    });
+
+    res.json({ ok: true, date: importDate, count: result.imported, filename: safeName });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "import-server failed", details: String(e?.stack || e?.message || e) });
   }
 });
 
@@ -1358,7 +1530,7 @@ function parseHTMLRoster(html) {
       if (nameEl.length === 0) return;
       
       const swimmerName = lastFirstToFirstLast(nameEl.text().trim());
-      const ageText = $row.find('.student-info').text().trim();
+      const ageText = normalizeAgeText($row.find('.student-info').text().trim());
       
       const flags = {
         flag_new: 0,
@@ -1439,7 +1611,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       return res.status(400).json({ ok: false, error: "No file data provided" });
     }
 
-    const locId = parseInt(req.body.location_id || req.file?.fieldname === 'html' && req.body.location_id || 1);
+    const locId = Number(req.body.location_id || req.query.location_id || 1);
     const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
 
     if (!location) {
@@ -1454,16 +1626,23 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     setActiveDate(detectedDate);
 
     // Save to location-specific folder with descriptive filename
-    // Format: roll_sheet_{LOCATION_CODE}_{DATE}.html
-    // Example: roll_sheet_SLW_2026-01-24.html (SwimLabs Westchester)
-    //          roll_sheet_SSM_2026-01-24.html (SafeSplash Santa Monica)
-    const locationDir = path.join(SCHEDULE_DIR, location.code);
+    // Format: roll_sheet_{LOCATION_NAME}_{DATE}.html
+    const locationDir = getScheduleDir(location);
     if (!fs.existsSync(locationDir)) fs.mkdirSync(locationDir, { recursive: true });
-    const htmlFilename = `roll_sheet_${location.code}_${detectedDate}.html`;
+    const htmlFilename = `roll_sheet_${getLocationFileTag(location)}_${detectedDate}.html`;
     const htmlPath = path.join(locationDir, htmlFilename);
-    fs.writeFileSync(htmlPath, html, "utf-8");
+    try {
+      fs.writeFileSync(htmlPath, html, "utf-8");
+    } catch (writeError) {
+      return res.status(500).json({ ok: false, error: `Failed to save HTML: ${writeError.message}` });
+    }
 
-    const swimmers = parseHTMLRoster(html);
+    let swimmers = [];
+    try {
+      swimmers = parseHTMLRoster(html);
+    } catch (parseError) {
+      return res.status(400).json({ ok: false, error: `Failed to parse HTML: ${parseError.message}` });
+    }
     if (swimmers.length === 0) {
       return res.status(400).json({ ok: false, error: "No swimmers found in HTML file" });
     }
@@ -1599,8 +1778,22 @@ app.get("/api/instructors", (req, res) => {
       return res.json({ ok: true, instructors: [] });
     }
 
-    // Map location name to region
-    const region = locationMapping[location.name] || location.name;
+    const normalizeKey = (value) => String(value || "").trim().toLowerCase();
+    const normalizedMapping = new Map(
+      Object.entries(locationMapping || {}).map(([key, value]) => [normalizeKey(key), value])
+    );
+    const regionCandidates = [
+      location.name,
+      location.code,
+      location.short_code,
+      location.shortCode
+    ].map(normalizeKey);
+    const mappedRegion = regionCandidates
+      .map((key) => normalizedMapping.get(key))
+      .find(Boolean);
+
+    // Map location name/code/short code to region
+    const region = mappedRegion || location.name;
 
     // Filter instructors by region and format as "First L."
     const filtered = instructors
@@ -1992,6 +2185,117 @@ app.get("/api/admin/stats", (req, res) => {
   }
 });
 
+// Trial follow-up report
+app.get("/api/trials", (req, res) => {
+  try {
+    const locationId = Number(req.query.location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const days = Math.max(1, Math.min(120, Number(req.query.days || 30)));
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    const startISO = startDate.toISOString().split('T')[0];
+
+    const trials = db.prepare(`
+      SELECT
+        swimmer_name,
+        MAX(date) as last_date,
+        COUNT(*) as trial_visits,
+        MAX(program) as program,
+        MAX(instructor_name) as instructor_name,
+        MAX(balance_amount) as balance_amount
+      FROM roster
+      WHERE location_id = ? AND flag_trial = 1 AND date >= ?
+      GROUP BY swimmer_name
+      ORDER BY last_date DESC, swimmer_name ASC
+    `).all(locationId, startISO);
+
+    const followups = db.prepare(`
+      SELECT swimmer_name, status, last_contact_at, next_follow_up_at, notes, updated_at
+      FROM trial_followups
+      WHERE location_id = ?
+    `).all(locationId);
+
+    const followupMap = new Map(followups.map((f) => [f.swimmer_name, f]));
+    const results = trials.map((t) => {
+      const follow = followupMap.get(t.swimmer_name);
+      return {
+        swimmer_name: t.swimmer_name,
+        last_date: t.last_date,
+        trial_visits: t.trial_visits,
+        program: t.program,
+        instructor_name: t.instructor_name,
+        balance_amount: t.balance_amount,
+        follow_up: follow || {
+          status: "new",
+          last_contact_at: null,
+          next_follow_up_at: null,
+          notes: "",
+          updated_at: null
+        }
+      };
+    });
+
+    res.json({ ok: true, trials: results, days, start_date: startISO });
+  } catch (error) {
+    console.error("Trial report error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/trials/followup", (req, res) => {
+  try {
+    const { swimmer_name, location_id, status, last_contact_at, next_follow_up_at, notes } = req.body || {};
+    if (!swimmer_name) {
+      return res.status(400).json({ ok: false, error: "swimmer_name required" });
+    }
+
+    const locationId = Number(location_id || 1);
+    const location = getLocationById(locationId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const now = nowISO();
+    db.prepare(`
+      INSERT INTO trial_followups (
+        swimmer_name, location_id, status, last_contact_at, next_follow_up_at, notes, created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?
+      )
+      ON CONFLICT(swimmer_name, location_id) DO UPDATE SET
+        status=excluded.status,
+        last_contact_at=excluded.last_contact_at,
+        next_follow_up_at=excluded.next_follow_up_at,
+        notes=excluded.notes,
+        updated_at=excluded.updated_at
+    `).run(
+      swimmer_name,
+      locationId,
+      status || "new",
+      last_contact_at || null,
+      next_follow_up_at || null,
+      notes || null,
+      now,
+      now
+    );
+
+    audit(req, "trial_followup_update", {
+      location_id: locationId,
+      swimmer_name,
+      status: status || "new"
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Trial follow-up update error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Virtual Desk: Detailed swimmer data
 app.get("/api/virtual-desk/swimmers", (req, res) => {
   try {
@@ -2096,7 +2400,7 @@ app.post("/api/add-location", (req, res) => {
     }
 
     // Create directories
-    const schedDir = path.join(SCHEDULE_DIR, code);
+    const schedDir = path.join(SCHEDULE_DIR, sanitizeDirSegment(name));
     const expDir = path.join(EXPORT_DIR, code);
     if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
     if (!fs.existsSync(expDir)) fs.mkdirSync(expDir, { recursive: true });
@@ -2110,6 +2414,618 @@ app.post("/api/add-location", (req, res) => {
     audit(req, "add_location", { code, name });
     res.json({ ok: true, location_id: result.lastInsertRowid });
   } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// =============================================================
+// ENHANCED REPORTING FEATURES (v4.6.x)
+// =============================================================
+
+// Virtual Desk Export: Export swimmer details to CSV or JSON
+app.get("/api/reports/virtual-desk/export", (req, res) => {
+  try {
+    const { date, location_id, format } = req.query;
+
+    if (!date || !location_id) {
+      return res.status(400).json({ ok: false, error: 'date and location_id required' });
+    }
+
+    const location = getLocationById(Number(location_id));
+    if (!location) {
+      return res.status(400).json({ ok: false, error: 'Invalid location' });
+    }
+
+    // Get all swimmers for the specified date and location
+    const swimmers = db.prepare(`
+      SELECT
+        swimmer_name,
+        age_text,
+        program,
+        instructor_name,
+        substitute_instructor,
+        zone,
+        start_time,
+        attendance,
+        is_addon,
+        flag_new,
+        flag_makeup,
+        flag_policy,
+        flag_owes,
+        flag_trial,
+        balance_amount
+      FROM roster
+      WHERE date = ? AND location_id = ?
+      ORDER BY start_time, instructor_name, swimmer_name
+    `).all(date, location_id);
+
+    // Calculate attendance statistics for each swimmer
+    const swimmerDetails = swimmers.map(s => {
+      const attendanceHistory = db.prepare(`
+        SELECT date, attendance
+        FROM roster
+        WHERE swimmer_name = ? AND location_id = ? AND attendance IS NOT NULL
+        ORDER BY date DESC
+        LIMIT 30
+      `).all(s.swimmer_name, location_id);
+
+      const totalClasses = attendanceHistory.length;
+      const attendedCount = attendanceHistory.filter(a => a.attendance === 1).length;
+      const missedCount = attendanceHistory.filter(a => a.attendance === 0).length;
+      const attendanceRate = totalClasses > 0 ? Math.round((attendedCount / totalClasses) * 100) : 0;
+
+      return {
+        swimmer_name: s.swimmer_name,
+        age_text: s.age_text || '',
+        program: s.program || '',
+        instructor_name: s.instructor_name || '',
+        substitute_instructor: s.substitute_instructor || '',
+        zone: s.zone || '',
+        start_time: s.start_time,
+        start_time_12h: formatTime12h(s.start_time),
+        attendance: s.attendance === 1 ? 'Present' : s.attendance === 0 ? 'Absent' : 'Unmarked',
+        is_addon: s.is_addon ? 'Yes' : 'No',
+        flag_new: s.flag_new ? 'Yes' : 'No',
+        flag_makeup: s.flag_makeup ? 'Yes' : 'No',
+        flag_policy: s.flag_policy ? 'Yes' : 'No',
+        flag_owes: s.flag_owes ? 'Yes' : 'No',
+        flag_trial: s.flag_trial ? 'Yes' : 'No',
+        balance_amount: s.balance_amount || 0,
+        total_classes_30d: totalClasses,
+        attended_30d: attendedCount,
+        missed_30d: missedCount,
+        attendance_rate: attendanceRate
+      };
+    });
+
+    // Export as JSON
+    if (format === 'json') {
+      const filename = `virtual_desk_${location.code}_${date}.json`;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.json({
+        export_date: nowISO(),
+        roster_date: date,
+        location: location.name,
+        location_code: location.code,
+        total_swimmers: swimmerDetails.length,
+        swimmers: swimmerDetails
+      });
+    }
+
+    // Default: Export as CSV
+    const header = [
+      "swimmer_name", "age", "program", "instructor", "substitute_instructor",
+      "zone", "start_time", "start_time_12h", "attendance",
+      "is_addon", "new", "makeup", "policy", "owes", "trial",
+      "balance_amount", "total_classes_30d", "attended_30d", "missed_30d", "attendance_rate"
+    ];
+
+    const lines = [header.join(",")];
+    for (const r of swimmerDetails) {
+      const vals = [
+        r.swimmer_name, r.age_text, r.program, r.instructor_name, r.substitute_instructor,
+        r.zone, r.start_time, r.start_time_12h, r.attendance,
+        r.is_addon, r.flag_new, r.flag_makeup, r.flag_policy, r.flag_owes, r.flag_trial,
+        r.balance_amount, r.total_classes_30d, r.attended_30d, r.missed_30d, r.attendance_rate + '%'
+      ].map(x => {
+        const s = String(x ?? "");
+        if (s.includes('"') || s.includes(",") || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      });
+      lines.push(vals.join(","));
+    }
+
+    const csv = lines.join("\n");
+    const filename = `virtual_desk_${location.code}_${date}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+
+  } catch (error) {
+    console.error("Virtual desk export error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Attendance Reports: Comprehensive attendance analytics with date range
+app.get("/api/reports/attendance", (req, res) => {
+  try {
+    const { location_id, start_date, end_date, group_by } = req.query;
+
+    if (!location_id) {
+      return res.status(400).json({ ok: false, error: 'location_id required' });
+    }
+
+    const location = getLocationById(Number(location_id));
+    if (!location) {
+      return res.status(400).json({ ok: false, error: 'Invalid location' });
+    }
+
+    // Default to last 30 days if no dates provided
+    const endDt = end_date || todayISO();
+    const startDt = start_date || (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      return d.toISOString().split('T')[0];
+    })();
+
+    // Overall stats for the period
+    const overallStats = db.prepare(`
+      SELECT
+        COUNT(*) as total_entries,
+        COUNT(DISTINCT swimmer_name) as unique_swimmers,
+        COUNT(DISTINCT date) as days_with_classes,
+        SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) as total_present,
+        SUM(CASE WHEN attendance = 0 THEN 1 ELSE 0 END) as total_absent,
+        SUM(CASE WHEN attendance IS NULL THEN 1 ELSE 0 END) as total_unmarked,
+        SUM(CASE WHEN flag_trial = 1 THEN 1 ELSE 0 END) as total_trials,
+        SUM(CASE WHEN flag_new = 1 THEN 1 ELSE 0 END) as total_new,
+        SUM(CASE WHEN flag_makeup = 1 THEN 1 ELSE 0 END) as total_makeups
+      FROM roster
+      WHERE location_id = ? AND date >= ? AND date <= ?
+    `).get(location_id, startDt, endDt);
+
+    const markedEntries = (overallStats.total_present || 0) + (overallStats.total_absent || 0);
+    const overallRate = markedEntries > 0
+      ? Math.round((overallStats.total_present / markedEntries) * 100)
+      : 0;
+
+    // Daily breakdown
+    const dailyStats = db.prepare(`
+      SELECT
+        date,
+        COUNT(*) as total,
+        SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) as present,
+        SUM(CASE WHEN attendance = 0 THEN 1 ELSE 0 END) as absent,
+        SUM(CASE WHEN attendance IS NULL THEN 1 ELSE 0 END) as unmarked
+      FROM roster
+      WHERE location_id = ? AND date >= ? AND date <= ?
+      GROUP BY date
+      ORDER BY date DESC
+    `).all(location_id, startDt, endDt);
+
+    const dailyWithRates = dailyStats.map(d => {
+      const marked = d.present + d.absent;
+      return {
+        ...d,
+        attendance_rate: marked > 0 ? Math.round((d.present / marked) * 100) : 0
+      };
+    });
+
+    // Program breakdown
+    const programStats = db.prepare(`
+      SELECT
+        program,
+        COUNT(*) as total,
+        SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) as present,
+        SUM(CASE WHEN attendance = 0 THEN 1 ELSE 0 END) as absent
+      FROM roster
+      WHERE location_id = ? AND date >= ? AND date <= ?
+      GROUP BY program
+      ORDER BY total DESC
+    `).all(location_id, startDt, endDt);
+
+    const programWithRates = programStats.map(p => {
+      const marked = p.present + p.absent;
+      return {
+        ...p,
+        attendance_rate: marked > 0 ? Math.round((p.present / marked) * 100) : 0
+      };
+    });
+
+    // Time slot breakdown
+    const timeSlotStats = db.prepare(`
+      SELECT
+        start_time,
+        COUNT(*) as total,
+        SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) as present,
+        SUM(CASE WHEN attendance = 0 THEN 1 ELSE 0 END) as absent
+      FROM roster
+      WHERE location_id = ? AND date >= ? AND date <= ?
+      GROUP BY start_time
+      ORDER BY start_time
+    `).all(location_id, startDt, endDt);
+
+    const timeSlotWithRates = timeSlotStats.map(t => {
+      const marked = t.present + t.absent;
+      return {
+        ...t,
+        start_time_12h: formatTime12h(t.start_time),
+        attendance_rate: marked > 0 ? Math.round((t.present / marked) * 100) : 0
+      };
+    });
+
+    // Low attendance swimmers (< 70% attendance rate)
+    const lowAttendanceSwimmers = db.prepare(`
+      SELECT
+        swimmer_name,
+        COUNT(*) as total_classes,
+        SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) as attended,
+        SUM(CASE WHEN attendance = 0 THEN 1 ELSE 0 END) as missed
+      FROM roster
+      WHERE location_id = ? AND date >= ? AND date <= ? AND attendance IS NOT NULL
+      GROUP BY swimmer_name
+      HAVING (SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) < 70
+      ORDER BY (SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) ASC
+      LIMIT 20
+    `).all(location_id, startDt, endDt);
+
+    const lowAttendanceWithRates = lowAttendanceSwimmers.map(s => ({
+      ...s,
+      attendance_rate: s.total_classes > 0 ? Math.round((s.attended / s.total_classes) * 100) : 0
+    }));
+
+    res.json({
+      ok: true,
+      report: {
+        location: location.name,
+        location_code: location.code,
+        period: { start_date: startDt, end_date: endDt },
+        generated_at: nowISO(),
+        summary: {
+          total_entries: overallStats.total_entries || 0,
+          unique_swimmers: overallStats.unique_swimmers || 0,
+          days_with_classes: overallStats.days_with_classes || 0,
+          total_present: overallStats.total_present || 0,
+          total_absent: overallStats.total_absent || 0,
+          total_unmarked: overallStats.total_unmarked || 0,
+          overall_attendance_rate: overallRate,
+          total_trials: overallStats.total_trials || 0,
+          total_new_swimmers: overallStats.total_new || 0,
+          total_makeups: overallStats.total_makeups || 0
+        },
+        by_date: dailyWithRates,
+        by_program: programWithRates,
+        by_time_slot: timeSlotWithRates,
+        low_attendance_swimmers: lowAttendanceWithRates
+      }
+    });
+
+  } catch (error) {
+    console.error("Attendance report error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Attendance Report Export
+app.get("/api/reports/attendance/export", (req, res) => {
+  try {
+    const { location_id, start_date, end_date, format } = req.query;
+
+    if (!location_id) {
+      return res.status(400).json({ ok: false, error: 'location_id required' });
+    }
+
+    const location = getLocationById(Number(location_id));
+    if (!location) {
+      return res.status(400).json({ ok: false, error: 'Invalid location' });
+    }
+
+    const endDt = end_date || todayISO();
+    const startDt = start_date || (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      return d.toISOString().split('T')[0];
+    })();
+
+    const rows = db.prepare(`
+      SELECT
+        date, start_time, swimmer_name, instructor_name, program, zone,
+        attendance, flag_new, flag_makeup, flag_trial, balance_amount
+      FROM roster
+      WHERE location_id = ? AND date >= ? AND date <= ?
+      ORDER BY date DESC, start_time, swimmer_name
+    `).all(location_id, startDt, endDt);
+
+    if (format === 'json') {
+      const filename = `attendance_report_${location.code}_${startDt}_to_${endDt}.json`;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.json({
+        export_date: nowISO(),
+        location: location.name,
+        period: { start_date: startDt, end_date: endDt },
+        total_records: rows.length,
+        records: rows.map(r => ({
+          ...r,
+          start_time_12h: formatTime12h(r.start_time),
+          attendance_status: r.attendance === 1 ? 'Present' : r.attendance === 0 ? 'Absent' : 'Unmarked'
+        }))
+      });
+    }
+
+    // CSV export
+    const header = ["date", "start_time", "start_time_12h", "swimmer_name", "instructor", "program", "zone", "attendance", "new", "makeup", "trial", "balance"];
+    const lines = [header.join(",")];
+
+    for (const r of rows) {
+      const vals = [
+        r.date,
+        r.start_time,
+        formatTime12h(r.start_time),
+        r.swimmer_name,
+        r.instructor_name || '',
+        r.program || '',
+        r.zone || '',
+        r.attendance === 1 ? 'Present' : r.attendance === 0 ? 'Absent' : 'Unmarked',
+        r.flag_new ? 'Yes' : 'No',
+        r.flag_makeup ? 'Yes' : 'No',
+        r.flag_trial ? 'Yes' : 'No',
+        r.balance_amount || ''
+      ].map(x => {
+        const s = String(x ?? "");
+        if (s.includes('"') || s.includes(",") || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      });
+      lines.push(vals.join(","));
+    }
+
+    const csv = lines.join("\n");
+    const filename = `attendance_report_${location.code}_${startDt}_to_${endDt}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+
+  } catch (error) {
+    console.error("Attendance report export error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Instructor Performance Analytics
+app.get("/api/reports/instructors", (req, res) => {
+  try {
+    const { location_id, start_date, end_date } = req.query;
+
+    if (!location_id) {
+      return res.status(400).json({ ok: false, error: 'location_id required' });
+    }
+
+    const location = getLocationById(Number(location_id));
+    if (!location) {
+      return res.status(400).json({ ok: false, error: 'Invalid location' });
+    }
+
+    const endDt = end_date || todayISO();
+    const startDt = start_date || (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      return d.toISOString().split('T')[0];
+    })();
+
+    // Get instructor performance metrics
+    const instructorStats = db.prepare(`
+      SELECT
+        instructor_name,
+        COUNT(DISTINCT date) as days_worked,
+        COUNT(*) as total_swimmers,
+        COUNT(DISTINCT swimmer_name) as unique_swimmers,
+        SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) as swimmers_present,
+        SUM(CASE WHEN attendance = 0 THEN 1 ELSE 0 END) as swimmers_absent,
+        COUNT(DISTINCT program) as programs_taught,
+        GROUP_CONCAT(DISTINCT program) as program_list
+      FROM roster
+      WHERE location_id = ? AND date >= ? AND date <= ? AND instructor_name IS NOT NULL AND instructor_name != ''
+      GROUP BY instructor_name
+      ORDER BY total_swimmers DESC
+    `).all(location_id, startDt, endDt);
+
+    const instructorDetails = instructorStats.map(i => {
+      const markedTotal = i.swimmers_present + i.swimmers_absent;
+      const attendanceRate = markedTotal > 0 ? Math.round((i.swimmers_present / markedTotal) * 100) : 0;
+
+      // Get time slot distribution for this instructor
+      const timeSlots = db.prepare(`
+        SELECT start_time, COUNT(*) as count
+        FROM roster
+        WHERE location_id = ? AND date >= ? AND date <= ? AND instructor_name = ?
+        GROUP BY start_time
+        ORDER BY count DESC
+        LIMIT 5
+      `).all(location_id, startDt, endDt, i.instructor_name);
+
+      // Get most recent classes
+      const recentClasses = db.prepare(`
+        SELECT date, start_time, program, COUNT(*) as swimmer_count
+        FROM roster
+        WHERE location_id = ? AND date >= ? AND date <= ? AND instructor_name = ?
+        GROUP BY date, start_time, program
+        ORDER BY date DESC, start_time DESC
+        LIMIT 10
+      `).all(location_id, startDt, endDt, i.instructor_name);
+
+      return {
+        instructor_name: i.instructor_name,
+        days_worked: i.days_worked,
+        total_class_entries: i.total_swimmers,
+        unique_swimmers: i.unique_swimmers,
+        swimmers_present: i.swimmers_present,
+        swimmers_absent: i.swimmers_absent,
+        class_attendance_rate: attendanceRate,
+        programs_taught: i.programs_taught,
+        program_list: i.program_list ? i.program_list.split(',') : [],
+        common_time_slots: timeSlots.map(t => ({
+          time: t.start_time,
+          time_12h: formatTime12h(t.start_time),
+          count: t.count
+        })),
+        recent_classes: recentClasses.map(c => ({
+          date: c.date,
+          time: c.start_time,
+          time_12h: formatTime12h(c.start_time),
+          program: c.program,
+          swimmer_count: c.swimmer_count
+        }))
+      };
+    });
+
+    // Top performers by attendance rate (min 10 entries)
+    const topByAttendance = [...instructorDetails]
+      .filter(i => (i.swimmers_present + i.swimmers_absent) >= 10)
+      .sort((a, b) => b.class_attendance_rate - a.class_attendance_rate)
+      .slice(0, 5);
+
+    // Most active instructors
+    const mostActive = [...instructorDetails]
+      .sort((a, b) => b.total_class_entries - a.total_class_entries)
+      .slice(0, 5);
+
+    res.json({
+      ok: true,
+      report: {
+        location: location.name,
+        location_code: location.code,
+        period: { start_date: startDt, end_date: endDt },
+        generated_at: nowISO(),
+        summary: {
+          total_instructors: instructorDetails.length,
+          total_class_entries: instructorDetails.reduce((sum, i) => sum + i.total_class_entries, 0),
+          average_attendance_rate: instructorDetails.length > 0
+            ? Math.round(instructorDetails.reduce((sum, i) => sum + i.class_attendance_rate, 0) / instructorDetails.length)
+            : 0
+        },
+        instructors: instructorDetails,
+        highlights: {
+          top_by_attendance: topByAttendance.map(i => ({
+            name: i.instructor_name,
+            attendance_rate: i.class_attendance_rate,
+            total_entries: i.total_class_entries
+          })),
+          most_active: mostActive.map(i => ({
+            name: i.instructor_name,
+            total_entries: i.total_class_entries,
+            days_worked: i.days_worked
+          }))
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Instructor report error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Instructor Report Export
+app.get("/api/reports/instructors/export", (req, res) => {
+  try {
+    const { location_id, start_date, end_date, format } = req.query;
+
+    if (!location_id) {
+      return res.status(400).json({ ok: false, error: 'location_id required' });
+    }
+
+    const location = getLocationById(Number(location_id));
+    if (!location) {
+      return res.status(400).json({ ok: false, error: 'Invalid location' });
+    }
+
+    const endDt = end_date || todayISO();
+    const startDt = start_date || (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      return d.toISOString().split('T')[0];
+    })();
+
+    const instructorStats = db.prepare(`
+      SELECT
+        instructor_name,
+        COUNT(DISTINCT date) as days_worked,
+        COUNT(*) as total_swimmers,
+        COUNT(DISTINCT swimmer_name) as unique_swimmers,
+        SUM(CASE WHEN attendance = 1 THEN 1 ELSE 0 END) as swimmers_present,
+        SUM(CASE WHEN attendance = 0 THEN 1 ELSE 0 END) as swimmers_absent,
+        COUNT(DISTINCT program) as programs_taught,
+        GROUP_CONCAT(DISTINCT program) as program_list
+      FROM roster
+      WHERE location_id = ? AND date >= ? AND date <= ? AND instructor_name IS NOT NULL AND instructor_name != ''
+      GROUP BY instructor_name
+      ORDER BY total_swimmers DESC
+    `).all(location_id, startDt, endDt);
+
+    const rows = instructorStats.map(i => {
+      const marked = i.swimmers_present + i.swimmers_absent;
+      return {
+        instructor_name: i.instructor_name,
+        days_worked: i.days_worked,
+        total_class_entries: i.total_swimmers,
+        unique_swimmers: i.unique_swimmers,
+        swimmers_present: i.swimmers_present,
+        swimmers_absent: i.swimmers_absent,
+        attendance_rate: marked > 0 ? Math.round((i.swimmers_present / marked) * 100) : 0,
+        programs_taught: i.programs_taught,
+        program_list: i.program_list || ''
+      };
+    });
+
+    if (format === 'json') {
+      const filename = `instructor_report_${location.code}_${startDt}_to_${endDt}.json`;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.json({
+        export_date: nowISO(),
+        location: location.name,
+        period: { start_date: startDt, end_date: endDt },
+        total_instructors: rows.length,
+        instructors: rows
+      });
+    }
+
+    // CSV export
+    const header = ["instructor", "days_worked", "total_class_entries", "unique_swimmers", "present", "absent", "attendance_rate", "programs_taught", "program_list"];
+    const lines = [header.join(",")];
+
+    for (const r of rows) {
+      const vals = [
+        r.instructor_name,
+        r.days_worked,
+        r.total_class_entries,
+        r.unique_swimmers,
+        r.swimmers_present,
+        r.swimmers_absent,
+        r.attendance_rate + '%',
+        r.programs_taught,
+        r.program_list
+      ].map(x => {
+        const s = String(x ?? "");
+        if (s.includes('"') || s.includes(",") || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      });
+      lines.push(vals.join(","));
+    }
+
+    const csv = lines.join("\n");
+    const filename = `instructor_report_${location.code}_${startDt}_to_${endDt}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+
+  } catch (error) {
+    console.error("Instructor report export error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });

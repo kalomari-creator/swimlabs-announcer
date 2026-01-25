@@ -388,7 +388,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.5.2</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.6.0</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -400,17 +400,17 @@
         <option value="roster">Roster</option>
         <option value="lifeguard">Lifeguard 🏊</option>
         <option value="announcements">Announcements</option>
-        <option value="virtualDesk">Virtual Desk</option>
+        <option value="virtualDesk">Manager</option>
         <option value="admin">⚙️ Admin</option>
       </select>
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
       <button id="settingsBtn" title="Settings">⚙️</button>
       <span class="pill">
-        <span style="font-size:11px; color:var(--muted);">Time:</span>
+        <span style="font-size:11px; color:var(--muted);">Current Time:</span>
         <strong id="currentTime" style="color:#04D9FF; margin-left:4px;">—</strong>
       </span>
       <span class="pill" id="nextAnnouncementPill">
-        <span style="font-size:11px; color:var(--muted);">Next:</span>
+        <span style="font-size:11px; color:var(--muted);">Next Announcement:</span>
         <strong id="nextAnnouncementTimer" style="color:#04D9FF; margin-left:4px;">—</strong>
       </span>
       <span class="pill">Last: <strong id="lastAt">None</strong></span>
@@ -423,9 +423,8 @@
         <button class="primary" id="importBtn">Import Today (PDF)</button>
         <button class="primary" id="uploadHtmlBtn">Upload HTML</button>
         <input type="file" id="htmlFileInput" accept=".html" style="display: none;">
-        <button class="secondary" id="exportJsonBtn" title="Download a JSON backup of the active roster">Export JSON</button>
-        <button class="secondary" id="importJsonBtn" title="Upload a JSON export to restore a roster">Import JSON</button>
-        <input type="file" id="jsonFileInput" accept="application/json,.json" style="display:none;">
+        <button class="secondary" id="exportServerBtn" title="Save a JSON backup on the server">Export to Server</button>
+        <button class="secondary" id="importServerBtn" title="Restore a roster from server backups">Import from Server</button>
 
         <div class="spacer"></div>
         <span class="pill tiny">Auto announcement runs about 3 minutes before each time block.</span>
@@ -519,7 +518,7 @@
 
   <div id="panelVirtualDesk" class="hidden">
     <div class="card">
-      <h2 style="margin:0 0 16px; font-size:20px;">Virtual Desk Dashboard</h2>
+      <h2 style="margin:0 0 16px; font-size:20px;">Manager Dashboard</h2>
 
       <!-- Quick Stats -->
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
@@ -553,9 +552,27 @@
             <option value="balance">Sort: Balance Status</option>
           </select>
           <button id="refreshSwimmers" class="secondary" style="padding:6px 12px; font-size:13px;">🔄 Refresh</button>
+          <button id="exportVirtualDeskBtn" class="secondary" style="padding:6px 12px; font-size:13px;">📥 Export</button>
         </div>
 
         <div id="swimmerDetailsTable"></div>
+      </div>
+
+      <!-- Reports Section -->
+      <div class="card" style="margin-top:20px;">
+        <div class="row" style="margin-bottom:12px;">
+          <h3 style="margin:0; font-size:18px;">📈 Reports & Analytics</h3>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+          <button id="openAttendanceReportBtn" class="secondary" style="padding:12px; text-align:left;">
+            <div style="font-weight:700;">📊 Attendance Report</div>
+            <div class="tiny" style="color:var(--muted); margin-top:4px;">Daily/weekly/monthly attendance analytics</div>
+          </button>
+          <button id="openInstructorReportBtn" class="secondary" style="padding:12px; text-align:left;">
+            <div style="font-weight:700;">👨‍🏫 Instructor Analytics</div>
+            <div class="tiny" style="color:var(--muted); margin-top:4px;">Performance metrics per instructor</div>
+          </button>
+        </div>
       </div>
 
       <!-- Navigation Cards -->
@@ -568,6 +585,11 @@
         <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavTrials">
           <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🧪 Trial Follow-up</div>
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Manage trial swimmers and conversion tracking</div>
+        </div>
+
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavGuards">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
         </div>
 
         <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavHistory">
@@ -587,7 +609,22 @@
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
-        Virtual Desk features are protected by PIN authentication. Session expires after 2 hours.
+        Manager features are protected by PIN authentication. Session expires after 2 hours.
+      </div>
+    </div>
+  </div>
+
+  <div id="panelLifeguard" class="hidden">
+    <div class="card">
+      <h2 style="margin:0 0 16px; font-size:20px;">🛟 Lifeguard Dashboard</h2>
+      <div class="tiny" style="color:var(--muted); margin-bottom:12px;">
+        Guard tasks are available for SwimLabs Westchester.
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px;">
+        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="lifeguardNavGuards">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
+        </div>
       </div>
     </div>
   </div>
@@ -847,6 +884,111 @@
   </div>
 </div>
 
+<!-- Trial Follow-up Modal -->
+<div class="modalBackdrop" id="trialFollowupModal">
+  <div class="modal" style="max-width:900px;">
+    <h3>🧪 Trial Follow-up Report</h3>
+
+    <div class="row" style="margin:10px 0 12px;">
+      <span class="pill">Last <strong id="trialDaysLabel">30</strong> days</span>
+      <div class="spacer"></div>
+      <button class="secondary" id="trialRefreshBtn">Refresh</button>
+    </div>
+
+    <div id="trialSummary" class="tiny" style="color:var(--muted); margin-bottom:10px;">Loading…</div>
+    <div id="trialReportTable" style="max-height:520px; overflow-y:auto;"></div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="trialCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Server Import Modal -->
+<div class="modalBackdrop" id="serverImportModal">
+  <div class="modal" style="max-width:720px;">
+    <h3>📦 Server Backups</h3>
+
+    <div class="row" style="margin:10px 0 12px;">
+      <span class="pill">Location: <strong id="serverExportLocation">—</strong></span>
+      <div class="spacer"></div>
+      <button class="secondary" id="serverExportRefresh">Refresh</button>
+    </div>
+
+    <div id="serverExportList" style="max-height:420px; overflow-y:auto;"></div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="serverImportClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Attendance Report Modal -->
+<div class="modalBackdrop" id="attendanceReportModal">
+  <div class="modal" style="max-width:900px;">
+    <h3>📊 Attendance Report</h3>
+
+    <div class="row" style="margin:10px 0 16px; flex-wrap:wrap; gap:10px;">
+      <div class="field" style="margin:0; flex:1; min-width:120px;">
+        <label style="font-size:12px;">Start Date</label>
+        <input type="date" id="attendanceReportStartDate" style="width:100%;">
+      </div>
+      <div class="field" style="margin:0; flex:1; min-width:120px;">
+        <label style="font-size:12px;">End Date</label>
+        <input type="date" id="attendanceReportEndDate" style="width:100%;">
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:8px;">
+        <button class="secondary" id="attendanceReportGenerate" style="padding:8px 16px;">Generate Report</button>
+      </div>
+    </div>
+
+    <div id="attendanceReportContent" style="max-height:450px; overflow-y:auto;">
+      <div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">
+        Select a date range and click "Generate Report" to view attendance analytics.
+      </div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="attendanceReportExportCSV">Export CSV</button>
+      <button class="secondary" id="attendanceReportExportJSON">Export JSON</button>
+      <button class="secondary" id="attendanceReportClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Instructor Report Modal -->
+<div class="modalBackdrop" id="instructorReportModal">
+  <div class="modal" style="max-width:900px;">
+    <h3>👨‍🏫 Instructor Performance Analytics</h3>
+
+    <div class="row" style="margin:10px 0 16px; flex-wrap:wrap; gap:10px;">
+      <div class="field" style="margin:0; flex:1; min-width:120px;">
+        <label style="font-size:12px;">Start Date</label>
+        <input type="date" id="instructorReportStartDate" style="width:100%;">
+      </div>
+      <div class="field" style="margin:0; flex:1; min-width:120px;">
+        <label style="font-size:12px;">End Date</label>
+        <input type="date" id="instructorReportEndDate" style="width:100%;">
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:8px;">
+        <button class="secondary" id="instructorReportGenerate" style="padding:8px 16px;">Generate Report</button>
+      </div>
+    </div>
+
+    <div id="instructorReportContent" style="max-height:450px; overflow-y:auto;">
+      <div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">
+        Select a date range and click "Generate Report" to view instructor analytics.
+      </div>
+    </div>
+
+    <div class="modalFooter">
+      <button class="secondary" id="instructorReportExportCSV">Export CSV</button>
+      <button class="secondary" id="instructorReportExportJSON">Export JSON</button>
+      <button class="secondary" id="instructorReportClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let currentBlock = null;
   let zoneTarget = null;
@@ -862,6 +1004,83 @@
   let countdownInterval = null; // Interval for countdown updates
 
   const el = (id) => document.getElementById(id);
+  const escapeSelector = (value) => {
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+      return window.CSS.escape(value);
+    }
+    return String(value).replace(/["\\]/g, '\\$&');
+  };
+  const normalizeKey = (value) => String(value || '').trim().toLowerCase();
+  const locationTimeZones = new Map([
+    ['new york', 'America/New_York'],
+    ['ny', 'America/New_York'],
+    ['westchester', 'America/New_York'],
+    ['riverdale', 'America/New_York'],
+    ['swimlabs westchester', 'America/New_York'],
+    ['safesplash riverdale', 'America/New_York'],
+    ['slw', 'America/New_York'],
+    ['ssr', 'America/New_York'],
+    ['texas', 'America/Chicago'],
+    ['tx', 'America/Chicago'],
+    ['woodlands', 'America/Chicago'],
+    ['swimlabs woodlands', 'America/Chicago'],
+    ['slx', 'America/Chicago'],
+    ['california', 'America/Los_Angeles'],
+    ['ca', 'America/Los_Angeles'],
+    ['santa monica', 'America/Los_Angeles'],
+    ['torrance', 'America/Los_Angeles'],
+    ['safesplash santa monica', 'America/Los_Angeles'],
+    ['safesplash torrance', 'America/Los_Angeles'],
+    ['ssm', 'America/Los_Angeles'],
+    ['sst', 'America/Los_Angeles'],
+    ['nevada', 'America/Los_Angeles'],
+    ['nv', 'America/Los_Angeles'],
+    ['summerlin', 'America/Los_Angeles'],
+    ['safesplash summerlin', 'America/Los_Angeles'],
+    ['sss', 'America/Los_Angeles']
+  ]);
+
+  function getLocationTimeZone() {
+    const fallbackZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!currentLocation) return fallbackZone;
+    const candidates = [
+      currentLocation.name,
+      currentLocation.code,
+      currentLocation.short_code,
+      currentLocation.shortCode
+    ].map(normalizeKey);
+    for (const key of candidates) {
+      if (locationTimeZones.has(key)) {
+        return locationTimeZones.get(key);
+      }
+    }
+    return fallbackZone;
+  }
+
+  function getTimeZoneOffsetMinutes(date, timeZone) {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = Object.fromEntries(
+      dtf.formatToParts(date).map((p) => [p.type, p.value])
+    );
+    const asUTC = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second)
+    );
+    return (asUTC - date.getTime()) / 60000;
+  }
 
   // Load locations on startup
   async function loadLocations() {
@@ -886,6 +1105,7 @@
       
       // Show/hide announcements tab based on location
       updateAnnouncementsVisibility();
+      updateGuardTasksVisibility();
       
     } catch (e) {
       console.error('Failed to load locations:', e);
@@ -893,20 +1113,42 @@
   }
 
   function updateAnnouncementsVisibility() {
-    const announcementsTab = el('tabAnnouncements');
-    const announcementsSection = el('announcements-section');
-    
-    if (currentLocation && currentLocation.has_announcements) {
-      announcementsTab.style.display = '';
-      if (announcementsSection) announcementsSection.style.display = '';
-    } else {
-      announcementsTab.style.display = 'none';
-      if (announcementsSection) announcementsSection.style.display = 'none';
-      // Switch to Roster tab if on Announcements
-      if (announcementsTab.classList.contains('active')) {
-        el('tabRoster').click();
-      }
+    const viewSelect = el('viewSelect');
+    const panelAnnouncements = el('panelAnnouncements');
+    const panelRoster = el('panelRoster');
+    const announcementsOption = viewSelect?.querySelector('option[value="announcements"]');
+    const hasAnnouncements = Boolean(currentLocation && currentLocation.has_announcements);
+
+    if (announcementsOption) {
+      announcementsOption.hidden = !hasAnnouncements;
+      announcementsOption.disabled = !hasAnnouncements;
     }
+
+    if (!hasAnnouncements) {
+      if (viewSelect && viewSelect.value === 'announcements') {
+        viewSelect.value = 'roster';
+        panelRoster?.classList.remove('hidden');
+        panelAnnouncements?.classList.add('hidden');
+      }
+      return;
+    }
+
+    if (panelAnnouncements && viewSelect?.value === 'announcements') {
+      panelAnnouncements.classList.remove('hidden');
+    }
+  }
+
+  function isWestchesterLocation() {
+    if (!currentLocation) return false;
+    const code = String(currentLocation.code || '').toUpperCase();
+    const name = String(currentLocation.name || '').toLowerCase();
+    return code === 'SLW' || name.includes('westchester');
+  }
+
+  function updateGuardTasksVisibility() {
+    const guardCard = el('adminNavGuards');
+    if (!guardCard) return;
+    guardCard.style.display = isWestchesterLocation() ? '' : 'none';
   }
 
   el('locationSelect').addEventListener('change', async (e) => {
@@ -921,6 +1163,7 @@
       });
       
       updateAnnouncementsVisibility();
+      updateGuardTasksVisibility();
       await loadStatus();
       await loadBlocks();
       if (currentBlock) await loadRoster();
@@ -948,6 +1191,32 @@
     const h12 = ((hh + 11) % 12) + 1;
     if(mm === 0) return `${h12} ${ampm}`;
     return `${h12}:${String(mm).padStart(2,'0')} ${ampm}`;
+  }
+
+  function fmtCurrentTime(date, timeZone) {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const parts = formatter.formatToParts(date);
+      const hour = parts.find((p) => p.type === 'hour')?.value;
+      const minute = parts.find((p) => p.type === 'minute')?.value;
+      const dayPeriod = parts.find((p) => p.type === 'dayPeriod')?.value;
+      if (hour && minute && dayPeriod) {
+        return `${hour}:${minute}${dayPeriod}`;
+      }
+      return formatter.format(date).replace(/\s+/g, '');
+    } catch (e) {
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 || 12;
+      const displayMinutes = String(minutes).padStart(2, '0');
+      return `${displayHours}:${displayMinutes}${ampm}`;
+    }
   }
 
   function parseTypeLevel(program){
@@ -1034,7 +1303,7 @@
 
   function setSelectedBlockUI(){
     el('selectedBlock').textContent = currentBlock ? fmtTime(currentBlock) : 'None';
-    [...el('blocks').querySelectorAll('button')].forEach(b => {
+    [...el('blocks').querySelectorAll('button[data-time]')].forEach(b => {
       b.classList.toggle('active', b.dataset.time === currentBlock);
     });
     el('addSwimmerBtn').disabled = !currentBlock;
@@ -1044,6 +1313,9 @@
     const st = await api('/api/status');
 
     const activeDate = st.activeDate || st.todayISO;
+    if (activeDate) {
+      activeDateISO = activeDate;
+    }
     const ttsOk = (st.piperBinExists && st.voiceModelExists);
     const ttsMsg = ttsOk ? 'TTS ready' : 'TTS missing (piper/model)';
     const rosterMsg = st.htmlExists ? `Roster loaded (${Math.round((st.htmlSizeBytes||0)/1024)} KB)` : 'No roster uploaded yet';
@@ -1065,7 +1337,15 @@
 
     blocksList = (b.blocks || []);
 
+    const issuesResp = await api(`/api/safety-issues?location_id=${locId}&date=${activeDateISO || ''}`);
+    const safetyMap = new Map((issuesResp.issues || []).map((i) => [i.start_time, i]));
+
     blocksList.forEach((t) => {
+      const holder = document.createElement('div');
+      holder.style.display = 'flex';
+      holder.style.gap = '6px';
+      holder.style.alignItems = 'center';
+
       const btn = document.createElement('button');
       btn.textContent = fmtTime(t);
       btn.dataset.time = t;
@@ -1074,7 +1354,44 @@
         setSelectedBlockUI();
         loadRoster();
       });
-      wrap.appendChild(btn);
+      holder.appendChild(btn);
+
+      const issueBtn = document.createElement('button');
+      issueBtn.className = 'miniBtn';
+      issueBtn.title = 'Flag safety issue for this block';
+      issueBtn.textContent = safetyMap.has(t) ? '⚠️' : '⚑';
+      issueBtn.style.minWidth = '40px';
+      issueBtn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const existing = safetyMap.get(t);
+        const note = prompt(
+          `Safety issue for ${fmtTime(t)}.\n\nEnter details (leave blank to clear):`,
+          existing?.note || ''
+        );
+        if (note === null) return;
+        try {
+          await api('/api/safety-issues', {
+            method: 'POST',
+            body: JSON.stringify({
+              date: activeDateISO,
+              start_time: t,
+              location_id: currentLocation?.id || 1,
+              note
+            })
+          });
+          await loadBlocks();
+          toast('Safety issue updated');
+        } catch (err) {
+          alert('Safety issue failed: ' + (err.message || err));
+        }
+      });
+      holder.appendChild(issueBtn);
+
+      if (safetyMap.has(t)) {
+        holder.title = safetyMap.get(t)?.note || 'Safety issue flagged';
+      }
+
+      wrap.appendChild(holder);
     });
 
     if(!currentBlock && (b.blocks || []).length){
@@ -1087,12 +1404,14 @@
   }
 
 
-  function parseBlockDateTime(dateISO, time24){
+  function parseBlockDateTime(dateISO, time24, timeZone){
     if(!dateISO || !time24) return null;
     const [y,m,d] = dateISO.split('-').map(n=>parseInt(n,10));
     const [hh,mm] = String(time24).split(':').map(n=>parseInt(n,10));
     if(!y||!m||!d||Number.isNaN(hh)) return null;
-    return new Date(y, (m-1), d, hh, mm||0, 0, 0);
+    const utcGuess = new Date(Date.UTC(y, (m-1), d, hh, mm||0, 0, 0));
+    const offsetMinutes = getTimeZoneOffsetMinutes(utcGuess, timeZone);
+    return new Date(utcGuess.getTime() - offsetMinutes * 60000);
   }
 
   function scheduleAutoAnnouncements(){
@@ -1109,9 +1428,10 @@
     }
 
     const now = new Date();
+    const timeZone = getLocationTimeZone();
 
     blocksList.forEach((t, idxBlock) => {
-      const classAt = parseBlockDateTime(activeDateISO, t);
+      const classAt = parseBlockDateTime(activeDateISO, t, timeZone);
       if(!classAt) return;
 
       const announceAt = new Date(classAt.getTime() - 3*60*1000);
@@ -1170,11 +1490,6 @@
   }
 
   function stopCountdown() {
-    if (countdownInterval) {
-      clearInterval(countdownInterval);
-      countdownInterval = null;
-    }
-
     // Show timer pill but with dash
     el('nextAnnouncementTimer').textContent = '—';
     el('nextAnnouncementPill').style.display = '';
@@ -1182,14 +1497,10 @@
 
   function updateCountdown() {
     const now = new Date();
+    const timeZone = getLocationTimeZone();
 
     // Update current time display
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    const displayMinutes = String(minutes).padStart(2, '0');
-    el('currentTime').textContent = `${displayHours}:${displayMinutes} ${ampm}`;
+    el('currentTime').textContent = fmtCurrentTime(now, timeZone);
 
     if (!nextAnnouncementTime) {
       el('nextAnnouncementTimer').textContent = '—';
@@ -1591,13 +1902,12 @@
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.add('hidden');
+    el('panelLifeguard').classList.add('hidden');
 
     if (view === 'roster') {
       el('panelRoster').classList.remove('hidden');
     } else if (view === 'lifeguard') {
-      alert('Lifeguard Tracker\n\nComing soon!\n\nThis will track lifeguard schedules and certifications.');
-      el('viewSelect').value = 'roster'; // Reset to roster
-      el('panelRoster').classList.remove('hidden');
+      el('panelLifeguard').classList.remove('hidden');
     } else if (view === 'announcements') {
       el('panelAnnouncements').classList.remove('hidden');
     } else if (view === 'virtualDesk') {
@@ -1639,6 +1949,7 @@
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.remove('hidden');
     el('panelAdmin').classList.add('hidden');
+    el('panelLifeguard').classList.add('hidden');
 
     // Load virtual desk stats and swimmer details
     loadAdminStats();
@@ -1651,6 +1962,7 @@
     el('panelAnnouncements').classList.add('hidden');
     el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.remove('hidden');
+    el('panelLifeguard').classList.add('hidden');
 
     // Load locations and staff
     loadAdminLocations();
@@ -1967,6 +2279,175 @@
     if (e.target === el('attendanceHistoryModal')) showModal('attendanceHistoryModal', false);
   });
 
+  function formatBytes(bytes) {
+    if (!bytes && bytes !== 0) return '—';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let idx = 0;
+    while (size >= 1024 && idx < units.length - 1) {
+      size /= 1024;
+      idx += 1;
+    }
+    return `${size.toFixed(size >= 10 || idx === 0 ? 0 : 1)} ${units[idx]}`;
+  }
+
+  function formatShortDate(dateStr) {
+    if (!dateStr) return '—';
+    const parts = String(dateStr).split('T')[0].split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[1]}/${parts[2]}/${parts[0]}`;
+  }
+
+  async function loadServerExports() {
+    const locId = currentLocation?.id || 1;
+    const resp = await api(`/api/server-exports?location_id=${locId}`);
+    const list = resp.exports || [];
+    el('serverExportLocation').textContent = currentLocation?.name || 'Unknown';
+
+    if (!list.length) {
+      el('serverExportList').innerHTML = '<div class="tiny" style="color:var(--muted); padding:8px;">No server backups found.</div>';
+      return;
+    }
+
+    let html = '<table style="width:100%;"><thead><tr>';
+    html += '<th>File</th><th>Modified</th><th>Size</th><th>Action</th>';
+    html += '</tr></thead><tbody>';
+    list.forEach((item) => {
+      html += '<tr>';
+      html += `<td><span class="tiny">${escapeHtml(item.filename)}</span></td>`;
+      html += `<td>${formatShortDate(item.modified_at)}</td>`;
+      html += `<td>${formatBytes(item.size)}</td>`;
+      html += `<td><button class="secondary" data-file="${escapeHtml(item.filename)}">Import</button></td>`;
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    el('serverExportList').innerHTML = html;
+
+    el('serverExportList').querySelectorAll('button[data-file]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const filename = btn.getAttribute('data-file');
+        if (!filename) return;
+        if (!confirm(`Import server backup: ${filename}?\n\nThis will replace the current roster for the active date.`)) return;
+        try {
+          btn.disabled = true;
+          await api('/api/import-server', {
+            method: 'POST',
+            body: JSON.stringify({
+              location_id: currentLocation?.id || 1,
+              filename
+            })
+          });
+          showModal('serverImportModal', false);
+          await loadStatus();
+          await loadBlocks();
+          await loadRoster();
+          toast('Server import complete');
+        } catch (err) {
+          alert('Import failed: ' + (err.message || err));
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function loadTrialReport() {
+    const locId = currentLocation?.id || 1;
+    const days = 30;
+    el('trialDaysLabel').textContent = String(days);
+    const resp = await api(`/api/trials?location_id=${locId}&days=${days}`);
+    const trials = resp.trials || [];
+
+    if (!trials.length) {
+      el('trialSummary').textContent = 'No trial swimmers found for this period.';
+      el('trialReportTable').innerHTML = '';
+      return;
+    }
+
+    const statusCounts = trials.reduce((acc, t) => {
+      const status = t.follow_up?.status || 'new';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+    const summary = Object.entries(statusCounts)
+      .map(([status, count]) => `${status}: ${count}`)
+      .join(' • ');
+    el('trialSummary').textContent = `Total trials: ${trials.length} • ${summary}`;
+
+    let html = '<table style="width:100%;"><thead><tr>';
+    html += '<th>Swimmer</th><th>Last Seen</th><th>Program</th><th>Instructor</th><th>Visits</th><th>Status</th><th>Last Contact</th><th>Next Follow-up</th><th>Notes</th><th>Save</th>';
+    html += '</tr></thead><tbody>';
+
+    trials.forEach((t) => {
+      const follow = t.follow_up || {};
+      const status = follow.status || 'new';
+      html += '<tr>';
+      html += `<td><strong>${escapeHtml(t.swimmer_name)}</strong></td>`;
+      html += `<td>${formatShortDate(t.last_date)}</td>`;
+      html += `<td><span class="tiny">${escapeHtml(t.program || '—')}</span></td>`;
+      html += `<td>${escapeHtml(t.instructor_name || '—')}</td>`;
+      html += `<td style="text-align:center;">${t.trial_visits || 0}</td>`;
+      html += '<td>';
+      html += `<select data-field="status" data-swimmer="${escapeHtml(t.swimmer_name)}">`;
+      ['new','contacted','scheduled','converted','lost'].forEach((opt) => {
+        html += `<option value="${opt}" ${opt === status ? 'selected' : ''}>${opt}</option>`;
+      });
+      html += '</select>';
+      html += '</td>';
+      html += `<td><input type="date" data-field="last_contact" data-swimmer="${escapeHtml(t.swimmer_name)}" value="${escapeHtml(follow.last_contact_at || '')}" /></td>`;
+      html += `<td><input type="date" data-field="next_follow" data-swimmer="${escapeHtml(t.swimmer_name)}" value="${escapeHtml(follow.next_follow_up_at || '')}" /></td>`;
+      html += `<td><input type="text" data-field="notes" data-swimmer="${escapeHtml(t.swimmer_name)}" value="${escapeHtml(follow.notes || '')}" placeholder="Notes" /></td>`;
+      html += `<td><button class="secondary" data-action="save" data-swimmer="${escapeHtml(t.swimmer_name)}">Save</button></td>`;
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    el('trialReportTable').innerHTML = html;
+
+    el('trialReportTable').querySelectorAll('button[data-action="save"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const swimmer = btn.getAttribute('data-swimmer');
+        if (!swimmer) return;
+        const safeSwimmer = escapeSelector(swimmer);
+        const status = el('trialReportTable').querySelector(`select[data-field="status"][data-swimmer="${safeSwimmer}"]`)?.value;
+        const lastContact = el('trialReportTable').querySelector(`input[data-field="last_contact"][data-swimmer="${safeSwimmer}"]`)?.value || '';
+        const nextFollow = el('trialReportTable').querySelector(`input[data-field="next_follow"][data-swimmer="${safeSwimmer}"]`)?.value || '';
+        const notes = el('trialReportTable').querySelector(`input[data-field="notes"][data-swimmer="${safeSwimmer}"]`)?.value || '';
+        try {
+          btn.disabled = true;
+          await api('/api/trials/followup', {
+            method: 'POST',
+            body: JSON.stringify({
+              swimmer_name: swimmer,
+              location_id: currentLocation?.id || 1,
+              status,
+              last_contact_at: lastContact || null,
+              next_follow_up_at: nextFollow || null,
+              notes
+            })
+          });
+          toast('Follow-up saved');
+        } catch (err) {
+          alert('Save failed: ' + (err.message || err));
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  el('trialCloseBtn').addEventListener('click', () => showModal('trialFollowupModal', false));
+  el('trialFollowupModal').addEventListener('click', (e) => {
+    if (e.target === el('trialFollowupModal')) showModal('trialFollowupModal', false);
+  });
+  el('trialRefreshBtn').addEventListener('click', loadTrialReport);
+
+  el('serverImportClose').addEventListener('click', () => showModal('serverImportModal', false));
+  el('serverImportModal').addEventListener('click', (e) => {
+    if (e.target === el('serverImportModal')) showModal('serverImportModal', false);
+  });
+  el('serverExportRefresh').addEventListener('click', loadServerExports);
+
   // Add Location Modal
   el('addLocationBtn').addEventListener('click', () => {
     el('newLocationName').value = '';
@@ -2101,22 +2582,327 @@
     }
   });
 
-  // Admin navigation cards (placeholders for future sessions)
+  // Admin navigation cards
   el('adminNavAbsence').addEventListener('click', () => {
     alert('Absence Tracker\n\nComing in Session 9!\n\nThis will track multi-week absences and help you follow up with families.');
   });
 
   el('adminNavTrials').addEventListener('click', () => {
-    alert('Trial Follow-up\n\nComing in Session 10!\n\nThis will manage trial swimmers and track conversion rates.');
+    loadTrialReport();
+    showModal('trialFollowupModal', true);
   });
 
   el('adminNavHistory').addEventListener('click', () => {
-    alert('Attendance History\n\nComing in Session 12 (Optional)!\n\nThis will show 30-day attendance patterns and reports.');
+    openAttendanceReport();
   });
 
   el('adminNavObservations').addEventListener('click', () => {
-    alert('Instructor Observations\n\nComing in Session 13 (Optional)!\n\nThis will generate evaluation forms for instructor observations.');
+    openInstructorReport();
   });
+
+  // Virtual Desk Export
+  el('exportVirtualDeskBtn').addEventListener('click', async () => {
+    if (!currentLocation || !activeDateISO) {
+      alert('Please select a location and date first.');
+      return;
+    }
+    const format = prompt('Export format: Enter "csv" or "json" (default: csv)', 'csv');
+    if (format === null) return;
+    const fmt = format.toLowerCase() === 'json' ? 'json' : 'csv';
+    window.location.href = `/api/reports/virtual-desk/export?date=${activeDateISO}&location_id=${currentLocation.id}&format=${fmt}`;
+  });
+
+  // Open Attendance Report Modal
+  el('openAttendanceReportBtn').addEventListener('click', openAttendanceReport);
+  el('openInstructorReportBtn').addEventListener('click', openInstructorReport);
+
+  function openAttendanceReport() {
+    // Set default dates (last 30 days)
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    el('attendanceReportEndDate').value = today.toISOString().split('T')[0];
+    el('attendanceReportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    el('attendanceReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Select a date range and click "Generate Report" to view attendance analytics.</div>`;
+    showModal('attendanceReportModal', true);
+  }
+
+  function openInstructorReport() {
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    el('instructorReportEndDate').value = today.toISOString().split('T')[0];
+    el('instructorReportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    el('instructorReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Select a date range and click "Generate Report" to view instructor analytics.</div>`;
+    showModal('instructorReportModal', true);
+  }
+
+  // Attendance Report Handlers
+  el('attendanceReportGenerate').addEventListener('click', async () => {
+    const startDate = el('attendanceReportStartDate').value;
+    const endDate = el('attendanceReportEndDate').value;
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates.');
+      return;
+    }
+    if (!currentLocation) {
+      alert('Please select a location first.');
+      return;
+    }
+
+    el('attendanceReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Loading report...</div>`;
+
+    try {
+      const resp = await api(`/api/reports/attendance?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}`);
+      if (!resp.ok) throw new Error(resp.error || 'Failed to generate report');
+
+      const report = resp.report;
+      const summary = report.summary;
+
+      let html = `
+        <div style="margin-bottom:20px;">
+          <div class="row" style="gap:12px; flex-wrap:wrap;">
+            <div class="card" style="flex:1; min-width:140px; background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
+              <div class="tiny" style="color:var(--muted);">Attendance Rate</div>
+              <div style="font-size:24px; font-weight:900; color:#22c55e;">${summary.overall_attendance_rate}%</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);">
+              <div class="tiny" style="color:var(--muted);">Total Swimmers</div>
+              <div style="font-size:24px; font-weight:900; color:#3b82f6;">${summary.unique_swimmers}</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.2);">
+              <div class="tiny" style="color:var(--muted);">Class Entries</div>
+              <div style="font-size:24px; font-weight:900; color:#eab308;">${summary.total_entries}</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.2);">
+              <div class="tiny" style="color:var(--muted);">Days Tracked</div>
+              <div style="font-size:24px; font-weight:900; color:#a855f7;">${summary.days_with_classes}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row" style="gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#22c55e;">${summary.total_present}</div>
+            <div class="tiny" style="color:var(--muted);">Present</div>
+          </div>
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#ef4444;">${summary.total_absent}</div>
+            <div class="tiny" style="color:var(--muted);">Absent</div>
+          </div>
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#f97316;">${summary.total_trials}</div>
+            <div class="tiny" style="color:var(--muted);">Trials</div>
+          </div>
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#06b6d4;">${summary.total_new_swimmers}</div>
+            <div class="tiny" style="color:var(--muted);">New</div>
+          </div>
+          <div class="card" style="flex:1; min-width:80px; text-align:center;">
+            <div style="font-size:20px; font-weight:700; color:#8b5cf6;">${summary.total_makeups}</div>
+            <div class="tiny" style="color:var(--muted);">Makeups</div>
+          </div>
+        </div>
+
+        <h4 style="margin:16px 0 8px; font-size:14px;">By Program</h4>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+              <tr style="background:rgba(255,255,255,0.05); text-align:left;">
+                <th style="padding:8px;">Program</th>
+                <th style="padding:8px;">Total</th>
+                <th style="padding:8px;">Present</th>
+                <th style="padding:8px;">Absent</th>
+                <th style="padding:8px;">Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${report.by_program.map(p => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                  <td style="padding:8px;">${p.program || 'Unknown'}</td>
+                  <td style="padding:8px;">${p.total}</td>
+                  <td style="padding:8px; color:#22c55e;">${p.present}</td>
+                  <td style="padding:8px; color:#ef4444;">${p.absent}</td>
+                  <td style="padding:8px;"><span style="color:${p.attendance_rate >= 80 ? '#22c55e' : p.attendance_rate >= 60 ? '#eab308' : '#ef4444'}">${p.attendance_rate}%</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        ${report.low_attendance_swimmers.length > 0 ? `
+          <h4 style="margin:16px 0 8px; font-size:14px; color:#ef4444;">Low Attendance Swimmers (&lt;70%)</h4>
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+              <thead>
+                <tr style="background:rgba(255,255,255,0.05); text-align:left;">
+                  <th style="padding:8px;">Swimmer</th>
+                  <th style="padding:8px;">Classes</th>
+                  <th style="padding:8px;">Attended</th>
+                  <th style="padding:8px;">Missed</th>
+                  <th style="padding:8px;">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${report.low_attendance_swimmers.map(s => `
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                    <td style="padding:8px;">${s.swimmer_name}</td>
+                    <td style="padding:8px;">${s.total_classes}</td>
+                    <td style="padding:8px; color:#22c55e;">${s.attended}</td>
+                    <td style="padding:8px; color:#ef4444;">${s.missed}</td>
+                    <td style="padding:8px; color:#ef4444;">${s.attendance_rate}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+      `;
+
+      el('attendanceReportContent').innerHTML = html;
+    } catch (e) {
+      el('attendanceReportContent').innerHTML = `<div class="tiny" style="color:#ef4444; text-align:center; padding:40px;">Error: ${e.message}</div>`;
+    }
+  });
+
+  el('attendanceReportExportCSV').addEventListener('click', () => {
+    const startDate = el('attendanceReportStartDate').value;
+    const endDate = el('attendanceReportEndDate').value;
+    if (!currentLocation || !startDate || !endDate) {
+      alert('Please generate a report first.');
+      return;
+    }
+    window.location.href = `/api/reports/attendance/export?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}&format=csv`;
+  });
+
+  el('attendanceReportExportJSON').addEventListener('click', () => {
+    const startDate = el('attendanceReportStartDate').value;
+    const endDate = el('attendanceReportEndDate').value;
+    if (!currentLocation || !startDate || !endDate) {
+      alert('Please generate a report first.');
+      return;
+    }
+    window.location.href = `/api/reports/attendance/export?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}&format=json`;
+  });
+
+  el('attendanceReportClose').addEventListener('click', () => showModal('attendanceReportModal', false));
+  el('attendanceReportModal').addEventListener('click', (e) => { if(e.target === el('attendanceReportModal')) showModal('attendanceReportModal', false); });
+
+  // Instructor Report Handlers
+  el('instructorReportGenerate').addEventListener('click', async () => {
+    const startDate = el('instructorReportStartDate').value;
+    const endDate = el('instructorReportEndDate').value;
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates.');
+      return;
+    }
+    if (!currentLocation) {
+      alert('Please select a location first.');
+      return;
+    }
+
+    el('instructorReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Loading report...</div>`;
+
+    try {
+      const resp = await api(`/api/reports/instructors?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}`);
+      if (!resp.ok) throw new Error(resp.error || 'Failed to generate report');
+
+      const report = resp.report;
+      const summary = report.summary;
+
+      let html = `
+        <div style="margin-bottom:20px;">
+          <div class="row" style="gap:12px; flex-wrap:wrap;">
+            <div class="card" style="flex:1; min-width:140px; background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);">
+              <div class="tiny" style="color:var(--muted);">Total Instructors</div>
+              <div style="font-size:24px; font-weight:900; color:#3b82f6;">${summary.total_instructors}</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
+              <div class="tiny" style="color:var(--muted);">Avg Attendance Rate</div>
+              <div style="font-size:24px; font-weight:900; color:#22c55e;">${summary.average_attendance_rate}%</div>
+            </div>
+            <div class="card" style="flex:1; min-width:140px; background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.2);">
+              <div class="tiny" style="color:var(--muted);">Total Class Entries</div>
+              <div style="font-size:24px; font-weight:900; color:#eab308;">${summary.total_class_entries}</div>
+            </div>
+          </div>
+        </div>
+
+        ${report.highlights.top_by_attendance.length > 0 ? `
+          <h4 style="margin:16px 0 8px; font-size:14px;">Top Performers (by Class Attendance Rate)</h4>
+          <div class="row" style="gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+            ${report.highlights.top_by_attendance.map((i, idx) => `
+              <div class="card" style="flex:1; min-width:150px; text-align:center; background: ${idx === 0 ? 'rgba(234,179,8,0.15)' : 'rgba(255,255,255,0.05)'};">
+                <div style="font-size:11px; color:var(--muted);">#${idx + 1}</div>
+                <div style="font-weight:700; font-size:14px;">${i.name}</div>
+                <div style="font-size:20px; font-weight:900; color:#22c55e;">${i.attendance_rate}%</div>
+                <div class="tiny" style="color:var(--muted);">${i.total_entries} entries</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <h4 style="margin:16px 0 8px; font-size:14px;">All Instructors</h4>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+              <tr style="background:rgba(255,255,255,0.05); text-align:left;">
+                <th style="padding:8px;">Instructor</th>
+                <th style="padding:8px;">Days</th>
+                <th style="padding:8px;">Entries</th>
+                <th style="padding:8px;">Swimmers</th>
+                <th style="padding:8px;">Present</th>
+                <th style="padding:8px;">Absent</th>
+                <th style="padding:8px;">Rate</th>
+                <th style="padding:8px;">Programs</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${report.instructors.map(i => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                  <td style="padding:8px; font-weight:600;">${i.instructor_name}</td>
+                  <td style="padding:8px;">${i.days_worked}</td>
+                  <td style="padding:8px;">${i.total_class_entries}</td>
+                  <td style="padding:8px;">${i.unique_swimmers}</td>
+                  <td style="padding:8px; color:#22c55e;">${i.swimmers_present}</td>
+                  <td style="padding:8px; color:#ef4444;">${i.swimmers_absent}</td>
+                  <td style="padding:8px;"><span style="color:${i.class_attendance_rate >= 80 ? '#22c55e' : i.class_attendance_rate >= 60 ? '#eab308' : '#ef4444'}">${i.class_attendance_rate}%</span></td>
+                  <td style="padding:8px;">${i.programs_taught}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      el('instructorReportContent').innerHTML = html;
+    } catch (e) {
+      el('instructorReportContent').innerHTML = `<div class="tiny" style="color:#ef4444; text-align:center; padding:40px;">Error: ${e.message}</div>`;
+    }
+  });
+
+  el('instructorReportExportCSV').addEventListener('click', () => {
+    const startDate = el('instructorReportStartDate').value;
+    const endDate = el('instructorReportEndDate').value;
+    if (!currentLocation || !startDate || !endDate) {
+      alert('Please generate a report first.');
+      return;
+    }
+    window.location.href = `/api/reports/instructors/export?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}&format=csv`;
+  });
+
+  el('instructorReportExportJSON').addEventListener('click', () => {
+    const startDate = el('instructorReportStartDate').value;
+    const endDate = el('instructorReportEndDate').value;
+    if (!currentLocation || !startDate || !endDate) {
+      alert('Please generate a report first.');
+      return;
+    }
+    window.location.href = `/api/reports/instructors/export?location_id=${currentLocation.id}&start_date=${startDate}&end_date=${endDate}&format=json`;
+  });
+
+  el('instructorReportClose').addEventListener('click', () => showModal('instructorReportModal', false));
+  el('instructorReportModal').addEventListener('click', (e) => { if(e.target === el('instructorReportModal')) showModal('instructorReportModal', false); });
 
   el('adminNavClearRoster').addEventListener('click', async () => {
     const locationName = currentLocation?.name || 'Unknown';
@@ -2209,11 +2995,11 @@
         // No headers, no credentials - browser handles multipart automatically
       });
 
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
+      const result = await response.json().catch(() => ({}));
 
-      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || `Upload failed: ${response.statusText}`);
+      }
 
       if (result.ok) {
         alert(`Success! Imported ${result.count} swimmers`);
@@ -2232,27 +3018,28 @@
     }
   });
 
-  el('exportJsonBtn').addEventListener('click', () => {
-    window.location.href = '/api/export-json';
+  el('exportServerBtn').addEventListener('click', async () => {
+    try {
+      el('exportServerBtn').disabled = true;
+      const date = el('rosterDate').value || activeDateISO;
+      const resp = await api('/api/export-server', {
+        method: 'POST',
+        body: JSON.stringify({
+          location_id: currentLocation?.id || 1,
+          date
+        })
+      });
+      alert(`✅ Exported ${resp.count} swimmers to server.\n\nFile: ${resp.filename}`);
+    } catch (err) {
+      alert('Export failed: ' + (err.message || err));
+    } finally {
+      el('exportServerBtn').disabled = false;
+    }
   });
 
-  el('importJsonBtn').addEventListener('click', () => el('jsonFileInput').click());
-  el('jsonFileInput').addEventListener('change', async (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    try{
-      const txt = await f.text();
-      const payload = JSON.parse(txt);
-      await api('/api/import-json', { method:'POST', body: JSON.stringify(payload) });
-      await loadStatus();
-      await loadBlocks();
-      await loadRoster();
-      toast('JSON import complete');
-    }catch(err){
-      alert('Import failed: ' + (err.message || err));
-    }finally{
-      e.target.value = '';
-    }
+  el('importServerBtn').addEventListener('click', async () => {
+    await loadServerExports();
+    showModal('serverImportModal', true);
   });
 
   el('setDateBtn').addEventListener('click', async () => {
@@ -2452,10 +3239,11 @@
       await loadLocations();
       await loadStatus();
       await loadBlocks();
-      // Start clock update (runs independently of announcements)
-      startCountdown();
     }catch(e){
       setStatus(e.message || 'Failed to load', 'warn');
+    }finally{
+      // Start clock update (runs independently of announcements)
+      startCountdown();
     }
   })();
 </script>
