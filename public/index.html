@@ -502,7 +502,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.7.5</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.8</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -754,19 +754,19 @@
       <div id="managerTabReports" class="hidden">
         <div class="card" style="margin-bottom:16px;">
           <h3 style="margin:0 0 8px; font-size:18px;">📁 Manager Reports</h3>
-          <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track retention, billing, aged accounts, and drop list reports per location.</div>
+          <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track retention (HTML), drop list (HTML), balance list (HTML), billing, and aged accounts reports per location.</div>
 
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
             <div class="card" style="background: rgba(255,255,255,0.04);">
               <div class="row" style="gap:10px;">
                 <div>
-                  <div style="font-weight:800;">📈 Retention Report</div>
+                  <div style="font-weight:800;">📈 Retention List (HTML)</div>
                   <div class="tiny" id="reportMetaRetention">No report uploaded yet.</div>
                 </div>
                 <div class="spacer"></div>
                 <a class="secondary hidden" id="reportDownloadRetention" target="_blank" rel="noopener">View</a>
                 <button class="secondary reportUploadBtn" data-report-type="retention">Upload</button>
-                <input type="file" class="reportFileInput hidden" data-report-type="retention" accept=".html,.pdf,.csv,.xls,.xlsx" />
+                <input type="file" class="reportFileInput hidden" data-report-type="retention" accept=".html" />
               </div>
             </div>
 
@@ -786,13 +786,26 @@
             <div class="card" style="background: rgba(255,255,255,0.04);">
               <div class="row" style="gap:10px;">
                 <div>
-                  <div style="font-weight:800;">📉 Drop List</div>
+                  <div style="font-weight:800;">📉 Drop List (HTML)</div>
                   <div class="tiny" id="reportMetaDropList">No report uploaded yet.</div>
                 </div>
                 <div class="spacer"></div>
                 <a class="secondary hidden" id="reportDownloadDropList" target="_blank" rel="noopener">View</a>
                 <button class="secondary reportUploadBtn" data-report-type="drop_list">Upload</button>
-                <input type="file" class="reportFileInput hidden" data-report-type="drop_list" accept=".html,.pdf,.csv,.xls,.xlsx" />
+                <input type="file" class="reportFileInput hidden" data-report-type="drop_list" accept=".html" />
+              </div>
+            </div>
+
+            <div class="card" style="background: rgba(255,255,255,0.04);">
+              <div class="row" style="gap:10px;">
+                <div>
+                  <div style="font-weight:800;">⚖️ Balance List (HTML)</div>
+                  <div class="tiny" id="reportMetaBalanceList">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <a class="secondary hidden" id="reportDownloadBalanceList" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="balance_list">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="balance_list" accept=".html" />
               </div>
             </div>
 
@@ -1298,9 +1311,10 @@
   let countdownInterval = null; // Interval for countdown updates
   let lastPanel = 'roster';
   const managerReportTypes = [
-    { type: 'retention', metaId: 'reportMetaRetention', downloadId: 'reportDownloadRetention', label: 'Retention report' },
+    { type: 'retention', metaId: 'reportMetaRetention', downloadId: 'reportDownloadRetention', label: 'Retention list (HTML)' },
     { type: 'aged_accounts', metaId: 'reportMetaAgedAccounts', downloadId: 'reportDownloadAgedAccounts', label: 'Aged accounts' },
-    { type: 'drop_list', metaId: 'reportMetaDropList', downloadId: 'reportDownloadDropList', label: 'Drop list' },
+    { type: 'drop_list', metaId: 'reportMetaDropList', downloadId: 'reportDownloadDropList', label: 'Drop list (HTML)' },
+    { type: 'balance_list', metaId: 'reportMetaBalanceList', downloadId: 'reportDownloadBalanceList', label: 'Balance list (HTML)' },
     { type: 'billing', metaId: 'reportMetaBilling', downloadId: 'reportDownloadBilling', label: 'Billing snapshot' }
   ];
 
@@ -2485,25 +2499,25 @@
     },
     weekend: {
       opening: [
-        { group: 'Guard 1', label: 'Chemicals check' },
-        { group: 'Guard 1', label: 'Make sure each pool has a bin' },
-        { group: 'Guard 1', label: 'Vacuum pools' },
-        { group: 'Guard 2', label: 'Set up lobby' },
-        { group: 'Guard 2', label: 'Cycle laundry' },
-        { group: 'Guard 2', label: 'Empty dehumidifiers' },
+        { group: 'Guard 2 (Up for First Rotation)', label: 'Set up lobby' },
+        { group: 'Guard 2 (Up for First Rotation)', label: 'Cycle laundry' },
+        { group: 'Guard 2 (Up for First Rotation)', label: 'Empty dehumidifiers' },
         { group: 'Guard 3 (Up for First Rotation)', label: 'Check playpen' },
         { group: 'Guard 3 (Up for First Rotation)', label: 'Restock snack wall, fridge, and coffee station' },
+        { group: 'Guard 1 (Up for Second Rotation)', label: 'Chemicals check' },
+        { group: 'Guard 1 (Up for Second Rotation)', label: 'Make sure each pool has a bin' },
+        { group: 'Guard 1 (Up for Second Rotation)', label: 'Vacuum pools' },
         { group: 'All Guards', label: 'Pick up a walkie' }
       ],
       closing: [
-        { group: 'Guard 1', label: 'Chemicals check' },
-        { group: 'Guard 1', label: 'Clean pool deck and close deck doors' },
-        { group: 'Guard 2', label: 'Empty dehumidifiers' },
-        { group: 'Guard 2', label: 'Empty and change garbage bags' },
-        { group: 'Guard 2', label: 'Clean bathrooms and leave doors open' },
-        { group: 'Guard 2', label: 'Cycle laundry' },
+        { group: 'Guard 2 (Up for First Rotation)', label: 'Empty dehumidifiers' },
+        { group: 'Guard 2 (Up for First Rotation)', label: 'Empty and change garbage bags' },
+        { group: 'Guard 2 (Up for First Rotation)', label: 'Clean bathrooms and leave doors open' },
+        { group: 'Guard 2 (Up for First Rotation)', label: 'Cycle laundry' },
         { group: 'Guard 3 (Down for Last Rotation)', label: 'Vacuum facility including playpen' },
         { group: 'Guard 3 (Down for Last Rotation)', label: 'Mop floors' },
+        { group: 'Guard 1 (Up for Second Rotation)', label: 'Chemicals check' },
+        { group: 'Guard 1 (Up for Second Rotation)', label: 'Clean pool deck and close deck doors' },
         { group: 'Front Desk', label: 'Tidy playpen' },
         { group: 'Front Desk', label: 'Close lobby' }
       ]
