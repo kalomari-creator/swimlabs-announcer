@@ -263,13 +263,7 @@ const ipAuthState = new Map();
 
 function nowISO() { return new Date().toISOString(); }
 
-const MANAGER_REPORT_TYPES = new Set([
-  "instructor_retention",
-  "retention",
-  "aged_accounts",
-  "drop_list",
-  "billing"
-]);
+const MANAGER_REPORT_TYPES = new Set(["retention", "aged_accounts", "drop_list", "billing"]);
 
 function getLocationById(locId) {
   return db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);

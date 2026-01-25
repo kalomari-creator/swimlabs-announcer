@@ -213,26 +213,6 @@
       color:#d1fae5;
     }
 
-    .guard-add-row{
-      display:flex;
-      justify-content:flex-end;
-      margin-top:8px;
-    }
-
-    .managerReportPreview{
-      border:1px solid rgba(255,255,255,0.12);
-      border-radius:14px;
-      overflow:hidden;
-      min-height:320px;
-      background:rgba(9,12,20,0.55);
-    }
-    .managerReportPreview iframe{
-      width:100%;
-      height:420px;
-      border:0;
-      background:#fff;
-    }
-
     table{
       width:100%;
       border-collapse:separate;
@@ -522,7 +502,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.8.0</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.7.5</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -768,34 +748,15 @@
             <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🗑️ Clear Roster</div>
             <div class="tiny" style="color:var(--muted); line-height:1.4;">Remove all uploaded roster data for current location</div>
           </div>
-
-          <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(249,115,22,0.08); border-color: rgba(249,115,22,0.3);" id="adminNavClearFutureRoster">
-            <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#f97316;">🧹 Clear Future Roster</div>
-            <div class="tiny" style="color:var(--muted); line-height:1.4;">Delete all roster data from today forward for current location</div>
-          </div>
         </div>
       </div>
 
       <div id="managerTabReports" class="hidden">
         <div class="card" style="margin-bottom:16px;">
           <h3 style="margin:0 0 8px; font-size:18px;">📁 Manager Reports</h3>
-          <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track instructor retention, retention, billing, aged accounts, and drop list reports per location.</div>
+          <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track retention, billing, aged accounts, and drop list reports per location.</div>
 
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
-            <div class="card" style="background: rgba(255,255,255,0.04);">
-              <div class="row" style="gap:10px;">
-                <div>
-                  <div style="font-weight:800;">🧑‍🏫 Instructor Retention</div>
-                  <div class="tiny" id="reportMetaInstructorRetention">No report uploaded yet.</div>
-                </div>
-                <div class="spacer"></div>
-                <button class="secondary reportPreviewBtn hidden" data-report-type="instructor_retention">Preview</button>
-                <a class="secondary hidden" id="reportDownloadInstructorRetention" target="_blank" rel="noopener">View</a>
-                <button class="secondary reportUploadBtn" data-report-type="instructor_retention">Upload</button>
-                <input type="file" class="reportFileInput hidden" data-report-type="instructor_retention" accept=".html,.pdf,.csv,.xls,.xlsx" />
-              </div>
-            </div>
-
             <div class="card" style="background: rgba(255,255,255,0.04);">
               <div class="row" style="gap:10px;">
                 <div>
@@ -803,7 +764,6 @@
                   <div class="tiny" id="reportMetaRetention">No report uploaded yet.</div>
                 </div>
                 <div class="spacer"></div>
-                <button class="secondary reportPreviewBtn hidden" data-report-type="retention">Preview</button>
                 <a class="secondary hidden" id="reportDownloadRetention" target="_blank" rel="noopener">View</a>
                 <button class="secondary reportUploadBtn" data-report-type="retention">Upload</button>
                 <input type="file" class="reportFileInput hidden" data-report-type="retention" accept=".html,.pdf,.csv,.xls,.xlsx" />
@@ -817,7 +777,6 @@
                   <div class="tiny" id="reportMetaAgedAccounts">No report uploaded yet.</div>
                 </div>
                 <div class="spacer"></div>
-                <button class="secondary reportPreviewBtn hidden" data-report-type="aged_accounts">Preview</button>
                 <a class="secondary hidden" id="reportDownloadAgedAccounts" target="_blank" rel="noopener">View</a>
                 <button class="secondary reportUploadBtn" data-report-type="aged_accounts">Upload</button>
                 <input type="file" class="reportFileInput hidden" data-report-type="aged_accounts" accept=".html,.pdf,.csv,.xls,.xlsx" />
@@ -831,7 +790,6 @@
                   <div class="tiny" id="reportMetaDropList">No report uploaded yet.</div>
                 </div>
                 <div class="spacer"></div>
-                <button class="secondary reportPreviewBtn hidden" data-report-type="drop_list">Preview</button>
                 <a class="secondary hidden" id="reportDownloadDropList" target="_blank" rel="noopener">View</a>
                 <button class="secondary reportUploadBtn" data-report-type="drop_list">Upload</button>
                 <input type="file" class="reportFileInput hidden" data-report-type="drop_list" accept=".html,.pdf,.csv,.xls,.xlsx" />
@@ -845,22 +803,10 @@
                   <div class="tiny" id="reportMetaBilling">No report uploaded yet.</div>
                 </div>
                 <div class="spacer"></div>
-                <button class="secondary reportPreviewBtn hidden" data-report-type="billing">Preview</button>
                 <a class="secondary hidden" id="reportDownloadBilling" target="_blank" rel="noopener">View</a>
                 <button class="secondary reportUploadBtn" data-report-type="billing">Upload</button>
                 <input type="file" class="reportFileInput hidden" data-report-type="billing" accept=".html,.pdf,.csv,.xls,.xlsx" />
               </div>
-            </div>
-          </div>
-
-          <div class="card" style="margin-top:16px;">
-            <div class="row" style="margin-bottom:8px;">
-              <div class="pill">Latest report preview</div>
-              <div class="spacer"></div>
-              <span class="tiny" id="managerReportPreviewMeta">Select a report to preview the latest upload.</span>
-            </div>
-            <div class="managerReportPreview" id="managerReportPreview">
-              <iframe id="managerReportPreviewFrame" title="Manager report preview"></iframe>
             </div>
           </div>
         </div>
@@ -1352,13 +1298,11 @@
   let countdownInterval = null; // Interval for countdown updates
   let lastPanel = 'roster';
   const managerReportTypes = [
-    { type: 'instructor_retention', metaId: 'reportMetaInstructorRetention', downloadId: 'reportDownloadInstructorRetention', label: 'Instructor retention report' },
     { type: 'retention', metaId: 'reportMetaRetention', downloadId: 'reportDownloadRetention', label: 'Retention report' },
     { type: 'aged_accounts', metaId: 'reportMetaAgedAccounts', downloadId: 'reportDownloadAgedAccounts', label: 'Aged accounts' },
     { type: 'drop_list', metaId: 'reportMetaDropList', downloadId: 'reportDownloadDropList', label: 'Drop list' },
     { type: 'billing', metaId: 'reportMetaBilling', downloadId: 'reportDownloadBilling', label: 'Billing snapshot' }
   ];
-  let managerReportLatest = {};
 
   const el = (id) => document.getElementById(id);
   const escapeSelector = (value) => {
@@ -1488,12 +1432,10 @@
     try {
       const resp = await api(`/api/manager-reports?location_id=${currentLocation.id}`);
       if (!resp.ok) throw new Error(resp.error || 'Failed to load manager reports');
-      managerReportLatest = resp.latest || {};
       managerReportTypes.forEach((report) => {
         const metaEl = el(report.metaId);
         const linkEl = el(report.downloadId);
-        const previewBtn = document.querySelector(`.reportPreviewBtn[data-report-type="${report.type}"]`);
-        const latest = managerReportLatest?.[report.type] || null;
+        const latest = resp.latest?.[report.type] || null;
         if (latest) {
           const uploaded = formatShortDate(latest.uploaded_at);
           const size = formatBytes(latest.size_bytes);
@@ -1503,18 +1445,11 @@
             linkEl.href = `/api/manager-reports/download?location_id=${currentLocation.id}&filename=${encodeURIComponent(latest.filename)}`;
             linkEl.classList.remove('hidden');
           }
-          if (previewBtn) previewBtn.classList.remove('hidden');
         } else {
           if (metaEl) metaEl.textContent = 'No report uploaded yet.';
           if (linkEl) linkEl.classList.add('hidden');
-          if (previewBtn) previewBtn.classList.add('hidden');
         }
       });
-      const frame = el('managerReportPreviewFrame');
-      if (frame && (!frame.src || frame.src === 'about:blank')) {
-        const defaultType = Object.keys(managerReportLatest || {})[0];
-        if (defaultType) setManagerReportPreview(defaultType);
-      }
     } catch (e) {
       console.error('Failed to load manager reports:', e);
     }
@@ -3269,28 +3204,6 @@
     }
   }
 
-  function setManagerReportPreview(reportType) {
-    const previewMeta = el('managerReportPreviewMeta');
-    const frame = el('managerReportPreviewFrame');
-    const latest = managerReportLatest?.[reportType];
-    if (!latest || !currentLocation) {
-      if (previewMeta) previewMeta.textContent = 'No report uploaded yet.';
-      if (frame) frame.src = 'about:blank';
-      return;
-    }
-    const name = latest.original_name || latest.filename;
-    const ext = name.split('.').pop()?.toLowerCase() || '';
-    const isHtml = ext === 'html' || ext === 'htm';
-    const url = `/api/manager-reports/download?location_id=${currentLocation.id}&filename=${encodeURIComponent(latest.filename)}`;
-    if (!isHtml) {
-      if (previewMeta) previewMeta.textContent = `Preview unavailable for ${name}. Use the View button to download.`;
-      if (frame) frame.src = 'about:blank';
-      return;
-    }
-    if (previewMeta) previewMeta.textContent = `Showing ${name} (uploaded ${formatShortDate(latest.uploaded_at)})`;
-    if (frame) frame.src = url;
-  }
-
   async function loadServerExports() {
     const locId = currentLocation?.id || 1;
     const resp = await api(`/api/server-exports?location_id=${locId}`);
@@ -4077,43 +3990,6 @@
     }
   });
 
-  el('adminNavClearFutureRoster').addEventListener('click', async () => {
-    const locationName = currentLocation?.name || 'Unknown';
-    const locationCode = currentLocation?.code || 'Unknown';
-    const confirmMsg = `⚠️ CLEAR FUTURE ROSTER FOR ${locationName.toUpperCase()}\n\n` +
-      `This will permanently delete ALL roster data from today forward for ${locationName} (${locationCode}).\n\n` +
-      `• All future swimmers will be removed\n` +
-      `• All future attendance records will be deleted\n` +
-      `• All future flags and notes will be lost\n\n` +
-      `A roster backup will be auto-exported before deletion.\n\n` +
-      `Type "DELETE FUTURE" to confirm:`;
-
-    const userInput = prompt(confirmMsg);
-    if (userInput !== 'DELETE FUTURE') {
-      if (userInput !== null) {
-        alert('Cancelled. Future roster was NOT cleared.');
-      }
-      return;
-    }
-
-    try {
-      const resp = await api('/api/clear-roster-future', {
-        method: 'POST',
-        body: JSON.stringify({
-          location_id: currentLocation?.id || 1
-        })
-      });
-
-      if (resp.ok) {
-        alert(`✅ Future Roster Cleared!\n\nDeleted ${resp.deleted_count} future swimmers for ${locationName}.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
-        await loadBlocks();
-        await loadRoster();
-      }
-    } catch (e) {
-      alert(`❌ Clear Failed\n\n${e.message}`);
-    }
-  });
-
   async function runAdminClearAll({ startDate, endDate, label }) {
     if ((startDate && !endDate) || (!startDate && endDate)) {
       alert('Please set both a start and end date to delete a window.');
@@ -4218,13 +4094,6 @@
       const reportType = btn.dataset.reportType;
       const input = document.querySelector(`.reportFileInput[data-report-type="${reportType}"]`);
       if (input) input.click();
-    });
-  });
-
-  document.querySelectorAll('.reportPreviewBtn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const reportType = btn.dataset.reportType;
-      setManagerReportPreview(reportType);
     });
   });
 
