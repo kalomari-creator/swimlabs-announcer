@@ -869,16 +869,25 @@
         <div class="guard-section">
           <h4 id="guardOpeningTitle">🌅 Opening Checklist</h4>
           <div id="guardOpeningList"></div>
+          <div class="guard-add-row">
+            <button class="secondary miniBtn guardAddTask" data-section="opening">+ Add task</button>
+          </div>
         </div>
 
         <div class="guard-section">
           <h4>🌤️ Midday Checklist</h4>
           <div id="guardMiddayList"></div>
+          <div class="guard-add-row">
+            <button class="secondary miniBtn guardAddTask" data-section="midday">+ Add task</button>
+          </div>
         </div>
 
         <div class="guard-section">
           <h4 id="guardClosingTitle">🌙 Closing Checklist</h4>
           <div id="guardClosingList"></div>
+          <div class="guard-add-row">
+            <button class="secondary miniBtn guardAddTask" data-section="closing">+ Add task</button>
+          </div>
         </div>
       </div>
 
@@ -2469,7 +2478,7 @@
         { group: 'Guard 1', label: 'Cycle laundry' },
         { group: 'Guard 1', label: 'Clean bathrooms and leave doors open' },
         { group: 'Guard 2', label: 'Empty and change garbage bags' },
-        { group: 'Guard 2', label: 'Vacuum facility (include playpen)' },
+        { group: 'Guard 2', label: 'Vacuum facility including playpen' },
         { group: 'Guard 2', label: 'Mop floors' },
         { group: 'All Guards', label: 'Return walkie' }
       ]
@@ -2479,37 +2488,44 @@
         { group: 'Guard 1', label: 'Chemicals check' },
         { group: 'Guard 1', label: 'Make sure each pool has a bin' },
         { group: 'Guard 1', label: 'Vacuum pools' },
-        { group: 'Front Desk', label: 'Set up lobby' },
+        { group: 'Guard 2', label: 'Set up lobby' },
         { group: 'Guard 2', label: 'Cycle laundry' },
         { group: 'Guard 2', label: 'Empty dehumidifiers' },
-        { group: 'Guard 3 (Up for first rotation)', label: 'Check playpen' },
-        { group: 'Guard 3 (Up for first rotation)', label: 'Restock snack wall, fridge, and coffee station' },
+        { group: 'Guard 3 (Up for First Rotation)', label: 'Check playpen' },
+        { group: 'Guard 3 (Up for First Rotation)', label: 'Restock snack wall, fridge, and coffee station' },
         { group: 'All Guards', label: 'Pick up a walkie' }
       ],
       closing: [
         { group: 'Guard 1', label: 'Chemicals check' },
-        { group: 'Guard 1', label: 'Clean pool deck and close doors' },
+        { group: 'Guard 1', label: 'Clean pool deck and close deck doors' },
         { group: 'Guard 2', label: 'Empty dehumidifiers' },
         { group: 'Guard 2', label: 'Empty and change garbage bags' },
         { group: 'Guard 2', label: 'Clean bathrooms and leave doors open' },
         { group: 'Guard 2', label: 'Cycle laundry' },
-        { group: 'Guard 3 (Down for last rotation)', label: 'Vacuum facility/ include playpen' },
-        { group: 'Guard 3 (Down for last rotation)', label: 'Mop floors' },
-        { group: 'Front Desk', label: 'Tidy playpen / Close lobby' }
+        { group: 'Guard 3 (Down for Last Rotation)', label: 'Vacuum facility including playpen' },
+        { group: 'Guard 3 (Down for Last Rotation)', label: 'Mop floors' },
+        { group: 'Front Desk', label: 'Tidy playpen' },
+        { group: 'Front Desk', label: 'Close lobby' }
       ]
     },
     midday: [
       { group: 'All Guards', label: 'Check bathrooms during each rotation' },
-      { group: 'All Guards', label: 'Sweep/Mop, clean toilet, stock TP' },
-      { group: 'All Guards', label: 'Mirrors, hand railings, doorknob, walls' },
+      { group: 'All Guards', label: 'Sweep and mop' },
+      { group: 'All Guards', label: 'Clean toilet' },
+      { group: 'All Guards', label: 'Stock toilet paper' },
+      { group: 'All Guards', label: 'Clean mirrors, hand railings, doorknobs, and walls' },
       { group: 'All Guards', label: 'Sign bathroom log' },
       { group: 'All Guards', label: 'Empty dehumidifiers' },
       { group: 'All Guards', label: 'Midday chemical check' },
       { group: 'All Guards', label: 'Laundry (client towels only)' },
       { group: 'All Guards', label: 'Do not start washer with fewer than 5 towels' },
-      { group: 'All Guards', label: 'Do not change washer settings and use heavy duty setting for the dryer' },
-      { group: 'All Guards', label: 'Hand vacuum / Sweep / Dry Mop' },
-      { group: 'All Guards', label: 'Lobby, bathrooms, staff room, locker rooms' },
+      { group: 'All Guards', label: 'Do not change washer settings' },
+      { group: 'All Guards', label: 'Use heavy duty setting for the dryer' },
+      { group: 'All Guards', label: 'Hand vacuum, sweep, or dry mop' },
+      { group: 'All Guards', label: 'Lobby' },
+      { group: 'All Guards', label: 'Bathrooms' },
+      { group: 'All Guards', label: 'Staff room' },
+      { group: 'All Guards', label: 'Locker rooms' },
       { group: 'All Guards', label: 'Deck windows when time allows' }
     ]
   };
@@ -2683,6 +2699,23 @@
 
       container.appendChild(row);
     });
+  }
+
+  function addCustomGuardTask(sectionKey) {
+    if (!guardState || !guardState[sectionKey]) return;
+    const groupInput = prompt('Task group (optional):', '');
+    if (groupInput === null) return;
+    const labelInput = prompt('Task label:');
+    if (!labelInput) return;
+    guardState[sectionKey].push({
+      id: `task_custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      label: labelInput.trim(),
+      group: groupInput.trim() || null,
+      initials: '',
+      custom: true
+    });
+    saveGuardState();
+    renderGuardTasks();
   }
 
   function renderGuardRotation() {
@@ -3538,6 +3571,13 @@
     guardState = loadGuardState(date);
     saveGuardState();
     renderGuardTasks();
+  });
+
+  document.querySelectorAll('.guardAddTask').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const section = btn.dataset.section;
+      addCustomGuardTask(section);
+    });
   });
 
   // Virtual Desk Export

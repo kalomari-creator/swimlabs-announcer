@@ -2584,6 +2584,72 @@ app.post("/api/clear-roster", (req, res) => {
   }
 });
 
+// ==================== ADMIN CLEAR FUTURE ROSTER ====================
+app.post("/api/clear-roster-future", (req, res) => {
+  try {
+    const { location_id } = req.body || {};
+    const locId = location_id || 1;
+    const today = todayISO();
+
+    const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Invalid location" });
+    }
+
+    const existingRoster = db.prepare(`
+      SELECT * FROM roster
+      WHERE date >= ? AND location_id = ?
+    `).all(today, locId);
+
+    let backupFile = null;
+    if (existingRoster.length > 0) {
+      const exportDir = path.join(EXPORT_DIR, location.code);
+      if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const exportFilename = `roster_CLEARED_FUTURE_${location.code}_${today}_${timestamp}.json`;
+      const exportPath = path.join(exportDir, exportFilename);
+
+      fs.writeFileSync(exportPath, JSON.stringify({
+        location: location.name,
+        location_code: location.code,
+        date_start: today,
+        cleared_at: nowISO(),
+        count: existingRoster.length,
+        roster: existingRoster
+      }, null, 2), 'utf-8');
+
+      backupFile = `${location.code}/${exportFilename}`;
+      console.log(`[ADMIN CLEAR FUTURE] Backed up ${existingRoster.length} swimmers to: ${backupFile}`);
+    }
+
+    const result = db.prepare(`
+      DELETE FROM roster WHERE date >= ? AND location_id = ?
+    `).run(today, locId);
+
+    audit(req, "admin_clear_roster_future", {
+      location: location.name,
+      location_id: locId,
+      date_start: today,
+      deleted_count: result.changes,
+      backup_file: backupFile
+    });
+
+    console.log(`[ADMIN CLEAR FUTURE] Deleted ${result.changes} swimmers for ${location.name} (from ${today})`);
+
+    res.json({
+      ok: true,
+      deleted_count: result.changes,
+      backup_file: backupFile,
+      location: location.name,
+      date_start: today
+    });
+  } catch (error) {
+    console.error("Clear future roster error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // ==================== ADMIN CLEAR ALL ROSTERS ====================
 app.post("/api/clear-roster-all", (req, res) => {
   try {
