@@ -1,0 +1,23 @@
+/* SwimLabs Announcer: SUB Badge CSS
+   Add this to your <style> section in index.html
+   Find .badge.addon and .badge.over, then add this after them */
+
+.badge.sub {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(249,115,22,0.45);
+  background: rgba(249,115,22,0.15);
+  color: rgb(249,115,22);
+  cursor: help;
+}
+
+.badge.sub:hover {
+  background: rgba(249,115,22,0.25);
+  transform: scale(1.05);
+  transition: all 0.15s ease;
+}
