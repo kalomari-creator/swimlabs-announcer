@@ -2044,8 +2044,11 @@
       tdAtt.appendChild(renderAttendance(kid));
       tr.appendChild(tdAtt);
 
-      const subMeta = getSubMeta(kid);
-      if (subMeta.hasSub) tr.classList.add('row-sub');
+      const hasSub = kid.is_substitute || kid.original_instructor || kid.substitute_instructor;
+      const originalSubLabel = kid.original_instructor ||
+        ((kid.substitute_instructor && kid.instructor_name && kid.substitute_instructor !== kid.instructor_name)
+          ? kid.instructor_name
+          : '');
 
       // Swimmer (with badges + flags)
       const tdName = document.createElement('td');
@@ -2067,11 +2070,11 @@
         nameLine.appendChild(b);
       }
 
-      if (subMeta.hasSub) {
+      if (hasSub) {
         const b = document.createElement('span');
         b.className = 'badge sub';
         b.textContent = 'SUB';
-        b.title = subMeta.originalName ? `Subbing for ${subMeta.originalName}` : 'Substitute';
+        b.title = originalSubLabel ? `Subbing for ${originalSubLabel}` : 'Substitute';
         nameLine.appendChild(b);
       }
 
@@ -2097,15 +2100,15 @@
 
       // Instructor (show substitute name + original when applicable)
       const tdInst = document.createElement('td');
-      if (subMeta.hasSub) {
+      if (hasSub) {
         const instDiv = document.createElement('div');
         instDiv.style.display = 'flex';
         instDiv.style.alignItems = 'center';
         instDiv.style.gap = '8px';
         instDiv.style.flexWrap = 'wrap';
 
-        const subNameValue = subMeta.subName;
-        const originalValue = subMeta.originalName;
+        const subNameValue = kid.substitute_instructor || kid.instructor_name || '—';
+        const originalValue = originalSubLabel;
 
         const instName = document.createElement('span');
         instName.textContent = `${subNameValue} (Sub)`;
