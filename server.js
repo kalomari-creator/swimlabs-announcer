@@ -2455,6 +2455,87 @@ app.post("/api/clear-roster", (req, res) => {
   }
 });
 
+// ==================== ADMIN CLEAR ALL ROSTERS ====================
+app.post("/api/clear-roster-all", (req, res) => {
+  try {
+    const date = activeOrToday();
+    const existingRoster = db.prepare(`SELECT * FROM roster`).all();
+    let backupFile = null;
+    let clearedScheduleEntries = 0;
+    let clearedExportEntries = 0;
+
+    if (existingRoster.length > 0) {
+      const exportDir = path.join(EXPORT_DIR, "ALL");
+      if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const exportFilename = `roster_CLEARED_ALL_${date}_${timestamp}.json`;
+      const exportPath = path.join(exportDir, exportFilename);
+
+      fs.writeFileSync(exportPath, JSON.stringify({
+        date: date,
+        cleared_at: nowISO(),
+        count: existingRoster.length,
+        roster: existingRoster
+      }, null, 2), 'utf-8');
+
+      backupFile = `ALL/${exportFilename}`;
+      console.log(`[ADMIN CLEAR ALL] Backed up ${existingRoster.length} swimmers to: ${backupFile}`);
+    }
+
+    const result = db.prepare(`DELETE FROM roster`).run();
+
+    const clearDirectory = (dir) => {
+      if (!fs.existsSync(dir)) return 0;
+      let cleared = 0;
+      fs.readdirSync(dir).forEach((entry) => {
+        const fullPath = path.join(dir, entry);
+        fs.rmSync(fullPath, { recursive: true, force: true });
+        cleared += 1;
+      });
+      return cleared;
+    };
+
+    clearedScheduleEntries = clearDirectory(SCHEDULE_DIR);
+    clearedExportEntries = clearDirectory(EXPORT_DIR);
+
+    if (!fs.existsSync(SCHEDULE_DIR)) fs.mkdirSync(SCHEDULE_DIR, { recursive: true });
+    if (!fs.existsSync(EXPORT_DIR)) fs.mkdirSync(EXPORT_DIR, { recursive: true });
+
+    const locations = db.prepare(`SELECT * FROM locations`).all();
+    locations.forEach((location) => {
+      const schedDir = getScheduleDir(location);
+      if (!fs.existsSync(schedDir)) fs.mkdirSync(schedDir, { recursive: true });
+      if (location?.code) {
+        const expDir = path.join(EXPORT_DIR, location.code);
+        if (!fs.existsSync(expDir)) fs.mkdirSync(expDir, { recursive: true });
+      }
+    });
+
+    audit(req, "admin_clear_roster_all", {
+      date: date,
+      deleted_count: result.changes,
+      backup_file: backupFile,
+      cleared_schedule_entries: clearedScheduleEntries,
+      cleared_export_entries: clearedExportEntries
+    });
+
+    console.log(`[ADMIN CLEAR ALL] Deleted ${result.changes} roster rows, cleared ${clearedScheduleEntries} schedule entries, ${clearedExportEntries} exports`);
+
+    res.json({
+      ok: true,
+      deleted_count: result.changes,
+      backup_file: backupFile,
+      date: date,
+      cleared_schedule_entries: clearedScheduleEntries,
+      cleared_export_entries: clearedExportEntries
+    });
+  } catch (error) {
+    console.error("Clear all rosters error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Admin stats endpoint
 app.get("/api/admin/stats", (req, res) => {
   try {

@@ -328,8 +328,27 @@
       border-color: rgba(34,197,94,.35);
       background: rgba(34,197,94,.08);
     }
-    .guard-task input[type="checkbox"] { transform: scale(1.1); }
+    .guard-task input[type="text"] {
+      width: 72px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      text-align: center;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 8px;
+      padding: 6px 8px;
+      color: #fff;
+    }
     .guard-task span { flex: 1; }
+    .guard-group-title {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: rgba(148,163,184,.9);
+      margin: 10px 0 6px;
+      letter-spacing: 0.4px;
+    }
     .guard-meta {
       display: flex;
       gap: 10px;
@@ -707,6 +726,11 @@
           <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🗑️ Clear Roster</div>
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Remove all uploaded roster data for current location</div>
         </div>
+
+        <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.45);" id="adminNavClearAllRosters">
+          <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🧨 Master Clear All Uploads</div>
+          <div class="tiny" style="color:var(--muted); line-height:1.4;">Permanently delete all roster data + uploaded files for every location</div>
+        </div>
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
@@ -720,12 +744,6 @@
       <h2 style="margin:0 0 16px; font-size:20px;">🛟 Lifeguard Dashboard</h2>
       <div class="tiny" style="color:var(--muted); margin-bottom:12px;">
         Guard tasks are available for SwimLabs Westchester.
-      </div>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px;">
-        <div class="card" style="cursor:pointer; transition: all .15s ease;" id="lifeguardNavGuards">
-          <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
-          <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
-        </div>
       </div>
     </div>
   </div>
@@ -745,56 +763,55 @@
           <input type="date" id="guardTasksDate" />
         </div>
         <div class="field">
-          <label>Shift</label>
-          <select id="guardShiftSelect">
-            <option value="opening">Opening</option>
-            <option value="midday">Midday</option>
-            <option value="closing">Closing</option>
-          </select>
+          <label>Guard 1</label>
+          <input type="text" id="guardName1" placeholder="Name..." />
+        </div>
+        <div class="field">
+          <label>Guard 2</label>
+          <input type="text" id="guardName2" placeholder="Name..." />
+        </div>
+        <div class="field">
+          <label>Guard 3</label>
+          <input type="text" id="guardName3" placeholder="Name..." />
         </div>
         <div class="spacer"></div>
-        <button class="secondary" id="guardTasksMarkAll">Mark all done</button>
+        <button class="secondary" id="guardTasksShuffle">Randomize guard numbers</button>
         <button class="danger" id="guardTasksReset">Reset</button>
+      </div>
+
+      <div class="tiny" style="color:var(--muted); margin-bottom:16px;">
+        Manager: enter the guard names for the day. Weekdays have no rotation unless manually added. Weekends rotate Guard 2 + 3 first, then 3 + 1, then 1 + 2.
+      </div>
+      <div class="tiny" style="color:rgba(248,250,252,0.9); font-weight:700; margin-bottom:16px;">
+        IF YOU ARE DOWN AND DON'T KNOW WHAT TO WORK ON OR DO, SEE MANAGER.
       </div>
 
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;">
         <div class="guard-section">
           <h4>🌅 Opening Checklist</h4>
           <div id="guardOpeningList"></div>
-          <div class="row">
-            <input type="text" id="guardOpeningNew" placeholder="Add opening task..." />
-            <button class="secondary" id="guardOpeningAdd">Add</button>
-          </div>
         </div>
 
         <div class="guard-section">
           <h4>🌤️ Midday Checklist</h4>
           <div id="guardMiddayList"></div>
-          <div class="row">
-            <input type="text" id="guardMiddayNew" placeholder="Add midday task..." />
-            <button class="secondary" id="guardMiddayAdd">Add</button>
-          </div>
         </div>
 
         <div class="guard-section">
           <h4>🌙 Closing Checklist</h4>
           <div id="guardClosingList"></div>
-          <div class="row">
-            <input type="text" id="guardClosingNew" placeholder="Add closing task..." />
-            <button class="secondary" id="guardClosingAdd">Add</button>
-          </div>
         </div>
       </div>
 
       <div class="guard-section" style="margin-top:16px;">
         <h4>🔁 Rotation Plan</h4>
-        <div class="tiny" style="color:var(--muted); margin-bottom:8px;">Log rotations by time, guard, and zone.</div>
+        <div class="tiny" style="color:var(--muted); margin-bottom:8px;" id="guardRotationHint">Log rotations by time, guard, and zone.</div>
         <table class="guard-rotation-table">
           <thead>
             <tr>
-              <th style="width:25%;">Time</th>
-              <th style="width:40%;">Guard</th>
-              <th style="width:25%;">Zone</th>
+              <th style="width:25%;">Time / Block</th>
+              <th style="width:40%;">Guards Up</th>
+              <th style="width:25%;">Notes</th>
               <th style="width:10%;"></th>
             </tr>
           </thead>
@@ -1331,7 +1348,15 @@
   function updateGuardTasksVisibility() {
     const guardCard = el('adminNavGuards');
     if (!guardCard) return;
-    guardCard.style.display = isWestchesterLocation() ? '' : 'none';
+    const isWestchester = isWestchesterLocation();
+    guardCard.style.display = isWestchester ? '' : 'none';
+    const lifeguardOption = el('viewSelect')?.querySelector('option[value="lifeguard"]');
+    if (lifeguardOption) lifeguardOption.hidden = !isWestchester;
+    if (!isWestchester && el('viewSelect')?.value === 'lifeguard') {
+      el('viewSelect').value = 'roster';
+      el('panelGuardTasks').classList.add('hidden');
+      el('panelRoster').classList.remove('hidden');
+    }
   }
 
   el('locationSelect').addEventListener('change', async (e) => {
@@ -2274,13 +2299,7 @@
   }
 
   function showLifeguardPanel() {
-    el('viewSelect').value = 'lifeguard';
-    el('panelRoster').classList.add('hidden');
-    el('panelAnnouncements').classList.add('hidden');
-    el('panelVirtualDesk').classList.add('hidden');
-    el('panelAdmin').classList.add('hidden');
-    el('panelLifeguard').classList.remove('hidden');
-    el('panelGuardTasks').classList.add('hidden');
+    showGuardTasksPanel('lifeguard');
   }
 
   async function loadAdminStats() {
@@ -2297,27 +2316,66 @@
   }
 
   const guardTaskTemplates = {
-    opening: [
-      'Unlock pool deck + front desk',
-      'Set up lifeguard radios + whistles',
-      'Check rescue tube + backboard',
-      'Verify AED + first aid kit present',
-      'Test water temp + chemical log',
-      'Walk deck for hazards'
-    ],
+    weekday: {
+      opening: [
+        { group: 'Guard 1 (First Guard In)', label: 'Chemicals check' },
+        { group: 'Guard 1 (First Guard In)', label: 'Make sure each pool has a bin' },
+        { group: 'Guard 1 (First Guard In)', label: 'Vacuum pools' },
+        { group: 'Guard 2 (Second Guard In)', label: 'Cycle laundry' },
+        { group: 'Guard 2 (Second Guard In)', label: 'Empty dehumidifiers' },
+        { group: 'Guard 2 (Second Guard In)', label: 'Check playpen' },
+        { group: 'Front Desk', label: 'Set up lobby' },
+        { group: 'All Guards', label: 'Pick up a walkie' }
+      ],
+      closing: [
+        { group: 'Guard 1', label: 'Chemicals check' },
+        { group: 'Guard 1', label: 'Clean pool deck and close deck doors' },
+        { group: 'Guard 1', label: 'Empty dehumidifiers' },
+        { group: 'Guard 1', label: 'Cycle laundry' },
+        { group: 'Guard 1', label: 'Clean bathrooms and leave doors open' },
+        { group: 'Guard 2', label: 'Empty and change garbage bags' },
+        { group: 'Guard 2', label: 'Vacuum facility (include playpen)' },
+        { group: 'Guard 2', label: 'Mop floors' },
+        { group: 'All Guards', label: 'Return walkie' }
+      ]
+    },
+    weekend: {
+      opening: [
+        { group: 'Guard 1', label: 'Chemicals check' },
+        { group: 'Guard 1', label: 'Make sure each pool has a bin' },
+        { group: 'Guard 1', label: 'Vacuum pools' },
+        { group: 'Guard 2', label: 'Set up lobby' },
+        { group: 'Guard 2', label: 'Cycle laundry' },
+        { group: 'Guard 2', label: 'Empty dehumidifiers' },
+        { group: 'Guard 3 (Up for first rotation)', label: 'Check playpen' },
+        { group: 'Guard 3 (Up for first rotation)', label: 'Restock snack wall, fridge, and coffee station' },
+        { group: 'All Guards', label: 'Pick up a walkie' }
+      ],
+      closing: [
+        { group: 'Guard 1', label: 'Chemicals check' },
+        { group: 'Guard 1', label: 'Clean pool deck and close doors' },
+        { group: 'Guard 2', label: 'Empty dehumidifiers' },
+        { group: 'Guard 2', label: 'Empty and change garbage bags' },
+        { group: 'Guard 2', label: 'Clean bathrooms and leave doors open' },
+        { group: 'Guard 2', label: 'Cycle laundry' },
+        { group: 'Guard 3 (Down for last rotation)', label: 'Vacuum facility/ include playpen' },
+        { group: 'Guard 3 (Down for last rotation)', label: 'Mop floors' },
+        { group: 'Front Desk', label: 'Tidy playpen / Close lobby' }
+      ]
+    },
     midday: [
-      'Rotate guard positions',
-      'Scan deck equipment readiness',
-      'Hydration + sunscreen check',
-      'Review lesson pace vs schedule',
-      'Update whiteboard / signage'
-    ],
-    closing: [
-      'Final pool sweep + clear deck',
-      'Secure chemicals + storage',
-      'Return rescue equipment',
-      'Lock doors + lights off',
-      'Complete end-of-day log'
+      { group: 'All Guards', label: 'Check bathrooms during each rotation' },
+      { group: 'All Guards', label: 'Sweep/Mop, clean toilet, stock TP' },
+      { group: 'All Guards', label: 'Mirrors, hand railings, doorknob, walls' },
+      { group: 'All Guards', label: 'Sign bathroom log' },
+      { group: 'All Guards', label: 'Empty dehumidifiers' },
+      { group: 'All Guards', label: 'Midday chemical check' },
+      { group: 'All Guards', label: 'Laundry (client towels only)' },
+      { group: 'All Guards', label: 'Do not start washer with fewer than 5 towels' },
+      { group: 'All Guards', label: 'Do not change washer settings and use heavy duty setting for the dryer' },
+      { group: 'All Guards', label: 'Hand vacuum / Sweep / Dry Mop' },
+      { group: 'All Guards', label: 'Lobby, bathrooms, staff room, locker rooms' },
+      { group: 'All Guards', label: 'Deck windows when time allows' }
     ]
   };
 
@@ -2329,11 +2387,27 @@
   }
 
   function buildGuardTasks(template) {
-    return template.map((label, idx) => ({
+    return template.map((item, idx) => ({
       id: `task_${idx}_${Math.random().toString(36).slice(2, 7)}`,
-      label,
-      done: false,
+      label: item.label || item,
+      group: item.group || null,
+      initials: '',
       custom: false
+    }));
+  }
+
+  function isWeekendDate(dateStr) {
+    if (!dateStr) return false;
+    const d = new Date(`${dateStr}T00:00:00`);
+    const day = d.getDay();
+    return day === 0 || day === 6;
+  }
+
+  function normalizeGuardTasks(list) {
+    return (list || []).map((task) => ({
+      ...task,
+      group: task.group || null,
+      initials: task.initials || (task.done ? '✓' : '')
     }));
   }
 
@@ -2344,21 +2418,29 @@
     if (existing) {
       try {
         const parsed = JSON.parse(existing);
+        const weekend = isWeekendDate(date);
+        const dayType = weekend ? 'weekend' : 'weekday';
         return {
           date,
-          opening: parsed.opening || buildGuardTasks(guardTaskTemplates.opening),
-          midday: parsed.midday || buildGuardTasks(guardTaskTemplates.midday),
-          closing: parsed.closing || buildGuardTasks(guardTaskTemplates.closing),
+          dayType,
+          guardNames: parsed.guardNames || { 1: '', 2: '', 3: '' },
+          opening: normalizeGuardTasks(parsed.opening || buildGuardTasks(guardTaskTemplates[dayType].opening)),
+          midday: normalizeGuardTasks(parsed.midday || buildGuardTasks(guardTaskTemplates.midday)),
+          closing: normalizeGuardTasks(parsed.closing || buildGuardTasks(guardTaskTemplates[dayType].closing)),
           rotation: parsed.rotation || [],
           notes: parsed.notes || ''
         };
       } catch (_) {}
     }
+    const weekend = isWeekendDate(date);
+    const dayType = weekend ? 'weekend' : 'weekday';
     return {
       date,
-      opening: buildGuardTasks(guardTaskTemplates.opening),
-      midday: buildGuardTasks(guardTaskTemplates.midday),
-      closing: buildGuardTasks(guardTaskTemplates.closing),
+      dayType,
+      guardNames: { 1: '', 2: '', 3: '' },
+      opening: normalizeGuardTasks(buildGuardTasks(guardTaskTemplates[dayType].opening)),
+      midday: normalizeGuardTasks(buildGuardTasks(guardTaskTemplates.midday)),
+      closing: normalizeGuardTasks(buildGuardTasks(guardTaskTemplates[dayType].closing)),
       rotation: [],
       notes: ''
     };
@@ -2372,42 +2454,56 @@
   function setGuardMeta() {
     if (!guardState?.date) return;
     const allTasks = [...guardState.opening, ...guardState.midday, ...guardState.closing];
-    const doneCount = allTasks.filter(t => t.done).length;
+    const doneCount = allTasks.filter(t => (t.initials || '').trim().length > 0).length;
     const totalCount = allTasks.length;
     const locName = currentLocation?.name || 'Unknown location';
-    el('guardTasksMeta').textContent = `${locName} • ${guardState.date} • ${doneCount}/${totalCount} tasks complete`;
+    const dayLabel = guardState.dayType === 'weekend' ? 'Weekend' : 'Weekday';
+    el('guardTasksMeta').textContent = `${locName} • ${guardState.date} • ${dayLabel} • ${doneCount}/${totalCount} tasks complete`;
   }
 
   function renderGuardSection(list, containerId, sectionKey) {
     const container = el(containerId);
     container.innerHTML = '';
+    let lastGroup = null;
     list.forEach((task) => {
+      if (task.group && task.group !== lastGroup) {
+        const group = document.createElement('div');
+        group.className = 'guard-group-title';
+        group.textContent = task.group;
+        container.appendChild(group);
+        lastGroup = task.group;
+      }
       const row = document.createElement('div');
-      row.className = `guard-task ${task.done ? 'done' : ''}`;
-
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = task.done;
-      checkbox.addEventListener('change', () => {
-        task.done = checkbox.checked;
-        saveGuardState();
-        renderGuardTasks();
-      });
-      row.appendChild(checkbox);
+      const isDone = (task.initials || '').trim().length > 0;
+      row.className = `guard-task ${isDone ? 'done' : ''}`;
 
       const label = document.createElement('span');
       label.textContent = task.label;
       row.appendChild(label);
 
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'miniBtn';
-      removeBtn.textContent = '✕';
-      removeBtn.addEventListener('click', () => {
-        guardState[sectionKey] = guardState[sectionKey].filter(t => t.id !== task.id);
+      const initials = document.createElement('input');
+      initials.type = 'text';
+      initials.maxLength = 4;
+      initials.placeholder = 'Init';
+      initials.value = task.initials || '';
+      initials.addEventListener('input', () => {
+        task.initials = initials.value.toUpperCase();
         saveGuardState();
         renderGuardTasks();
       });
-      row.appendChild(removeBtn);
+      row.appendChild(initials);
+
+      if (task.custom) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'miniBtn';
+        removeBtn.textContent = '✕';
+        removeBtn.addEventListener('click', () => {
+          guardState[sectionKey] = guardState[sectionKey].filter(t => t.id !== task.id);
+          saveGuardState();
+          renderGuardTasks();
+        });
+        row.appendChild(removeBtn);
+      }
 
       container.appendChild(row);
     });
@@ -2416,6 +2512,46 @@
   function renderGuardRotation() {
     const body = el('guardRotationBody');
     body.innerHTML = '';
+    const weekend = guardState.dayType === 'weekend';
+    const rotationHint = el('guardRotationHint');
+    if (weekend) {
+      rotationHint.textContent = 'Weekend rotation starts with Guard 2 + 3, then 3 + 1, then 1 + 2 (repeat).';
+      const guardLabels = {
+        1: guardState.guardNames?.[1] ? `Guard 1 (${guardState.guardNames[1]})` : 'Guard 1',
+        2: guardState.guardNames?.[2] ? `Guard 2 (${guardState.guardNames[2]})` : 'Guard 2',
+        3: guardState.guardNames?.[3] ? `Guard 3 (${guardState.guardNames[3]})` : 'Guard 3'
+      };
+      const pattern = [
+        [2, 3],
+        [3, 1],
+        [1, 2]
+      ];
+      const totalBlocks = 6;
+      for (let i = 0; i < totalBlocks; i += 1) {
+        const pair = pattern[i % pattern.length];
+        const tr = document.createElement('tr');
+
+        const tdBlock = document.createElement('td');
+        tdBlock.textContent = `Block ${i + 1}`;
+        tr.appendChild(tdBlock);
+
+        const tdGuard = document.createElement('td');
+        tdGuard.textContent = `${guardLabels[pair[0]]} + ${guardLabels[pair[1]]}`;
+        tr.appendChild(tdGuard);
+
+        const tdZone = document.createElement('td');
+        tdZone.textContent = 'Rotation';
+        tr.appendChild(tdZone);
+
+        const tdRemove = document.createElement('td');
+        tr.appendChild(tdRemove);
+
+        body.appendChild(tr);
+      }
+      return;
+    }
+
+    rotationHint.textContent = 'Weekdays have no rotation unless updated manually.';
     guardState.rotation.forEach((entry, idx) => {
       const tr = document.createElement('tr');
 
@@ -2472,6 +2608,10 @@
     renderGuardSection(guardState.closing, 'guardClosingList', 'closing');
     renderGuardRotation();
     el('guardNotes').value = guardState.notes || '';
+    el('guardName1').value = guardState.guardNames?.[1] || '';
+    el('guardName2').value = guardState.guardNames?.[2] || '';
+    el('guardName3').value = guardState.guardNames?.[3] || '';
+    el('guardRotationAdd').style.display = guardState.dayType === 'weekend' ? 'none' : '';
     setGuardMeta();
   }
 
@@ -3113,15 +3253,13 @@
     openInstructorReport();
   });
 
-  el('lifeguardNavGuards').addEventListener('click', () => {
-    showGuardTasksPanel('lifeguard');
-  });
-
   el('guardTasksBack').addEventListener('click', () => {
     if (lastPanel === 'virtualDesk') {
       showVirtualDeskPanel();
     } else if (lastPanel === 'lifeguard') {
-      showLifeguardPanel();
+      el('viewSelect').value = 'roster';
+      el('panelRoster').classList.remove('hidden');
+      el('panelGuardTasks').classList.add('hidden');
     } else {
       el('viewSelect').value = 'roster';
       el('panelRoster').classList.remove('hidden');
@@ -3134,29 +3272,32 @@
     renderGuardTasks();
   });
 
-  el('guardOpeningAdd').addEventListener('click', () => {
-    const value = el('guardOpeningNew').value.trim();
-    if (!value) return;
-    guardState.opening.push({ id: `custom_${Date.now()}`, label: value, done: false, custom: true });
-    el('guardOpeningNew').value = '';
-    saveGuardState();
-    renderGuardTasks();
+  ['guardName1', 'guardName2', 'guardName3'].forEach((id, idx) => {
+    el(id).addEventListener('input', () => {
+      if (!guardState) return;
+      guardState.guardNames = guardState.guardNames || { 1: '', 2: '', 3: '' };
+      guardState.guardNames[idx + 1] = el(id).value.trim();
+      saveGuardState();
+      renderGuardRotation();
+    });
   });
 
-  el('guardMiddayAdd').addEventListener('click', () => {
-    const value = el('guardMiddayNew').value.trim();
-    if (!value) return;
-    guardState.midday.push({ id: `custom_${Date.now()}`, label: value, done: false, custom: true });
-    el('guardMiddayNew').value = '';
-    saveGuardState();
-    renderGuardTasks();
-  });
-
-  el('guardClosingAdd').addEventListener('click', () => {
-    const value = el('guardClosingNew').value.trim();
-    if (!value) return;
-    guardState.closing.push({ id: `custom_${Date.now()}`, label: value, done: false, custom: true });
-    el('guardClosingNew').value = '';
+  el('guardTasksShuffle').addEventListener('click', () => {
+    if (!guardState) return;
+    const names = [el('guardName1').value.trim(), el('guardName2').value.trim(), el('guardName3').value.trim()].filter(Boolean);
+    if (names.length < 2) {
+      alert('Enter at least two guard names to randomize.');
+      return;
+    }
+    for (let i = names.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [names[i], names[j]] = [names[j], names[i]];
+    }
+    guardState.guardNames = {
+      1: names[0] || '',
+      2: names[1] || '',
+      3: names[2] || ''
+    };
     saveGuardState();
     renderGuardTasks();
   });
@@ -3171,14 +3312,6 @@
     if (!guardState) return;
     guardState.notes = el('guardNotes').value;
     saveGuardState();
-  });
-
-  el('guardTasksMarkAll').addEventListener('click', () => {
-    const shift = el('guardShiftSelect').value;
-    if (!guardState?.[shift]) return;
-    guardState[shift] = guardState[shift].map(t => ({ ...t, done: true }));
-    saveGuardState();
-    renderGuardTasks();
   });
 
   el('guardTasksReset').addEventListener('click', () => {
@@ -3589,6 +3722,40 @@
 
       if (resp.ok) {
         alert(`✅ Roster Cleared!\n\nDeleted ${resp.deleted_count} swimmers for ${locationName}.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
+        await loadBlocks();
+        await loadRoster();
+      }
+    } catch (e) {
+      alert(`❌ Clear Failed\n\n${e.message}`);
+    }
+  });
+
+  el('adminNavClearAllRosters').addEventListener('click', async () => {
+    const confirmMsg = `⚠️ MASTER DELETE ALL ROSTERS\n\n` +
+      `This will permanently delete ALL roster data and uploaded files for EVERY location.\n\n` +
+      `• All swimmers will be removed\n` +
+      `• All attendance records will be deleted\n` +
+      `• All flags and notes will be lost\n` +
+      `• All uploaded PDFs/HTML and server exports will be deleted\n\n` +
+      `A full roster backup will be auto-exported before deletion.\n\n` +
+      `Type "DELETE ALL" to confirm:`;
+
+    const userInput = prompt(confirmMsg);
+
+    if (userInput !== 'DELETE ALL') {
+      if (userInput !== null) {
+        alert('Cancelled. No rosters were deleted.');
+      }
+      return;
+    }
+
+    try {
+      const resp = await api('/api/clear-roster-all', {
+        method: 'POST'
+      });
+
+      if (resp.ok) {
+        alert(`✅ All Rosters Cleared!\n\nDeleted ${resp.deleted_count} total swimmers.\n\nBackup saved to: ${resp.backup_file || 'N/A'}`);
         await loadBlocks();
         await loadRoster();
       }
