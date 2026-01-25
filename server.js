@@ -334,6 +334,34 @@ function setActiveDate(date) {
   `).run("activeDate", d);
 }
 
+function getManagerDateRange() {
+  try {
+    const row = db.prepare(`SELECT value FROM app_state WHERE key = ?`).get("managerDateRange");
+    if (!row?.value) return null;
+    const parsed = JSON.parse(String(row.value));
+    if (!parsed?.start || !parsed?.end) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.start)) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(parsed.end)) return null;
+    return parsed;
+  } catch (_) {
+    return null;
+  }
+}
+
+function setManagerDateRange(start, end) {
+  const s = String(start || "").trim();
+  const e = String(end || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return null;
+  if (s > e) return null;
+  const payload = JSON.stringify({ start: s, end: e });
+  db.prepare(`
+    INSERT INTO app_state(key, value) VALUES(?, ?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value
+  `).run("managerDateRange", payload);
+  return { start: s, end: e };
+}
+
 function activeOrToday() {
   return getActiveDate() || todayISO();
 }
@@ -881,6 +909,7 @@ function speakAnnouncement(text, opts = {}) {
 // -------------------- API --------------------
 app.get("/api/status", (req, res) => {
   const activeDate = activeOrToday();
+  const managerDateRange = getManagerDateRange();
 
   const expectedPdf = `Roll_Sheets_${activeDate.slice(5,7)}-${activeDate.slice(8,10)}-${activeDate.slice(0,4)}.pdf`;
   const pdfPath = path.join(SCHEDULE_DIR, expectedPdf);
@@ -901,6 +930,7 @@ app.get("/api/status", (req, res) => {
     htmlSizeBytes: htmlExists ? fs.statSync(htmlPath).size : 0,
     piperBinExists: fs.existsSync(PIPER_BIN),
     voiceModelExists: fs.existsSync(VOICE_MODEL),
+    managerDateRange,
     lastAnnouncement
   });
 });
@@ -916,6 +946,26 @@ app.post("/api/set-active-date", (req, res) => {
     res.json({ ok: true, activeDate: activeOrToday() });
   } catch (e) {
     res.status(500).json({ ok: false, error: "set-active-date failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/manager-date-range", (req, res) => {
+  try {
+    const { start, end } = req.body || {};
+    const saved = setManagerDateRange(start, end);
+    if (!saved) return res.status(400).json({ ok: false, error: "invalid date range" });
+    audit(req, "set_manager_date_range", { start: saved.start, end: saved.end });
+    res.json({ ok: true, range: saved });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "manager-date-range failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.get("/api/manager-date-range", (req, res) => {
+  try {
+    res.json({ ok: true, range: getManagerDateRange() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "manager-date-range failed", details: String(e?.stack || e?.message || e) });
   }
 });
 
@@ -1637,6 +1687,23 @@ function parseHTMLRoster(html) {
     let instructorName = null;
     let substituteInstructor = null;
 
+    const headerText = $section.find('.full-width-header').text().replace(/\s+/g, ' ').trim();
+    if (headerText) {
+      const headerMatch = headerText.match(/with\s+(.+?)(?:\s{2,}|Zone:|Program:|Schedule:|Capacity:|Ages:|$)/i);
+      if (headerMatch) {
+        const headerInstructor = headerMatch[1].trim();
+        const headerIsSub = /\*/.test(headerInstructor) || /\(sub\)/i.test(headerInstructor);
+        const cleanedHeader = headerInstructor.replace(/\(sub\)/ig, "").replace(/\*/g, "").trim();
+        if (cleanedHeader) {
+          if (headerIsSub) {
+            substituteInstructor = lastFirstToFirstLast(cleanedHeader);
+          } else {
+            instructorName = lastFirstToFirstLast(cleanedHeader);
+          }
+        }
+      }
+    }
+
     // Get all instructor list items
     const instructorItems = $section.find('th:contains("Instructors:")').next().find('li');
 
@@ -1650,7 +1717,7 @@ function parseHTMLRoster(html) {
           // This is the substitute - remove asterisk and convert name
           const cleanName = text.replace(/\*/g, '').trim();
           substituteInstructor = lastFirstToFirstLast(cleanName);
-        } else if (idx === 0) {
+        } else if (!instructorName) {
           // First instructor without asterisk is the original/regular instructor
           instructorName = lastFirstToFirstLast(text);
         }

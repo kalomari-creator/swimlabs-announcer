@@ -300,6 +300,64 @@
       transition: all 0.15s ease;
     }
 
+    tbody tr.row-sub { background: rgba(249,115,22,0.06); }
+    tbody tr.row-sub:hover { background: rgba(249,115,22,0.12); }
+
+    .guard-section {
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      background: rgba(255,255,255,.03);
+    }
+    .guard-section h4 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      font-weight: 900;
+    }
+    .guard-task {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.02);
+      margin-bottom: 8px;
+    }
+    .guard-task.done {
+      border-color: rgba(34,197,94,.35);
+      background: rgba(34,197,94,.08);
+    }
+    .guard-task input[type="checkbox"] { transform: scale(1.1); }
+    .guard-task span { flex: 1; }
+    .guard-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .guard-rotation-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    .guard-rotation-table th,
+    .guard-rotation-table td {
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      padding: 8px;
+      text-align: left;
+    }
+    .guard-rotation-table input {
+      width: 100%;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 8px;
+      padding: 6px 8px;
+      color: #fff;
+    }
+
     /* Attendance buttons */
     .attWrap{ display:flex; gap:6px; align-items:center; }
     .attBtn{
@@ -559,6 +617,28 @@
         </div>
       </div>
 
+      <div class="card" style="margin-bottom:20px;">
+        <h3 style="margin:0 0 12px; font-size:18px;">📅 Manager Date Brackets</h3>
+        <div class="grid2" style="margin-bottom:10px;">
+          <div class="field">
+            <label>Start date</label>
+            <input type="date" id="managerRangeStart" />
+          </div>
+          <div class="field">
+            <label>End date</label>
+            <input type="date" id="managerRangeEnd" />
+          </div>
+        </div>
+        <div class="row" style="flex-wrap:wrap; gap:8px;">
+          <button class="secondary" id="managerRangeWeek">This Week</button>
+          <button class="secondary" id="managerRangeNextTwo">Next 14 Days</button>
+          <button class="secondary" id="managerRangeMonth">This Month</button>
+          <div class="spacer"></div>
+          <button class="primary" id="managerRangeSave">Save Brackets</button>
+        </div>
+        <div class="tiny" style="margin-top:8px; color:var(--muted);" id="managerRangeHint">Saved range syncs report defaults and guard tasks.</div>
+      </div>
+
       <!-- Swimmer Details View -->
       <div class="card" id="swimmerDetailsView">
         <div class="row" style="margin-bottom:12px;">
@@ -646,6 +726,86 @@
           <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
           <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panelGuardTasks" class="hidden">
+    <div class="card">
+      <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+        <button class="secondary" id="guardTasksBack">← Back</button>
+        <div class="pill">🛟 Guard Tasks</div>
+        <div class="spacer"></div>
+        <div class="guard-meta" id="guardTasksMeta">No date selected</div>
+      </div>
+
+      <div class="row" style="margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+        <div class="field">
+          <label>Task date</label>
+          <input type="date" id="guardTasksDate" />
+        </div>
+        <div class="field">
+          <label>Shift</label>
+          <select id="guardShiftSelect">
+            <option value="opening">Opening</option>
+            <option value="midday">Midday</option>
+            <option value="closing">Closing</option>
+          </select>
+        </div>
+        <div class="spacer"></div>
+        <button class="secondary" id="guardTasksMarkAll">Mark all done</button>
+        <button class="danger" id="guardTasksReset">Reset</button>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px;">
+        <div class="guard-section">
+          <h4>🌅 Opening Checklist</h4>
+          <div id="guardOpeningList"></div>
+          <div class="row">
+            <input type="text" id="guardOpeningNew" placeholder="Add opening task..." />
+            <button class="secondary" id="guardOpeningAdd">Add</button>
+          </div>
+        </div>
+
+        <div class="guard-section">
+          <h4>🌤️ Midday Checklist</h4>
+          <div id="guardMiddayList"></div>
+          <div class="row">
+            <input type="text" id="guardMiddayNew" placeholder="Add midday task..." />
+            <button class="secondary" id="guardMiddayAdd">Add</button>
+          </div>
+        </div>
+
+        <div class="guard-section">
+          <h4>🌙 Closing Checklist</h4>
+          <div id="guardClosingList"></div>
+          <div class="row">
+            <input type="text" id="guardClosingNew" placeholder="Add closing task..." />
+            <button class="secondary" id="guardClosingAdd">Add</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="guard-section" style="margin-top:16px;">
+        <h4>🔁 Rotation Plan</h4>
+        <div class="tiny" style="color:var(--muted); margin-bottom:8px;">Log rotations by time, guard, and zone.</div>
+        <table class="guard-rotation-table">
+          <thead>
+            <tr>
+              <th style="width:25%;">Time</th>
+              <th style="width:40%;">Guard</th>
+              <th style="width:25%;">Zone</th>
+              <th style="width:10%;"></th>
+            </tr>
+          </thead>
+          <tbody id="guardRotationBody"></tbody>
+        </table>
+        <button class="secondary" id="guardRotationAdd" style="margin-top:10px;">+ Add rotation</button>
+      </div>
+
+      <div class="guard-section" style="margin-top:16px;">
+        <h4>📝 Notes</h4>
+        <textarea id="guardNotes" rows="4" style="width:100%; border-radius:12px; padding:10px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); color:#fff;" placeholder="Document incidents, reminders, or handoff notes..."></textarea>
       </div>
     </div>
   </div>
@@ -1015,6 +1175,7 @@
   let zoneTarget = null;
   let deviceMode = localStorage.getItem('deviceMode') || 'deck';
   let activeDateISO = null;
+  let managerDateRange = null;
   let blocksList = [];
   let autoTimers = [];
   let currentLocation = null;
@@ -1023,6 +1184,7 @@
   let pendingPinPanel = null; // Track which panel requested PIN auth ('virtualDesk' or 'admin')
   let nextAnnouncementTime = null; // Track next scheduled announcement
   let countdownInterval = null; // Interval for countdown updates
+  let lastPanel = 'roster';
 
   const el = (id) => document.getElementById(id);
   const escapeSelector = (value) => {
@@ -1252,6 +1414,29 @@
     return { type: p, level: '—' };
   }
 
+  function getSubMeta(kid){
+    const rawInstructor = String(kid?.instructor_name || '');
+    const rawSub = String(kid?.substitute_instructor || '');
+    const rawOriginal = String(kid?.original_instructor || '');
+    const hasMarker = /\*|\(sub\)|\bsub\b/i.test(rawInstructor);
+    const cleanedInstructor = rawInstructor.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
+    const cleanedSub = rawSub.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
+
+    let hasSub = Boolean(kid?.is_substitute || rawSub || rawOriginal || hasMarker);
+    let subName = cleanedSub || cleanedInstructor || rawSub || rawInstructor;
+    let originalName = rawOriginal || '';
+
+    if (!originalName && cleanedSub && cleanedInstructor && cleanedSub !== cleanedInstructor) {
+      originalName = cleanedInstructor;
+    }
+
+    return {
+      hasSub,
+      subName: subName || '—',
+      originalName
+    };
+  }
+
   function getProgramColorClass(program){
     const p = String(program || '').toUpperCase().trim();
     if(!p) return '';
@@ -1366,6 +1551,31 @@
     el('addSwimmerBtn').disabled = !currentBlock;
   }
 
+  function getTodayISO(){
+    return new Date().toISOString().split('T')[0];
+  }
+
+  function applyManagerDateRange(range){
+    managerDateRange = range;
+    if (el('managerRangeStart')) el('managerRangeStart').value = range?.start || '';
+    if (el('managerRangeEnd')) el('managerRangeEnd').value = range?.end || '';
+
+    const hint = el('managerRangeHint');
+    if (hint) {
+      hint.textContent = range
+        ? `Saved range: ${range.start} → ${range.end}. Applies to reports + guard tasks.`
+        : 'Saved range syncs report defaults and guard tasks.';
+    }
+
+    if (range?.start && range?.end) {
+      if (el('attendanceReportStartDate')) el('attendanceReportStartDate').value = range.start;
+      if (el('attendanceReportEndDate')) el('attendanceReportEndDate').value = range.end;
+      if (el('instructorReportStartDate')) el('instructorReportStartDate').value = range.start;
+      if (el('instructorReportEndDate')) el('instructorReportEndDate').value = range.end;
+      if (el('guardTasksDate') && !el('guardTasksDate').value) el('guardTasksDate').value = range.start;
+    }
+  }
+
   async function loadStatus(){
     const st = await api('/api/status');
 
@@ -1384,6 +1594,10 @@
 
     setLastAnnouncementUI(st.lastAnnouncement);
     el('blockHint').textContent = '';
+
+    if (st.managerDateRange) {
+      applyManagerDateRange(st.managerDateRange);
+    }
   }
 
   async function loadBlocks(){
@@ -1794,11 +2008,15 @@
       kids = kids.filter(kid => {
         const name = (kid.swimmer_name || '').toLowerCase();
         const instructor = (kid.instructor_name || '').toLowerCase();
+        const substitute = (kid.substitute_instructor || '').toLowerCase();
+        const original = (kid.original_instructor || '').toLowerCase();
         const zone = (kid.zone || '').toString().toLowerCase();
         const program = (kid.program || '').toLowerCase();
 
         return name.includes(query) ||
                instructor.includes(query) ||
+               substitute.includes(query) ||
+               original.includes(query) ||
                zone.includes(query) ||
                program.includes(query);
       });
@@ -1978,6 +2196,7 @@
   // View selector dropdown
   el('viewSelect').addEventListener('change', async (e) => {
     const view = e.target.value;
+    lastPanel = view;
 
     // Hide all panels
     el('panelRoster').classList.add('hidden');
@@ -1985,11 +2204,12 @@
     el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.add('hidden');
     el('panelLifeguard').classList.add('hidden');
+    el('panelGuardTasks').classList.add('hidden');
 
     if (view === 'roster') {
       el('panelRoster').classList.remove('hidden');
     } else if (view === 'lifeguard') {
-      el('panelLifeguard').classList.remove('hidden');
+      showLifeguardPanel();
     } else if (view === 'announcements') {
       el('panelAnnouncements').classList.remove('hidden');
     } else if (view === 'virtualDesk') {
@@ -2032,6 +2252,7 @@
     el('panelVirtualDesk').classList.remove('hidden');
     el('panelAdmin').classList.add('hidden');
     el('panelLifeguard').classList.add('hidden');
+    el('panelGuardTasks').classList.add('hidden');
 
     // Load virtual desk stats and swimmer details
     loadAdminStats();
@@ -2045,10 +2266,21 @@
     el('panelVirtualDesk').classList.add('hidden');
     el('panelAdmin').classList.remove('hidden');
     el('panelLifeguard').classList.add('hidden');
+    el('panelGuardTasks').classList.add('hidden');
 
     // Load locations and staff
     loadAdminLocations();
     loadStaff();
+  }
+
+  function showLifeguardPanel() {
+    el('viewSelect').value = 'lifeguard';
+    el('panelRoster').classList.add('hidden');
+    el('panelAnnouncements').classList.add('hidden');
+    el('panelVirtualDesk').classList.add('hidden');
+    el('panelAdmin').classList.add('hidden');
+    el('panelLifeguard').classList.remove('hidden');
+    el('panelGuardTasks').classList.add('hidden');
   }
 
   async function loadAdminStats() {
@@ -2062,6 +2294,201 @@
     } catch (e) {
       console.error('Failed to load admin stats:', e);
     }
+  }
+
+  const guardTaskTemplates = {
+    opening: [
+      'Unlock pool deck + front desk',
+      'Set up lifeguard radios + whistles',
+      'Check rescue tube + backboard',
+      'Verify AED + first aid kit present',
+      'Test water temp + chemical log',
+      'Walk deck for hazards'
+    ],
+    midday: [
+      'Rotate guard positions',
+      'Scan deck equipment readiness',
+      'Hydration + sunscreen check',
+      'Review lesson pace vs schedule',
+      'Update whiteboard / signage'
+    ],
+    closing: [
+      'Final pool sweep + clear deck',
+      'Secure chemicals + storage',
+      'Return rescue equipment',
+      'Lock doors + lights off',
+      'Complete end-of-day log'
+    ]
+  };
+
+  let guardState = null;
+
+  function guardStorageKey(date) {
+    const locId = currentLocation?.id || 1;
+    return `guardTasks_${locId}_${date}`;
+  }
+
+  function buildGuardTasks(template) {
+    return template.map((label, idx) => ({
+      id: `task_${idx}_${Math.random().toString(36).slice(2, 7)}`,
+      label,
+      done: false,
+      custom: false
+    }));
+  }
+
+  function loadGuardState(date) {
+    if (!date) return null;
+    const key = guardStorageKey(date);
+    const existing = localStorage.getItem(key);
+    if (existing) {
+      try {
+        const parsed = JSON.parse(existing);
+        return {
+          date,
+          opening: parsed.opening || buildGuardTasks(guardTaskTemplates.opening),
+          midday: parsed.midday || buildGuardTasks(guardTaskTemplates.midday),
+          closing: parsed.closing || buildGuardTasks(guardTaskTemplates.closing),
+          rotation: parsed.rotation || [],
+          notes: parsed.notes || ''
+        };
+      } catch (_) {}
+    }
+    return {
+      date,
+      opening: buildGuardTasks(guardTaskTemplates.opening),
+      midday: buildGuardTasks(guardTaskTemplates.midday),
+      closing: buildGuardTasks(guardTaskTemplates.closing),
+      rotation: [],
+      notes: ''
+    };
+  }
+
+  function saveGuardState() {
+    if (!guardState?.date) return;
+    localStorage.setItem(guardStorageKey(guardState.date), JSON.stringify(guardState));
+  }
+
+  function setGuardMeta() {
+    if (!guardState?.date) return;
+    const allTasks = [...guardState.opening, ...guardState.midday, ...guardState.closing];
+    const doneCount = allTasks.filter(t => t.done).length;
+    const totalCount = allTasks.length;
+    const locName = currentLocation?.name || 'Unknown location';
+    el('guardTasksMeta').textContent = `${locName} • ${guardState.date} • ${doneCount}/${totalCount} tasks complete`;
+  }
+
+  function renderGuardSection(list, containerId, sectionKey) {
+    const container = el(containerId);
+    container.innerHTML = '';
+    list.forEach((task) => {
+      const row = document.createElement('div');
+      row.className = `guard-task ${task.done ? 'done' : ''}`;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = task.done;
+      checkbox.addEventListener('change', () => {
+        task.done = checkbox.checked;
+        saveGuardState();
+        renderGuardTasks();
+      });
+      row.appendChild(checkbox);
+
+      const label = document.createElement('span');
+      label.textContent = task.label;
+      row.appendChild(label);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'miniBtn';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        guardState[sectionKey] = guardState[sectionKey].filter(t => t.id !== task.id);
+        saveGuardState();
+        renderGuardTasks();
+      });
+      row.appendChild(removeBtn);
+
+      container.appendChild(row);
+    });
+  }
+
+  function renderGuardRotation() {
+    const body = el('guardRotationBody');
+    body.innerHTML = '';
+    guardState.rotation.forEach((entry, idx) => {
+      const tr = document.createElement('tr');
+
+      const tdTime = document.createElement('td');
+      const timeInput = document.createElement('input');
+      timeInput.value = entry.time || '';
+      timeInput.addEventListener('input', () => {
+        entry.time = timeInput.value;
+        saveGuardState();
+      });
+      tdTime.appendChild(timeInput);
+      tr.appendChild(tdTime);
+
+      const tdGuard = document.createElement('td');
+      const guardInput = document.createElement('input');
+      guardInput.value = entry.guard || '';
+      guardInput.addEventListener('input', () => {
+        entry.guard = guardInput.value;
+        saveGuardState();
+      });
+      tdGuard.appendChild(guardInput);
+      tr.appendChild(tdGuard);
+
+      const tdZone = document.createElement('td');
+      const zoneInput = document.createElement('input');
+      zoneInput.value = entry.zone || '';
+      zoneInput.addEventListener('input', () => {
+        entry.zone = zoneInput.value;
+        saveGuardState();
+      });
+      tdZone.appendChild(zoneInput);
+      tr.appendChild(tdZone);
+
+      const tdRemove = document.createElement('td');
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'miniBtn';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', () => {
+        guardState.rotation.splice(idx, 1);
+        saveGuardState();
+        renderGuardRotation();
+      });
+      tdRemove.appendChild(removeBtn);
+      tr.appendChild(tdRemove);
+
+      body.appendChild(tr);
+    });
+  }
+
+  function renderGuardTasks() {
+    if (!guardState) return;
+    renderGuardSection(guardState.opening, 'guardOpeningList', 'opening');
+    renderGuardSection(guardState.midday, 'guardMiddayList', 'midday');
+    renderGuardSection(guardState.closing, 'guardClosingList', 'closing');
+    renderGuardRotation();
+    el('guardNotes').value = guardState.notes || '';
+    setGuardMeta();
+  }
+
+  function showGuardTasksPanel(fromPanel) {
+    lastPanel = fromPanel;
+    el('panelRoster').classList.add('hidden');
+    el('panelAnnouncements').classList.add('hidden');
+    el('panelVirtualDesk').classList.add('hidden');
+    el('panelAdmin').classList.add('hidden');
+    el('panelLifeguard').classList.add('hidden');
+    el('panelGuardTasks').classList.remove('hidden');
+
+    const defaultDate = managerDateRange?.start || activeDateISO || getTodayISO();
+    const dateInput = el('guardTasksDate');
+    if (dateInput && !dateInput.value) dateInput.value = defaultDate;
+    guardState = loadGuardState(dateInput.value);
+    renderGuardTasks();
   }
 
   async function loadAdminLocations() {
@@ -2674,12 +3101,94 @@
     showModal('trialFollowupModal', true);
   });
 
+  el('adminNavGuards').addEventListener('click', () => {
+    showGuardTasksPanel('virtualDesk');
+  });
+
   el('adminNavHistory').addEventListener('click', () => {
     openAttendanceReport();
   });
 
   el('adminNavObservations').addEventListener('click', () => {
     openInstructorReport();
+  });
+
+  el('lifeguardNavGuards').addEventListener('click', () => {
+    showGuardTasksPanel('lifeguard');
+  });
+
+  el('guardTasksBack').addEventListener('click', () => {
+    if (lastPanel === 'virtualDesk') {
+      showVirtualDeskPanel();
+    } else if (lastPanel === 'lifeguard') {
+      showLifeguardPanel();
+    } else {
+      el('viewSelect').value = 'roster';
+      el('panelRoster').classList.remove('hidden');
+      el('panelGuardTasks').classList.add('hidden');
+    }
+  });
+
+  el('guardTasksDate').addEventListener('change', () => {
+    guardState = loadGuardState(el('guardTasksDate').value);
+    renderGuardTasks();
+  });
+
+  el('guardOpeningAdd').addEventListener('click', () => {
+    const value = el('guardOpeningNew').value.trim();
+    if (!value) return;
+    guardState.opening.push({ id: `custom_${Date.now()}`, label: value, done: false, custom: true });
+    el('guardOpeningNew').value = '';
+    saveGuardState();
+    renderGuardTasks();
+  });
+
+  el('guardMiddayAdd').addEventListener('click', () => {
+    const value = el('guardMiddayNew').value.trim();
+    if (!value) return;
+    guardState.midday.push({ id: `custom_${Date.now()}`, label: value, done: false, custom: true });
+    el('guardMiddayNew').value = '';
+    saveGuardState();
+    renderGuardTasks();
+  });
+
+  el('guardClosingAdd').addEventListener('click', () => {
+    const value = el('guardClosingNew').value.trim();
+    if (!value) return;
+    guardState.closing.push({ id: `custom_${Date.now()}`, label: value, done: false, custom: true });
+    el('guardClosingNew').value = '';
+    saveGuardState();
+    renderGuardTasks();
+  });
+
+  el('guardRotationAdd').addEventListener('click', () => {
+    guardState.rotation.push({ time: '', guard: '', zone: '' });
+    saveGuardState();
+    renderGuardRotation();
+  });
+
+  el('guardNotes').addEventListener('input', () => {
+    if (!guardState) return;
+    guardState.notes = el('guardNotes').value;
+    saveGuardState();
+  });
+
+  el('guardTasksMarkAll').addEventListener('click', () => {
+    const shift = el('guardShiftSelect').value;
+    if (!guardState?.[shift]) return;
+    guardState[shift] = guardState[shift].map(t => ({ ...t, done: true }));
+    saveGuardState();
+    renderGuardTasks();
+  });
+
+  el('guardTasksReset').addEventListener('click', () => {
+    const date = el('guardTasksDate').value;
+    if (!date) return;
+    if (!confirm('Reset all guard tasks and notes for this date?')) return;
+    localStorage.removeItem(guardStorageKey(date));
+    guardState = loadGuardState(date);
+    saveGuardState();
+    renderGuardTasks();
   });
 
   // Virtual Desk Export
@@ -2699,25 +3208,88 @@
   el('openInstructorReportBtn').addEventListener('click', openInstructorReport);
 
   function openAttendanceReport() {
-    // Set default dates (last 30 days)
-    const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    el('attendanceReportEndDate').value = today.toISOString().split('T')[0];
-    el('attendanceReportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    if (managerDateRange?.start && managerDateRange?.end) {
+      el('attendanceReportStartDate').value = managerDateRange.start;
+      el('attendanceReportEndDate').value = managerDateRange.end;
+    } else {
+      // Set default dates (last 30 days)
+      const today = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      el('attendanceReportEndDate').value = today.toISOString().split('T')[0];
+      el('attendanceReportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
     el('attendanceReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Select a date range and click "Generate Report" to view attendance analytics.</div>`;
     showModal('attendanceReportModal', true);
   }
 
   function openInstructorReport() {
-    const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    el('instructorReportEndDate').value = today.toISOString().split('T')[0];
-    el('instructorReportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    if (managerDateRange?.start && managerDateRange?.end) {
+      el('instructorReportStartDate').value = managerDateRange.start;
+      el('instructorReportEndDate').value = managerDateRange.end;
+    } else {
+      const today = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      el('instructorReportEndDate').value = today.toISOString().split('T')[0];
+      el('instructorReportStartDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
     el('instructorReportContent').innerHTML = `<div class="tiny" style="color:var(--muted); text-align:center; padding:40px;">Select a date range and click "Generate Report" to view instructor analytics.</div>`;
     showModal('instructorReportModal', true);
   }
+
+  function toISODate(date) {
+    return date.toISOString().split('T')[0];
+  }
+
+  function getWeekRange(date = new Date()) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1 - day);
+    const start = new Date(d);
+    start.setDate(d.getDate() + diff);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start: toISODate(start), end: toISODate(end) };
+  }
+
+  function getMonthRange(date = new Date()) {
+    const start = new Date(date.getFullYear(), date.getMonth(), 1);
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    return { start: toISODate(start), end: toISODate(end) };
+  }
+
+  function setManagerRangeInputsOnly(range) {
+    if (el('managerRangeStart')) el('managerRangeStart').value = range.start;
+    if (el('managerRangeEnd')) el('managerRangeEnd').value = range.end;
+  }
+
+  el('managerRangeWeek').addEventListener('click', () => setManagerRangeInputsOnly(getWeekRange()));
+  el('managerRangeNextTwo').addEventListener('click', () => {
+    const start = new Date();
+    const end = new Date();
+    end.setDate(start.getDate() + 13);
+    setManagerRangeInputsOnly({ start: toISODate(start), end: toISODate(end) });
+  });
+  el('managerRangeMonth').addEventListener('click', () => setManagerRangeInputsOnly(getMonthRange()));
+  el('managerRangeSave').addEventListener('click', async () => {
+    const start = el('managerRangeStart').value;
+    const end = el('managerRangeEnd').value;
+    if (!start || !end) {
+      alert('Please select both start and end dates.');
+      return;
+    }
+    try {
+      const resp = await api('/api/manager-date-range', {
+        method: 'POST',
+        body: JSON.stringify({ start, end })
+      });
+      applyManagerDateRange(resp.range);
+      toast('Manager date brackets saved');
+    } catch (err) {
+      alert('Save failed: ' + (err.message || err));
+    }
+  });
 
   // Attendance Report Handlers
   el('attendanceReportGenerate').addEventListener('click', async () => {
