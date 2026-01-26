@@ -1,5 +1,6 @@
 {
-  "admin_pin": "8118",
+  "admin_pin": "1590",
+  "manager_pin": "8118",
   "absence_tracker": {
     "min_weeks_threshold": 2,
     "enabled": true
@@ -11,6 +12,6 @@
   "attendance_history": {
     "days_to_keep": 90
   },
-  "app_version": "5.0.0",
+  "app_version": "4.8.5-beta",
   "last_updated": "2026-01-23T00:00:00.000Z"
 }

@@ -14,7 +14,9 @@ const app = express();
 const PORT = 5055;
 
 // -------------------- CONFIG --------------------
-const MANAGER_CODE = process.env.MANAGER_CODE || "4729";
+const ADMIN_PIN = process.env.ADMIN_PIN || "1590";
+const MANAGER_PIN = process.env.MANAGER_PIN || "8118";
+const MANAGER_CODE = process.env.MANAGER_CODE || MANAGER_PIN;
 const MAX_FAILS = 3;
 const LOCKOUT_MS = 2 * 60 * 1000;
 
@@ -199,6 +201,50 @@ function ensureSchema() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manager_report_data (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id INTEGER NOT NULL,
+      report_type TEXT NOT NULL,
+      report_date TEXT,
+      data_json TEXT,
+      warnings_json TEXT,
+      uploaded_at TEXT,
+      archived INTEGER DEFAULT 0
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guard_tasks (
+      location_id INTEGER NOT NULL,
+      task_date TEXT NOT NULL,
+      data_json TEXT,
+      updated_at TEXT,
+      PRIMARY KEY(location_id, task_date)
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guard_task_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id INTEGER NOT NULL,
+      task_date TEXT NOT NULL,
+      data_json TEXT,
+      saved_at TEXT
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action TEXT NOT NULL,
+      location_id INTEGER,
+      initials TEXT,
+      details TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+
   // Locations table
   db.exec(`
     CREATE TABLE IF NOT EXISTS locations (
@@ -255,6 +301,10 @@ function ensureSchema() {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_roster_date_time ON roster(date, start_time);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_manager_reports ON manager_reports(location_id, report_type, uploaded_at);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_manager_report_data ON manager_report_data(location_id, report_type, uploaded_at);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_guard_tasks ON guard_tasks(location_id, task_date);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_guard_task_history ON guard_task_history(location_id, task_date, saved_at);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_activity_log ON activity_log(created_at);`);
 }
 ensureSchema();
 
@@ -333,6 +383,19 @@ function audit(req, action, payload = {}) {
   );
 }
 
+function logActivity(action, { location_id = null, initials = null, details = null } = {}) {
+  db.prepare(`
+    INSERT INTO activity_log(action, location_id, initials, details, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    action,
+    location_id,
+    initials || null,
+    details ? JSON.stringify(details) : null,
+    nowISO()
+  );
+}
+
 // -------------------- Helpers --------------------
 function todayISO() {
   const d = new Date();
@@ -388,6 +451,23 @@ function setManagerDateRange(start, end) {
   return { start: s, end: e };
 }
 
+function getReadOnlyMode() {
+  try {
+    const row = db.prepare(`SELECT value FROM app_state WHERE key = ?`).get("readOnlyMode");
+    return row?.value === "true";
+  } catch (_) {
+    return false;
+  }
+}
+
+function setReadOnlyMode(enabled) {
+  db.prepare(`
+    INSERT INTO app_state(key, value) VALUES(?, ?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value
+  `).run("readOnlyMode", enabled ? "true" : "false");
+  return enabled ? true : false;
+}
+
 function activeOrToday() {
   return getActiveDate() || todayISO();
 }
@@ -432,6 +512,80 @@ function parseDateFromHTML(html) {
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ");
   return parseDateFromText(stripped);
+}
+
+function parseLocationFromHTML(html) {
+  const stripped = String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ");
+  const match = stripped.match(/Location\s*:\s*([A-Za-z0-9\s\-&]+)/i);
+  return match && match[1] ? match[1].trim() : null;
+}
+
+function parseHTMLTable(html) {
+  const $ = cheerio.load(html || "");
+  const tables = $("table");
+  if (!tables.length) return { headers: [], rows: [] };
+  let best = null;
+  tables.each((_, table) => {
+    const $table = $(table);
+    const headers = $table.find("tr").first().find("th,td").map((__, cell) => $(cell).text().trim()).get();
+    const rows = [];
+    $table.find("tr").slice(1).each((__, row) => {
+      const cols = $(row).find("td,th").map((___, cell) => $(cell).text().trim()).get();
+      if (cols.length) rows.push(cols);
+    });
+    if (!best || rows.length > best.rows.length) {
+      best = { headers, rows };
+    }
+  });
+  return best || { headers: [], rows: [] };
+}
+
+function parseRetentionReport(html) {
+  const { headers, rows } = parseHTMLTable(html);
+  const warnings = [];
+  if (!rows.length) warnings.push("No retention rows detected.");
+  const headerMap = headers.map((h) => h.toLowerCase());
+  const instructorIdx = headerMap.findIndex((h) => h.includes("instructor") || h.includes("coach"));
+  const percentIdx = headerMap.findIndex((h) => h.includes("%") || h.includes("retention"));
+  const countIdx = headerMap.findIndex((h) => h.includes("swimmer") || h.includes("count"));
+  const instructors = rows.map((cols) => {
+    const instructor = cols[instructorIdx >= 0 ? instructorIdx : 0] || "";
+    const percentRaw = cols[percentIdx >= 0 ? percentIdx : 1] || "";
+    const countRaw = cols[countIdx >= 0 ? countIdx : 2] || "";
+    const percentMatch = String(percentRaw).match(/-?\d+(\.\d+)?/);
+    const countMatch = String(countRaw).match(/-?\d+(\.\d+)?/);
+    return {
+      instructor: instructor.trim(),
+      retention_percent: percentMatch ? parseFloat(percentMatch[0]) : null,
+      swimmer_count: countMatch ? parseFloat(countMatch[0]) : null
+    };
+  }).filter((row) => row.instructor);
+  if (!instructors.length) warnings.push("No instructors detected in retention report.");
+  return { instructors, warnings };
+}
+
+function parseAgedAccountsReport(html) {
+  const { headers, rows } = parseHTMLTable(html);
+  const warnings = [];
+  if (!rows.length) warnings.push("No aged accounts rows detected.");
+  return { headers, rows, warnings };
+}
+
+function parseDropListReport(html) {
+  const { headers, rows } = parseHTMLTable(html);
+  const warnings = [];
+  if (!rows.length) warnings.push("No drop list rows detected.");
+  const entries = rows.map((cols) => {
+    const raw = cols.join(" ");
+    const date = parseDateFromText(raw);
+    return { raw: cols, drop_date: date || null };
+  });
+  if (!entries.some((e) => e.drop_date)) warnings.push("No drop dates detected in drop list.");
+  return { headers, entries, warnings };
 }
 
 
@@ -1180,6 +1334,32 @@ app.post("/api/attendance", (req, res) => {
   }
 });
 
+app.post("/api/attendance/bulk", (req, res) => {
+  try {
+    const { start_time, attendance, location_id, initials } = req.body || {};
+    if (!start_time) return res.status(400).json({ ok: false, error: "missing start_time" });
+    const locId = Number(location_id || 1);
+    const date = activeOrToday();
+    const now = nowISO();
+    const att = attendance === 1 || attendance === "1" ? 1 : null;
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "initials required" });
+    }
+
+    db.prepare(`
+      UPDATE roster SET attendance = ?, attendance_at = ?, updated_at = ?
+      WHERE date = ? AND start_time = ? AND location_id = ?
+    `).run(att, att === null ? null : now, now, date, start_time, locId);
+
+    audit(req, "attendance_bulk", { date, start_time, details: { attendance: att, initials: initialsClean } });
+    logActivity("attendance_bulk", { location_id: locId, initials: initialsClean, details: { start_time, attendance: att } });
+    res.json({ ok: true, attendance: att });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "attendance bulk failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
 // Zone update: requires manager_code in deck mode
 app.post("/api/update-zone", (req, res) => {
   try {
@@ -1288,8 +1468,10 @@ app.post("/api/add-swimmer", (req, res) => {
 // Remove add-on swimmer only
 app.post("/api/remove-addon", (req, res) => {
   try {
-    const { start_time, swimmer_name, device_mode } = req.body || {};
+    const { start_time, swimmer_name, device_mode, initials } = req.body || {};
     if (!start_time || !swimmer_name) return res.status(400).json({ ok: false, error: "missing fields" });
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) return res.status(400).json({ ok: false, error: "initials required" });
 
     const date = activeOrToday();
     const info = db.prepare(`
@@ -1303,7 +1485,8 @@ app.post("/api/remove-addon", (req, res) => {
       DELETE FROM roster WHERE date = ? AND start_time = ? AND swimmer_name = ?
     `).run(date, start_time, swimmer_name);
 
-    audit(req, "remove_addon", { device_mode, date, start_time, swimmer_name });
+    audit(req, "remove_addon", { device_mode, date, start_time, swimmer_name, details: { initials: initialsClean } });
+    logActivity("remove_addon", { location_id: null, initials: initialsClean, details: { swimmer_name, start_time, date } });
 
     res.json({ ok: true });
   } catch (e) {
@@ -1639,8 +1822,12 @@ app.post("/api/export-server", (req, res) => {
 
 app.post("/api/import-server", (req, res) => {
   try {
-    const { location_id, filename } = req.body || {};
+    const { location_id, filename, initials } = req.body || {};
     const locationId = Number(location_id || 1);
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
+    }
     const location = getLocationById(locationId);
     if (!location) {
       return res.status(400).json({ ok: false, error: "Invalid location" });
@@ -1673,8 +1860,10 @@ app.post("/api/import-server", (req, res) => {
       location_id: locationId,
       date: importDate,
       count: result.imported,
-      filename: safeName
+      filename: safeName,
+      initials: initialsClean
     });
+    logActivity("import_server", { location_id: locationId, initials: initialsClean, details: { filename: safeName, date: importDate } });
 
     res.json({ ok: true, date: importDate, count: result.imported, filename: safeName });
   } catch (e) {
@@ -1886,6 +2075,42 @@ function parseHTMLRoster(html) {
   return { swimmers, dates: Array.from(datesFound) };
 }
 
+app.post("/api/upload-html/preview", upload.single('html'), (req, res) => {
+  try {
+    const { location_id } = req.body || {};
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ ok: false, error: "No HTML file uploaded" });
+    }
+    const html = req.file.buffer.toString("utf8");
+    const detectedDate = parseDateFromHTML(html) || todayISO();
+    let parsed = null;
+    try {
+      parsed = parseHTMLRoster(html);
+    } catch (parseError) {
+      return res.status(400).json({ ok: false, error: `Failed to parse HTML: ${parseError.message}` });
+    }
+    const swimmers = Array.isArray(parsed) ? parsed : (parsed?.swimmers || []);
+    const normalizedRows = swimmers.map((row) => ({ ...row, date: row.date || detectedDate }));
+    const dateList = Array.from(new Set(normalizedRows.map((row) => row.date).filter(Boolean))).sort();
+    const dateStart = dateList[0] || detectedDate;
+    const dateEnd = dateList[dateList.length - 1] || dateStart;
+    const location = location_id ? getLocationById(Number(location_id)) : null;
+    res.json({
+      ok: true,
+      summary: {
+        location: location?.name || null,
+        report_type: "roster_html",
+        date_start: dateStart,
+        date_end: dateEnd,
+        count: swimmers.length
+      }
+    });
+  } catch (error) {
+    console.error("HTML preview error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.post("/api/upload-html", upload.single('html'), async (req, res) => {
   try {
     // Handle FormData file upload (new method)
@@ -2077,53 +2302,141 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
 });
 
 // ==================== MANAGER REPORTS ====================
-app.post("/api/manager-reports/upload", upload.single('report'), (req, res) => {
+function resolveLocationByName(name) {
+  if (!name) return null;
+  const normalized = String(name).trim().toLowerCase();
+  return db.prepare(`SELECT * FROM locations WHERE lower(name) = ?`).get(normalized)
+    || db.prepare(`SELECT * FROM locations WHERE lower(code) = ?`).get(normalized);
+}
+
+function normalizeInitials(value) {
+  return String(value || "").trim().toUpperCase().slice(0, 4);
+}
+
+function verifyPin(pin, pinType) {
+  if (!pin) return { ok: false };
+  const incoming = String(pin);
+  if (pinType === "manager") {
+    if (incoming === MANAGER_PIN) return { ok: true, role: "manager" };
+    if (incoming === ADMIN_PIN) return { ok: true, role: "admin" };
+    return { ok: false };
+  }
+  if (incoming === ADMIN_PIN) return { ok: true, role: "admin" };
+  return { ok: false };
+}
+
+app.post("/api/manager-reports/preview", upload.single("report"), (req, res) => {
   try {
     const reportType = String(req.body?.report_type || "").toLowerCase();
     if (!MANAGER_REPORT_TYPES.has(reportType)) {
       return res.status(400).json({ ok: false, error: "Invalid report type" });
     }
-    const locId = Number(req.body?.location_id || 0);
-    const location = getLocationById(locId);
-    if (!location) {
-      return res.status(400).json({ ok: false, error: "Invalid location" });
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ ok: false, error: "No report file uploaded" });
+    }
+    const html = req.file.buffer.toString("utf8");
+    const locationName = parseLocationFromHTML(html);
+    const reportDate = parseDateFromHTML(html);
+    let parsed = null;
+    if (reportType === "retention") parsed = parseRetentionReport(html);
+    if (reportType === "aged_accounts") parsed = parseAgedAccountsReport(html);
+    if (reportType === "drop_list") parsed = parseDropListReport(html);
+    const summary = {
+      location_name: locationName,
+      report_type: reportType,
+      report_date: reportDate,
+      warnings: parsed?.warnings || []
+    };
+    if (reportType === "retention") summary.row_count = parsed.instructors.length;
+    if (reportType === "aged_accounts") summary.row_count = parsed.rows.length;
+    if (reportType === "drop_list") summary.row_count = parsed.entries.length;
+    res.json({ ok: true, summary });
+  } catch (error) {
+    console.error("Manager report preview error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/manager-reports/upload", upload.single("report"), (req, res) => {
+  try {
+    const reportType = String(req.body?.report_type || "").toLowerCase();
+    if (!MANAGER_REPORT_TYPES.has(reportType)) {
+      return res.status(400).json({ ok: false, error: "Invalid report type" });
     }
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ ok: false, error: "No report file uploaded" });
     }
+    const initials = normalizeInitials(req.body?.initials || "");
+    if (!initials) {
+      return res.status(400).json({ ok: false, error: "Initials are required" });
+    }
+    const pinCheck = verifyPin(req.body?.pin, "manager");
+    if (!pinCheck.ok) {
+      return res.status(401).json({ ok: false, error: "Invalid manager PIN" });
+    }
 
-    const originalName = req.file.originalname || "report";
-    const ext = path.extname(originalName) || ".html";
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${reportType}_${getLocationFileTag(location)}_${timestamp}${ext}`;
-    const reportDir = getManagerReportDir(location);
-    if (!fs.existsSync(reportDir)) fs.mkdirSync(reportDir, { recursive: true });
-    const reportPath = path.join(reportDir, filename);
+    const html = req.file.buffer.toString("utf8");
+    const locationName = parseLocationFromHTML(html);
+    let location = null;
+    if (locationName) {
+      location = resolveLocationByName(locationName);
+    }
+    if (!location) {
+      const locId = Number(req.body?.location_id || 0);
+      if (locId) location = getLocationById(locId);
+    }
+    if (!location) {
+      return res.status(400).json({ ok: false, error: "Location required for this report." });
+    }
 
-    fs.writeFileSync(reportPath, req.file.buffer);
-
+    const reportDate = parseDateFromHTML(html);
+    let parsed = null;
+    if (reportType === "retention") parsed = parseRetentionReport(html);
+    if (reportType === "aged_accounts") parsed = parseAgedAccountsReport(html);
+    if (reportType === "drop_list") parsed = parseDropListReport(html);
+    const warnings = parsed?.warnings || [];
     const now = nowISO();
+
+    if (reportType === "aged_accounts") {
+      db.prepare(`
+        UPDATE manager_report_data
+        SET archived = 1
+        WHERE location_id = ? AND report_type = 'aged_accounts'
+      `).run(location.id);
+    }
+
     db.prepare(`
-      INSERT INTO manager_reports (
-        location_id, report_type, filename, original_name, uploaded_at, size_bytes
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(locId, reportType, filename, originalName, now, req.file.size || req.file.buffer.length);
+      INSERT INTO manager_report_data (
+        location_id, report_type, report_date, data_json, warnings_json, uploaded_at, archived
+      ) VALUES (?, ?, ?, ?, ?, ?, 0)
+    `).run(
+      location.id,
+      reportType,
+      reportDate,
+      JSON.stringify(parsed || {}),
+      JSON.stringify(warnings),
+      now
+    );
 
     audit(req, "manager_report_upload", {
-      location_id: locId,
+      location_id: location.id,
       report_type: reportType,
-      filename
+      details: { initials, warnings }
+    });
+    logActivity("manager_report_upload", {
+      location_id: location.id,
+      initials,
+      details: { report_type: reportType, warnings }
     });
 
     res.json({
       ok: true,
       report: {
-        location_id: locId,
+        location_id: location.id,
         report_type: reportType,
-        filename,
-        original_name: originalName,
+        report_date: reportDate,
         uploaded_at: now,
-        size_bytes: req.file.size || req.file.buffer.length
+        warnings
       }
     });
   } catch (error) {
@@ -2135,14 +2448,16 @@ app.post("/api/manager-reports/upload", upload.single('report'), (req, res) => {
 app.get("/api/manager-reports", (req, res) => {
   try {
     const locId = Number(req.query?.location_id || 0);
+    const role = String(req.query?.role || "manager");
     if (!locId) {
       return res.status(400).json({ ok: false, error: "location_id is required" });
     }
     const reports = db.prepare(`
-      SELECT * FROM manager_reports
+      SELECT * FROM manager_report_data
       WHERE location_id = ?
+      AND (? = 'admin' OR archived = 0)
       ORDER BY uploaded_at DESC
-    `).all(locId);
+    `).all(locId, role);
     const latest = {};
     for (const report of reports) {
       if (!latest[report.report_type]) {
@@ -2156,25 +2471,123 @@ app.get("/api/manager-reports", (req, res) => {
   }
 });
 
-app.get("/api/manager-reports/download", (req, res) => {
+app.get("/api/manager-reports/data", (req, res) => {
   try {
     const locId = Number(req.query?.location_id || 0);
-    const filename = safeExportFilename(req.query?.filename);
-    if (!locId || !filename) {
-      return res.status(400).json({ ok: false, error: "location_id and filename are required" });
+    const reportType = String(req.query?.report_type || "").toLowerCase();
+    const includeArchived = String(req.query?.include_archived || "false") === "true";
+    if (!locId || !MANAGER_REPORT_TYPES.has(reportType)) {
+      return res.status(400).json({ ok: false, error: "location_id and report_type required" });
     }
-    const location = getLocationById(locId);
-    if (!location) {
-      return res.status(400).json({ ok: false, error: "Invalid location" });
+    const rows = db.prepare(`
+      SELECT * FROM manager_report_data
+      WHERE location_id = ? AND report_type = ?
+      AND (? = 1 OR archived = 0)
+      ORDER BY uploaded_at DESC
+    `).all(locId, reportType, includeArchived ? 1 : 0);
+    res.json({ ok: true, reports: rows });
+  } catch (error) {
+    console.error("Manager report data error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/manager-reports/delete", (req, res) => {
+  try {
+    const { report_id, initials } = req.body || {};
+    const id = Number(report_id || 0);
+    const initialsClean = normalizeInitials(initials);
+    if (!id) {
+      return res.status(400).json({ ok: false, error: "report_id required" });
     }
-    const reportDir = getManagerReportDir(location);
-    const reportPath = path.join(reportDir, filename);
-    if (!fs.existsSync(reportPath)) {
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "initials required" });
+    }
+    const report = db.prepare(`SELECT * FROM manager_report_data WHERE id = ?`).get(id);
+    if (!report) {
       return res.status(404).json({ ok: false, error: "Report not found" });
     }
-    res.sendFile(reportPath);
+    db.prepare(`DELETE FROM manager_report_data WHERE id = ?`).run(id);
+    audit(req, "manager_report_delete", { details: { report_id: id, initials: initialsClean } });
+    logActivity("manager_report_delete", {
+      location_id: report.location_id,
+      initials: initialsClean,
+      details: { report_type: report.report_type, report_date: report.report_date }
+    });
+    res.json({ ok: true });
   } catch (error) {
-    console.error("Manager report download error:", error);
+    console.error("Manager report delete error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== GUARD TASKS ====================
+app.get("/api/guard-tasks", (req, res) => {
+  try {
+    const locId = Number(req.query?.location_id || 0);
+    const taskDate = String(req.query?.date || "").trim();
+    if (!locId || !taskDate) {
+      return res.status(400).json({ ok: false, error: "location_id and date required" });
+    }
+    const row = db.prepare(`
+      SELECT * FROM guard_tasks WHERE location_id = ? AND task_date = ?
+    `).get(locId, taskDate);
+    res.json({ ok: true, task: row || null });
+  } catch (error) {
+    console.error("Guard tasks fetch error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/guard-tasks", (req, res) => {
+  try {
+    const { location_id, date, data, initials } = req.body || {};
+    const locId = Number(location_id || 0);
+    const taskDate = String(date || "").trim();
+    if (!locId || !taskDate || !data) {
+      return res.status(400).json({ ok: false, error: "location_id, date, and data required" });
+    }
+    const now = nowISO();
+    const payload = JSON.stringify(data);
+    db.prepare(`
+      INSERT INTO guard_tasks(location_id, task_date, data_json, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(location_id, task_date) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at
+    `).run(locId, taskDate, payload, now);
+    db.prepare(`
+      INSERT INTO guard_task_history(location_id, task_date, data_json, saved_at)
+      VALUES (?, ?, ?, ?)
+    `).run(locId, taskDate, payload, now);
+
+    audit(req, "guard_tasks_save", { details: { location_id: locId, date: taskDate, initials } });
+    if (initials) {
+      logActivity("guard_tasks_save", { location_id: locId, initials, details: { date: taskDate } });
+    }
+    res.json({ ok: true, saved_at: now });
+  } catch (error) {
+    console.error("Guard tasks save error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/guard-tasks/clear", (req, res) => {
+  try {
+    const { location_id, date, initials } = req.body || {};
+    const locId = Number(location_id || 0);
+    const taskDate = String(date || "").trim();
+    const initialsClean = normalizeInitials(initials);
+    if (!locId || !taskDate) {
+      return res.status(400).json({ ok: false, error: "location_id and date required" });
+    }
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "initials required" });
+    }
+    db.prepare(`DELETE FROM guard_tasks WHERE location_id = ? AND task_date = ?`).run(locId, taskDate);
+    audit(req, "guard_tasks_clear", { details: { location_id: locId, date: taskDate, initials: initialsClean } });
+    logActivity("guard_tasks_clear", { location_id: locId, initials: initialsClean, details: { date: taskDate } });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Guard tasks clear error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -2209,16 +2622,54 @@ app.post("/api/set-location", (req, res) => {
 });
 
 // ==================== INSTRUCTOR MANAGEMENT ====================
+function loadStaffConfig() {
+  const configPath = path.join(CONFIG_DIR, "instructors.json");
+  if (!fs.existsSync(configPath)) {
+    throw new Error("instructors.json not found");
+  }
+  const configData = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  if (!configData.states) {
+    const states = {};
+    (configData.instructors || []).forEach((i) => {
+      const state = i.location || "Unknown";
+      if (!states[state]) states[state] = [];
+      states[state].push({
+        firstName: i.firstName,
+        lastName: i.lastName,
+        phone: i.phone || "",
+        birthday: i.birthday || ""
+      });
+    });
+    configData.states = states;
+    configData.locationOverrides = configData.locationOverrides || {};
+  }
+  return configData;
+}
+
+function saveStaffConfig(configData) {
+  const configPath = path.join(CONFIG_DIR, "instructors.json");
+  const next = { ...configData, last_updated: new Date().toISOString() };
+  fs.writeFileSync(configPath, JSON.stringify(next, null, 2), "utf8");
+}
+
+function getLocationState(location, mapping) {
+  const normalizeKey = (value) => String(value || "").trim().toLowerCase();
+  const normalizedMapping = new Map(
+    Object.entries(mapping || {}).map(([key, value]) => [normalizeKey(key), value])
+  );
+  const regionCandidates = [
+    location.name,
+    location.code,
+    location.short_code,
+    location.shortCode
+  ].map(normalizeKey);
+  return regionCandidates.map((key) => normalizedMapping.get(key)).find(Boolean) || location.name;
+}
+
 app.get("/api/instructors", (req, res) => {
   try {
-    const configPath = path.join(CONFIG_DIR, "instructors.json");
-
-    if (!fs.existsSync(configPath)) {
-      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
-    }
-
-    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    const { instructors, locationMapping } = configData;
+    const configData = loadStaffConfig();
+    const { states, locationMapping, locationOverrides } = configData;
 
     // Get current location from session/request (from location_id in query or default)
     const location_id = req.query.location_id || req.session?.location_id || 1;
@@ -2227,28 +2678,22 @@ app.get("/api/instructors", (req, res) => {
     if (!location) {
       return res.json({ ok: true, instructors: [] });
     }
+    const region = getLocationState(location, locationMapping);
+    const baseStaff = (states[region] || []).map((i) => ({
+      firstName: i.firstName,
+      lastName: i.lastName,
+      phone: i.phone || "",
+      birthday: i.birthday || ""
+    }));
 
-    const normalizeKey = (value) => String(value || "").trim().toLowerCase();
-    const normalizedMapping = new Map(
-      Object.entries(locationMapping || {}).map(([key, value]) => [normalizeKey(key), value])
-    );
-    const regionCandidates = [
-      location.name,
-      location.code,
-      location.short_code,
-      location.shortCode
-    ].map(normalizeKey);
-    const mappedRegion = regionCandidates
-      .map((key) => normalizedMapping.get(key))
-      .find(Boolean);
+    const overrideKey = location.code || location.name;
+    const overrides = locationOverrides?.[overrideKey] || { add: [], remove: [] };
+    const removeSet = new Set((overrides.remove || []).map((name) => name.toLowerCase()));
+    let staffList = baseStaff.filter((i) => !removeSet.has(`${i.firstName} ${i.lastName}`.toLowerCase()));
+    staffList = staffList.concat(overrides.add || []);
 
-    // Map location name/code/short code to region
-    const region = mappedRegion || location.name;
-
-    // Filter instructors by region and format as "First L."
-    const filtered = instructors
-      .filter(i => i.location === region)
-      .map(i => ({
+    const filtered = staffList
+      .map((i) => ({
         displayName: `${i.firstName} ${i.lastName.charAt(0)}.`,
         fullName: `${i.firstName} ${i.lastName}`,
         firstName: i.firstName,
@@ -2256,7 +2701,7 @@ app.get("/api/instructors", (req, res) => {
       }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-    res.json({ ok: true, instructors: filtered, location: location.name, region });
+    res.json({ ok: true, instructors: filtered, location: location.name, region, override_key: overrideKey });
   } catch (error) {
     console.error("Instructor fetch error:", error);
     res.status(500).json({ ok: false, error: error.message });
@@ -2266,26 +2711,21 @@ app.get("/api/instructors", (req, res) => {
 // Get all staff for admin panel (includes phone and birthday)
 app.get("/api/staff", (req, res) => {
   try {
-    const configPath = path.join(CONFIG_DIR, "instructors.json");
+    const configData = loadStaffConfig();
+    const { states, locationOverrides } = configData;
 
-    if (!fs.existsSync(configPath)) {
-      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
-    }
+    const staff = Object.entries(states || {}).flatMap(([state, list]) =>
+      (list || []).map((i) => ({
+        id: `${i.firstName}_${i.lastName}_${state}`,
+        firstName: i.firstName,
+        lastName: i.lastName,
+        state,
+        phone: i.phone || "",
+        birthday: i.birthday || ""
+      }))
+    ).sort((a, b) => a.lastName.localeCompare(b.lastName));
 
-    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    const { instructors } = configData;
-
-    // Return all staff with phone and birthday
-    const staff = instructors.map(i => ({
-      id: `${i.firstName}_${i.lastName}`,
-      firstName: i.firstName,
-      lastName: i.lastName,
-      location: i.location,
-      phone: i.phone || '',
-      birthday: i.birthday || ''
-    })).sort((a, b) => a.lastName.localeCompare(b.lastName));
-
-    res.json({ ok: true, staff });
+    res.json({ ok: true, staff, overrides: locationOverrides || {} });
   } catch (error) {
     console.error("Staff fetch error:", error);
     res.status(500).json({ ok: false, error: error.message });
@@ -2297,37 +2737,45 @@ app.get("/api/staff", (req, res) => {
 // Staff management endpoints
 app.post("/api/admin/remove-staff", (req, res) => {
   try {
-    const { id } = req.body;
-    if (!id) {
-      return res.status(400).json({ ok: false, error: 'Staff ID required' });
+    const { firstName, lastName, scope, state, location_key, initials } = req.body || {};
+    if (!firstName || !lastName) {
+      return res.status(400).json({ ok: false, error: "First and last name required" });
+    }
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
+    }
+    const configData = loadStaffConfig();
+    const scopeType = scope || "state";
+
+    if (scopeType === "override") {
+      if (!location_key) {
+        return res.status(400).json({ ok: false, error: "location_key required for override removal" });
+      }
+      const overrides = configData.locationOverrides || {};
+      const entry = overrides[location_key] || { add: [], remove: [] };
+      entry.add = (entry.add || []).filter((i) => !(i.firstName === firstName && i.lastName === lastName));
+      overrides[location_key] = entry;
+      configData.locationOverrides = overrides;
+      saveStaffConfig(configData);
+      audit(req, "remove_staff_override", { details: { firstName, lastName, location_key, initials: initialsClean } });
+      logActivity("remove_staff_override", { initials: initialsClean, details: { location_key, firstName, lastName } });
+      return res.json({ ok: true, message: "Override staff removed successfully" });
     }
 
-    const configPath = path.join(CONFIG_DIR, "instructors.json");
-    if (!fs.existsSync(configPath)) {
-      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    if (!state) {
+      return res.status(400).json({ ok: false, error: "state required for state removal" });
     }
-
-    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-
-    // Find and remove staff by ID (firstName_lastName format)
-    const [firstName, lastName] = id.split('_');
-    const originalCount = configData.instructors.length;
-    configData.instructors = configData.instructors.filter(i =>
-      !(i.firstName === firstName && i.lastName === lastName)
-    );
-
-    if (configData.instructors.length === originalCount) {
-      return res.status(404).json({ ok: false, error: 'Staff member not found' });
+    const list = configData.states?.[state] || [];
+    const next = list.filter((i) => !(i.firstName === firstName && i.lastName === lastName));
+    if (next.length === list.length) {
+      return res.status(404).json({ ok: false, error: "Staff member not found" });
     }
-
-    // Update timestamp
-    configData.last_updated = new Date().toISOString();
-
-    // Write back to file
-    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
-    audit(req, "remove_staff", { id, firstName, lastName });
-
-    res.json({ ok: true, message: 'Staff member removed successfully' });
+    configData.states[state] = next;
+    saveStaffConfig(configData);
+    audit(req, "remove_staff", { details: { firstName, lastName, state, initials: initialsClean } });
+    logActivity("remove_staff", { initials: initialsClean, details: { state, firstName, lastName } });
+    res.json({ ok: true, message: "Staff member removed successfully" });
   } catch (error) {
     console.error("Remove staff error:", error);
     res.status(500).json({ ok: false, error: error.message });
@@ -2336,50 +2784,106 @@ app.post("/api/admin/remove-staff", (req, res) => {
 
 app.post("/api/admin/add-staff", (req, res) => {
   try {
-    const { firstName, lastName, location, phone, birthday } = req.body;
+    const { firstName, lastName, state, location_key, scope, phone, birthday } = req.body || {};
+    if (!firstName || !lastName) {
+      return res.status(400).json({ ok: false, error: "First name and last name are required" });
+    }
+    const configData = loadStaffConfig();
+    const scopeType = scope || "state";
 
-    if (!firstName || !lastName || !location) {
-      return res.status(400).json({ ok: false, error: 'First name, last name, and location are required' });
+    if (scopeType === "override") {
+      if (!location_key) {
+        return res.status(400).json({ ok: false, error: "location_key required for override add" });
+      }
+      const overrides = configData.locationOverrides || {};
+      const entry = overrides[location_key] || { add: [], remove: [] };
+      const exists = (entry.add || []).some((i) => i.firstName === firstName && i.lastName === lastName);
+      if (exists) {
+        return res.status(400).json({ ok: false, error: "Override staff member already exists" });
+      }
+      entry.add = (entry.add || []).concat({
+        firstName,
+        lastName,
+        phone: phone || "",
+        birthday: birthday || ""
+      });
+      overrides[location_key] = entry;
+      configData.locationOverrides = overrides;
+      saveStaffConfig(configData);
+      audit(req, "add_staff_override", { details: { firstName, lastName, location_key } });
+      return res.json({ ok: true, message: "Override staff member added successfully" });
     }
 
-    const configPath = path.join(CONFIG_DIR, "instructors.json");
-    if (!fs.existsSync(configPath)) {
-      return res.status(404).json({ ok: false, error: 'instructors.json not found' });
+    if (!state) {
+      return res.status(400).json({ ok: false, error: "State is required" });
     }
-
-    const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-
-    // Check if staff already exists
-    const exists = configData.instructors.some(i =>
-      i.firstName === firstName && i.lastName === lastName
-    );
-
+    const list = configData.states?.[state] || [];
+    const exists = list.some((i) => i.firstName === firstName && i.lastName === lastName);
     if (exists) {
-      return res.status(400).json({ ok: false, error: 'Staff member already exists' });
+      return res.status(400).json({ ok: false, error: "Staff member already exists" });
     }
-
-    // Add new staff
-    configData.instructors.push({
+    configData.states[state] = list.concat({
       firstName,
       lastName,
-      location,
-      phone: phone || '',
-      birthday: birthday || ''
-    });
-
-    // Sort by last name
-    configData.instructors.sort((a, b) => a.lastName.localeCompare(b.lastName));
-
-    // Update timestamp
-    configData.last_updated = new Date().toISOString();
-
-    // Write back to file
-    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
-    audit(req, "add_staff", { firstName, lastName, location });
-
-    res.json({ ok: true, message: 'Staff member added successfully' });
+      phone: phone || "",
+      birthday: birthday || ""
+    }).sort((a, b) => a.lastName.localeCompare(b.lastName));
+    saveStaffConfig(configData);
+    audit(req, "add_staff", { details: { firstName, lastName, state } });
+    res.json({ ok: true, message: "Staff member added successfully" });
   } catch (error) {
     console.error("Add staff error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/staff/override-remove", (req, res) => {
+  try {
+    const { location_key, firstName, lastName, initials } = req.body || {};
+    if (!location_key || !firstName || !lastName) {
+      return res.status(400).json({ ok: false, error: "location_key, firstName, lastName required" });
+    }
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
+    }
+    const configData = loadStaffConfig();
+    const overrides = configData.locationOverrides || {};
+    const entry = overrides[location_key] || { add: [], remove: [] };
+    const fullName = `${firstName} ${lastName}`;
+    if (!entry.remove.includes(fullName)) {
+      entry.remove.push(fullName);
+    }
+    overrides[location_key] = entry;
+    configData.locationOverrides = overrides;
+    saveStaffConfig(configData);
+    audit(req, "staff_override_remove", { details: { location_key, firstName, lastName, initials: initialsClean } });
+    logActivity("staff_override_remove", { initials: initialsClean, details: { location_key, firstName, lastName } });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Override remove error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/staff/override-restore", (req, res) => {
+  try {
+    const { location_key, firstName, lastName } = req.body || {};
+    if (!location_key || !firstName || !lastName) {
+      return res.status(400).json({ ok: false, error: "location_key, firstName, lastName required" });
+    }
+    const configData = loadStaffConfig();
+    const overrides = configData.locationOverrides || {};
+    const entry = overrides[location_key] || { add: [], remove: [] };
+    const fullName = `${firstName} ${lastName}`;
+    entry.remove = (entry.remove || []).filter((name) => name !== fullName);
+    overrides[location_key] = entry;
+    configData.locationOverrides = overrides;
+    saveStaffConfig(configData);
+    audit(req, "staff_override_restore", { details: { location_key, firstName, lastName } });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Override restore error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -2387,9 +2891,13 @@ app.post("/api/admin/add-staff", (req, res) => {
 // Location management endpoints
 app.post("/api/admin/remove-location", (req, res) => {
   try {
-    const { id } = req.body;
+    const { id, initials } = req.body;
     if (!id) {
       return res.status(400).json({ ok: false, error: 'Location ID required' });
+    }
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
     }
 
     // Set location as inactive instead of deleting
@@ -2399,7 +2907,8 @@ app.post("/api/admin/remove-location", (req, res) => {
       return res.status(404).json({ ok: false, error: 'Location not found' });
     }
 
-    audit(req, "remove_location", { location_id: id });
+    audit(req, "remove_location", { location_id: id, details: { initials: initialsClean } });
+    logActivity("remove_location", { location_id: id, initials: initialsClean });
     res.json({ ok: true, message: 'Location removed successfully' });
   } catch (error) {
     console.error("Remove location error:", error);
@@ -2440,7 +2949,7 @@ const pinLockouts = new Map(); // Track lockout expiry by IP
 
 app.post("/api/verify-pin", (req, res) => {
   try {
-    const { pin } = req.body;
+    const { pin, pin_type } = req.body;
     const clientIp = req.ip || req.connection.remoteAddress;
 
     // Load settings
@@ -2450,7 +2959,11 @@ app.post("/api/verify-pin", (req, res) => {
     }
 
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    const correctPin = settings.admin_pin || "8118";
+    const adminPin = settings.admin_pin || ADMIN_PIN;
+    const managerPin = settings.manager_pin || MANAGER_PIN;
+    const requestedType = String(pin_type || "admin");
+    const allowAdmin = pin === adminPin;
+    const allowManager = pin === managerPin;
 
     // Check if client is locked out
     const lockoutUntil = pinLockouts.get(clientIp);
@@ -2465,16 +2978,17 @@ app.post("/api/verify-pin", (req, res) => {
     }
 
     // Verify PIN
-    if (pin === correctPin) {
+    if ((requestedType === "manager" && (allowManager || allowAdmin)) || (requestedType === "admin" && allowAdmin)) {
       // Success - clear attempts and lockout
       pinAttempts.delete(clientIp);
       pinLockouts.delete(clientIp);
 
-      audit(req, "admin_pin_success", { ip: clientIp });
+      audit(req, "pin_success", { ip: clientIp, details: { pin_type: requestedType } });
 
       return res.json({
         ok: true,
         authenticated: true,
+        role: allowAdmin ? "admin" : "manager",
         expires_at: Date.now() + (2 * 60 * 60 * 1000) // 2 hours from now
       });
     }
@@ -2483,7 +2997,7 @@ app.post("/api/verify-pin", (req, res) => {
     const attempts = (pinAttempts.get(clientIp) || 0) + 1;
     pinAttempts.set(clientIp, attempts);
 
-    audit(req, "admin_pin_failed", { ip: clientIp, attempts });
+    audit(req, "pin_failed", { ip: clientIp, attempts, details: { pin_type: requestedType } });
 
     if (attempts >= 3) {
       // Lockout for 2 minutes
@@ -2511,11 +3025,54 @@ app.post("/api/verify-pin", (req, res) => {
   }
 });
 
+// ==================== READ-ONLY MODE ====================
+app.get("/api/read-only", (req, res) => {
+  try {
+    res.json({ ok: true, read_only: getReadOnlyMode() });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/read-only", (req, res) => {
+  try {
+    const enabled = !!req.body?.read_only;
+    const initials = normalizeInitials(req.body?.initials || "");
+    if (!initials) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
+    }
+    const value = setReadOnlyMode(enabled);
+    audit(req, "read_only_toggle", { details: { enabled: value, initials } });
+    logActivity("read_only_toggle", { initials, details: { enabled: value } });
+    res.json({ ok: true, read_only: value });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== ACTIVITY LOG ====================
+app.get("/api/admin/activity-log", (req, res) => {
+  try {
+    const limit = Math.min(500, Math.max(50, Number(req.query?.limit || 200)));
+    const rows = db.prepare(`
+      SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?
+    `).all(limit);
+    res.json({ ok: true, entries: rows });
+  } catch (error) {
+    console.error("Activity log error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // ==================== ADMIN CLEAR ROSTER ====================
 app.post("/api/clear-roster", (req, res) => {
   try {
-    const { location_id } = req.body || {};
+    const { location_id, initials } = req.body || {};
     const locId = location_id || 1;
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
+    }
     const date = activeOrToday();
 
     const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
@@ -2565,8 +3122,10 @@ app.post("/api/clear-roster", (req, res) => {
       location_id: locId,
       date: date,
       deleted_count: result.changes,
-      backup_file: backupFile
+      backup_file: backupFile,
+      initials: initialsClean
     });
+    logActivity("clear_roster", { location_id: locId, initials: initialsClean, details: { date, backup_file: backupFile } });
 
     console.log(`[ADMIN CLEAR] Deleted ${result.changes} swimmers for ${location.name} (${date})`);
 
@@ -2587,8 +3146,12 @@ app.post("/api/clear-roster", (req, res) => {
 // ==================== ADMIN CLEAR FUTURE ROSTER ====================
 app.post("/api/clear-roster-future", (req, res) => {
   try {
-    const { location_id } = req.body || {};
+    const { location_id, initials } = req.body || {};
     const locId = location_id || 1;
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
+    }
     const today = todayISO();
 
     const location = db.prepare(`SELECT * FROM locations WHERE id = ?`).get(locId);
@@ -2632,8 +3195,10 @@ app.post("/api/clear-roster-future", (req, res) => {
       location_id: locId,
       date_start: today,
       deleted_count: result.changes,
-      backup_file: backupFile
+      backup_file: backupFile,
+      initials: initialsClean
     });
+    logActivity("clear_roster_future", { location_id: locId, initials: initialsClean, details: { date_start: today, backup_file: backupFile } });
 
     console.log(`[ADMIN CLEAR FUTURE] Deleted ${result.changes} swimmers for ${location.name} (from ${today})`);
 
@@ -2653,6 +3218,10 @@ app.post("/api/clear-roster-future", (req, res) => {
 // ==================== ADMIN CLEAR ALL ROSTERS ====================
 app.post("/api/clear-roster-all", (req, res) => {
   try {
+    const initialsClean = normalizeInitials(req.body?.initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
+    }
     const date = activeOrToday();
     const startDate = req.body?.start_date || null;
     const endDate = req.body?.end_date || null;
@@ -2701,8 +3270,10 @@ app.post("/api/clear-roster-all", (req, res) => {
       start_date: startDate,
       end_date: endDate,
       deleted_count: result.changes,
-      backup_file: backupFile
+      backup_file: backupFile,
+      initials: initialsClean
     });
+    logActivity("clear_roster_all", { initials: initialsClean, details: { start_date: startDate, end_date: endDate, backup_file: backupFile } });
 
     console.log(`[ADMIN CLEAR ALL] Deleted ${result.changes} roster rows`);
 
@@ -3615,6 +4186,32 @@ app.get("/api/reports/instructors/export", (req, res) => {
     res.status(500).json({ ok: false, error: error.message });
   }
 });
+
+function scheduleGuardTaskSnapshots() {
+  const now = new Date();
+  const nextMidnight = new Date(now);
+  nextMidnight.setHours(24, 0, 0, 0);
+  const delay = nextMidnight.getTime() - now.getTime();
+  setTimeout(() => {
+    try {
+      const today = todayISO();
+      const rows = db.prepare(`SELECT * FROM guard_tasks WHERE task_date = ?`).all(today);
+      const savedAt = nowISO();
+      const insert = db.prepare(`
+        INSERT INTO guard_task_history(location_id, task_date, data_json, saved_at)
+        VALUES (?, ?, ?, ?)
+      `);
+      rows.forEach((row) => {
+        insert.run(row.location_id, row.task_date, row.data_json, savedAt);
+      });
+    } catch (error) {
+      console.error("Guard task midnight snapshot error:", error);
+    }
+    scheduleGuardTaskSnapshots();
+  }, Math.max(1000, delay));
+}
+
+scheduleGuardTaskSnapshots();
 
 app.listen(PORT, () => {
   console.log(`SwimLabs Announcer server running on http://localhost:${PORT}`);
