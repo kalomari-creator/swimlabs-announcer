@@ -6,44 +6,46 @@
   <meta name="api-base" content="" />
   <title>SwimLabs Announcer</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root{
-      --bg:#070b14;
-      --cardA:rgba(255,255,255,.06);
-      --cardB:rgba(255,255,255,.03);
-      --text:#e8eefc;
-      --muted:#9fb0d0;
-      --line:rgba(255,255,255,.10);
-      --line2:rgba(255,255,255,.14);
-      --btn:#1f2a44;
-      --btn2:#2a3a63;
-      --good:#22c55e;
+      --bg:#f8fafc;
+      --cardA:#ffffff;
+      --cardB:#ffffff;
+      --text:#0f172a;
+      --muted:#475569;
+      --line:rgba(15,23,42,.08);
+      --line2:rgba(15,23,42,.12);
+      --btn:#ffffff;
+      --btn2:#f8fafc;
+      --good:#10b981;
       --warn:#f59e0b;
-      --bad:#ef4444;
-      --chip:rgba(255,255,255,.06);
+      --bad:#e11d48;
+      --chip:rgba(15,23,42,.04);
+      --accent:#10b981;
+      --accent-soft:#ecfdf5;
     }
     *{ box-sizing:border-box; }
     body{
       margin:0;
       padding:18px;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background: radial-gradient(1200px 600px at 20% 0%, #0e1b3a 0%, var(--bg) 55%) fixed;
+      background: var(--bg);
       color:var(--text);
     }
     .wrap{ max-width: 1250px; margin: 0 auto; }
     .topbar{ display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; padding-bottom: 4px; }
-    h1{ margin:0; font-size:22px; letter-spacing:.2px; }
+    h1{ margin:0; font-size:22px; letter-spacing:.2px; color: var(--text); }
     .muted{ color:var(--muted); font-size:14px; }
     .tiny{ font-size:12px; }
     .right{ margin-left:auto; }
     .card{
-      background: linear-gradient(180deg, var(--cardA), var(--cardB));
+      background: var(--cardA);
       border:1px solid var(--line);
       border-radius:18px;
       padding:14px;
       margin-top:14px;
-      box-shadow: 0 12px 34px rgba(0,0,0,.30);
-      backdrop-filter: blur(8px);
+      box-shadow: 0 10px 28px rgba(15,23,42,.08);
     }
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .spacer{ flex:1; }
@@ -54,23 +56,24 @@
       padding:6px;
       border-radius:999px;
       border:1px solid var(--line);
-      background: rgba(255,255,255,.04);
+      background: #fff;
     }
     button{
-      border:1px solid var(--line);
-      background: linear-gradient(180deg, var(--btn2), var(--btn));
-      color:var(--text);
+      border:1px solid rgba(148,163,184,.5);
+      background: #fff;
+      color:#0f172a;
       padding:10px 12px;
       border-radius:14px;
       cursor:pointer;
-      font-weight:900;
+      font-weight:700;
       letter-spacing:.2px;
     }
-    button:hover{ filter: brightness(1.08); }
+    button:hover{ background:#f8fafc; }
     button:active{ transform: translateY(1px); }
-    button.primary{ border-color: rgba(34,197,94,.45); }
-    button.secondary{ border-color: rgba(245,158,11,.35); }
-    button.danger{ border-color: rgba(239,68,68,.35); }
+    button.primary{ border-color: rgba(16,185,129,.45); }
+    button.secondary{ border-color: rgba(148,163,184,.6); }
+    button.danger{ border-color: rgba(225,29,72,.35); background:#e11d48; color:#fff; }
+    button.danger:hover{ background:#be123c; }
     .miniBtn{
       padding:6px 10px;
       font-size:12px;
@@ -78,11 +81,12 @@
       border-radius:10px;
     }
 
-    button.tab{ padding:9px 12px; border-radius:999px; background: transparent; border-color: transparent; }
+    button.tab{ padding:9px 12px; border-radius:999px; background: transparent; border-color: transparent; color:#334155; }
     button.tab.active{
-      background: rgba(255,255,255,.09);
-      border-color: rgba(255,255,255,.14);
-      outline: 2px solid rgba(255,255,255,.10);
+      background: var(--accent-soft);
+      border-color: rgba(16,185,129,.2);
+      outline: 2px solid rgba(16,185,129,.15);
+      color:#065f46;
     }
 
     .pill{
@@ -90,7 +94,7 @@
       align-items:center;
       gap:8px;
       border:1px solid var(--line);
-      background: rgba(255,255,255,.05);
+      background: #fff;
       padding:7px 10px;
       border-radius:999px;
       font-size:13px;
@@ -98,7 +102,7 @@
       line-height: 1.2;
       white-space: nowrap;
     }
-    .pill strong{ color: var(--text); font-weight:900; }
+    .pill strong{ color: var(--text); font-weight:800; }
     .ok{ color: var(--good); font-weight:900; }
     .warn{ color: var(--warn); font-weight:900; }
 
@@ -119,8 +123,8 @@
       resize: vertical;
       padding:12px 12px;
       border-radius:14px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.04);
+      border:1px solid rgba(148,163,184,.45);
+      background: #fff;
       color: var(--text);
       outline: none;
       font-size:14px;
@@ -131,24 +135,24 @@
     select, input[type="text"], input[type="password"]{
       padding:10px 12px;
       border-radius:14px;
-      border:1px solid rgba(255,255,255,.18);
-      background: #000;
-      color: #fff;
-      font-weight:900;
+      border:1px solid rgba(148,163,184,.45);
+      background: #fff;
+      color: #0f172a;
+      font-weight:600;
       outline: none;
       cursor:pointer;
     }
     input[type="text"], input[type="password"]{
       cursor:text;
-      font-weight:800;
+      font-weight:600;
     }
     input[type="text"]:focus, input[type="password"]:focus{
-      border-color: #04D9FF;
-      box-shadow: 0 0 0 3px rgba(4,217,255,.15);
+      border-color: #10b981;
+      box-shadow: 0 0 0 3px rgba(16,185,129,.15);
     }
     select option{
-      background:#000;
-      color:#fff;
+      background:#fff;
+      color:#0f172a;
     }
 
     /* Search bar */
@@ -162,21 +166,21 @@
       width: 280px;
       padding: 9px 34px 9px 12px;
       border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.18);
-      background: rgba(0,0,0,.75);
-      color: #fff;
+      border: 1px solid rgba(148,163,184,.45);
+      background: #fff;
+      color: #0f172a;
       font-size: 14px;
       font-weight: 700;
       outline: none;
       transition: all .15s ease;
     }
     .searchInput:focus{
-      border-color: #04D9FF;
-      box-shadow: 0 0 0 3px rgba(4,217,255,.15);
-      background: #000;
+      border-color: #10b981;
+      box-shadow: 0 0 0 3px rgba(16,185,129,.15);
+      background: #fff;
     }
     .searchInput::placeholder{
-      color: rgba(159,176,208,.6);
+      color: rgba(71,85,105,.6);
       font-weight: 600;
     }
     .searchClear{
@@ -209,15 +213,15 @@
       border-radius:10px;
       font-size:13px;
       font-weight:700;
-      border:1px solid rgba(255,255,255,0.2);
-      background:rgba(255,255,255,0.08);
-      color:#fff;
+      border:1px solid rgba(148,163,184,.45);
+      background:#fff;
+      color:#0f172a;
       cursor:pointer;
     }
     .managerTabBtn.active{
-      background:rgba(34,197,94,0.2);
-      border-color:rgba(34,197,94,0.4);
-      color:#d1fae5;
+      background:rgba(16,185,129,0.12);
+      border-color:rgba(16,185,129,0.4);
+      color:#065f46;
     }
 
     table{
@@ -228,7 +232,7 @@
       overflow:hidden;
       border-radius:14px;
       border:1px solid var(--line);
-      background: rgba(255,255,255,.02);
+      background: #fff;
     }
     .roster-table{
       table-layout: fixed;
@@ -237,20 +241,24 @@
     thead th{
       position: sticky;
       top: 0;
-      background: rgba(10, 16, 34, .92);
-      backdrop-filter: blur(8px);
+      background: #f1f5f9;
       z-index: 5;
       border-bottom: 1px solid var(--line2);
+      color:#0f172a;
+      font-weight:700;
     }
     th,td{
       text-align:left;
       padding:10px 10px;
-      border-bottom:1px solid var(--line);
+      border-bottom:1px solid rgba(148,163,184,.3);
       vertical-align: top;
       font-size:14px;
+      color:#0f172a;
     }
-    th{ color:var(--muted); font-weight:900; font-size:12px; text-transform: uppercase; letter-spacing: .5px; }
-    tbody tr:hover{ background: rgba(255,255,255,.035); }
+    th{ color:#0f172a; font-weight:700; font-size:12px; text-transform: uppercase; letter-spacing: .5px; }
+    tbody tr:nth-child(odd){ background:#fff; }
+    tbody tr:nth-child(even){ background:#f8fafc; }
+    tbody tr:hover{ background: #eef2f7; }
 
     /* Keep roster rows neutral */
     tbody tr.program-group,
@@ -258,7 +266,7 @@
     tbody tr.program-private,
     tbody tr.program-parent-tot,
     tbody tr.program-trial{
-      background: transparent;
+      background: inherit;
     }
 
     .zone{
@@ -269,7 +277,7 @@
       padding:6px 10px;
       border-radius:999px;
       color:var(--muted);
-      background: rgba(255,255,255,.04);
+      background: #fff;
       font-size:13px;
       font-weight:900;
       white-space: nowrap;
@@ -280,7 +288,7 @@
 
     .hidden{ display:none; }
 
-    .level{ font-weight:900; color: rgba(232,238,252,.95); line-height: 1.2; }
+    .level{ font-weight:900; color: var(--text); line-height: 1.2; }
     .nowrap{ white-space: nowrap; }
 
     .badge{
@@ -323,6 +331,92 @@
     tbody tr.row-sub { background: rgba(249,115,22,0.06); }
     tbody tr.row-sub:hover { background: rgba(249,115,22,0.12); }
 
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border-radius:999px;
+      padding:4px 8px;
+      font-size:11px;
+      font-weight:700;
+      border:1px solid rgba(148,163,184,.4);
+      background:#fff;
+      color:#0f172a;
+    }
+    .chip.teal{ border-color: rgba(16,185,129,.35); background: var(--accent-soft); color:#065f46; }
+    .chip.rose{ border-color: rgba(225,29,72,.35); background: rgba(225,29,72,.08); color:#9f1239; }
+    .chip.amber{ border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.08); color:#92400e; }
+    .chip.slate{ border-color: rgba(148,163,184,.35); background: rgba(148,163,184,.12); color:#1f2937; }
+
+    .notification-card{
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+      padding:12px;
+      border-radius:14px;
+      border:1px solid rgba(16,185,129,.2);
+      background: #fff;
+    }
+    .notification-card.danger{
+      border-color: rgba(225,29,72,.35);
+      background: rgba(225,29,72,.04);
+    }
+    .notification-card.warning{
+      border-color: rgba(245,158,11,.35);
+      background: rgba(245,158,11,.06);
+    }
+    .notification-card .dismiss{
+      border: none;
+      background: transparent;
+      color: #64748b;
+      font-weight:700;
+      cursor:pointer;
+    }
+    .report-card{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding:12px;
+      border-radius:16px;
+      border:1px solid rgba(148,163,184,.35);
+      background:#fff;
+    }
+    .report-card .accent{
+      width:8px;
+      align-self:stretch;
+      border-radius:999px;
+      background: linear-gradient(180deg, rgba(16,185,129,.9), rgba(20,184,166,.7));
+    }
+    .table-num{
+      text-align:right;
+      font-variant-numeric: tabular-nums;
+    }
+    .drop-details{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .drop-details .name{
+      font-weight:700;
+      color:#0f172a;
+    }
+    .drop-details .meta{
+      color:var(--muted);
+      font-size:12px;
+    }
+    .drop-details .chips{
+      display:flex;
+      gap:6px;
+      flex-wrap:wrap;
+    }
+    .trend-card{
+      background:#fff;
+      border:1px solid rgba(148,163,184,.35);
+      border-radius:16px;
+      padding:14px;
+      box-shadow: 0 10px 24px rgba(15,23,42,.08);
+    }
+
     .flagBadge{
       display:inline-flex;
       align-items:center;
@@ -350,7 +444,7 @@
       position: sticky;
       top: 0;
       z-index: 8;
-      background: rgba(7,11,20,.96);
+      background: #f8fafc;
       padding-bottom: 10px;
       margin-bottom: 4px;
     }
@@ -392,11 +486,11 @@
       letter-spacing: 0.5px;
       font-weight: 700;
       text-align: center;
-      background: rgba(255,255,255,.05);
-      border: 1px solid rgba(255,255,255,.12);
+      background: #fff;
+      border: 1px solid rgba(148,163,184,.35);
       border-radius: 8px;
       padding: 6px 8px;
-      color: #fff;
+      color: #0f172a;
     }
     .guard-task span { flex: 1; }
     .guard-group-title {
@@ -422,17 +516,17 @@
     }
     .guard-rotation-table th,
     .guard-rotation-table td {
-      border-bottom: 1px solid rgba(255,255,255,.08);
+      border-bottom: 1px solid rgba(148,163,184,.3);
       padding: 8px;
       text-align: left;
     }
     .guard-rotation-table input {
       width: 100%;
-      background: rgba(255,255,255,.05);
-      border: 1px solid rgba(255,255,255,.12);
+      background: #fff;
+      border: 1px solid rgba(148,163,184,.35);
       border-radius: 8px;
       padding: 6px 8px;
-      color: #fff;
+      color: #0f172a;
     }
 
     /* Attendance buttons */
@@ -443,10 +537,11 @@
       font-size:12px;
       font-weight:900;
       border:1px solid var(--line);
-      background: rgba(255,255,255,.04);
+      background: #fff;
       cursor:pointer;
       user-select:none;
       line-height:1;
+      color:#0f172a;
     }
     .attBtn.here.active{ border-color: rgba(34,197,94,.5); background: rgba(34,197,94,.12); }
     .attBtn.absent.active{ border-color: rgba(239,68,68,.5); background: rgba(239,68,68,.12); }
@@ -478,7 +573,7 @@
     .modalBackdrop{
       position: fixed;
       inset:0;
-      background: rgba(0,0,0,.55);
+      background: rgba(15,23,42,.35);
       display:none;
       align-items:center;
       justify-content:center;
@@ -488,12 +583,11 @@
     .modal{
       width: 100%;
       max-width: 560px;
-      background: linear-gradient(180deg, rgba(20,26,50,.92), rgba(10,12,24,.92));
+      background: #fff;
       border:1px solid var(--line2);
       border-radius:18px;
-      box-shadow: 0 22px 60px rgba(0,0,0,.55);
+      box-shadow: 0 22px 60px rgba(15,23,42,.25);
       padding:14px;
-      backdrop-filter: blur(10px);
     }
     .modal h3{ margin:4px 0 10px; font-size:16px; }
     .modal .grid2{ display:grid; grid-template-columns: 1fr; gap:10px; }
@@ -554,10 +648,10 @@
     </div>
 
     <div class="right row">
-      <select id="locationSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+      <select id="locationSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: #fff; color: #0f172a; border: 1px solid rgba(148,163,184,0.5);">
         <option value="">Loading locations...</option>
       </select>
-      <select id="viewSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); min-width: 150px;">
+      <select id="viewSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: #fff; color: #0f172a; border: 1px solid rgba(148,163,184,0.5); min-width: 150px;">
         <option value="roster">Roster</option>
         <option value="lifeguard">Lifeguard 🏊</option>
         <option value="announcements">Announcements</option>
@@ -568,17 +662,17 @@
       <button id="settingsBtn" title="Settings">⚙️</button>
       <span class="pill">
         <span style="font-size:11px; color:var(--muted);">Current Time:</span>
-        <strong id="currentTime" style="color:#04D9FF; margin-left:4px;">—</strong>
+        <strong id="currentTime" style="color:var(--accent); margin-left:4px;">—</strong>
       </span>
       <span class="pill" id="nextAnnouncementPill">
         <span style="font-size:11px; color:var(--muted);">Next Announcement:</span>
-        <strong id="nextAnnouncementTimer" style="color:#04D9FF; margin-left:4px;">—</strong>
+        <strong id="nextAnnouncementTimer" style="color:var(--accent); margin-left:4px;">—</strong>
       </span>
       <span class="pill">Last: <strong id="lastAt">None</strong></span>
     </div>
   </div>
 
-  <div id="readOnlyBanner" class="card hidden bg-gradient-to-r from-cyan-500/10 to-blue-500/10" style="background: rgba(14,116,144,.2); border-color: rgba(14,116,144,.5);">
+  <div id="readOnlyBanner" class="card hidden" style="background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.3);">
     <div style="font-weight:900;">🔒 Read-only mode enabled</div>
     <div class="tiny" style="color:var(--muted);">Uploads, edits, clears, and exports are disabled on this device.</div>
   </div>
@@ -606,7 +700,7 @@
       <div class="blocks" id="blocks"></div>
     </div>
 
-    <div id="deckDateWarning" class="card hidden bg-gradient-to-r from-amber-500/10 to-orange-500/10" style="background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.4);">
+    <div id="deckDateWarning" class="card hidden" style="background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.4);">
       <div style="font-weight:900;">⚠️ Past-date roster</div>
       <div class="tiny" style="color:var(--muted);">Deck Mode is on and this roster date is not today.</div>
     </div>
@@ -677,7 +771,7 @@
 
         <div class="card" style="margin-top:12px; background: rgba(255,255,255,.03);">
           <div class="pill" style="margin-bottom:8px;">Last announcement</div>
-          <div id="lastText" class="tiny" style="line-height:1.45; color: rgba(232,238,252,.92);">None</div>
+          <div id="lastText" class="tiny" style="line-height:1.45; color: var(--text);">None</div>
         </div>
       </div>
 
@@ -720,6 +814,15 @@
           </div>
         </div>
 
+        <div class="card" id="managerNotifications">
+          <div class="row" style="margin-bottom:10px;">
+            <h3 style="margin:0; font-size:18px;">🔔 Notifications</h3>
+            <div class="spacer"></div>
+            <span class="chip teal">Persistent</span>
+          </div>
+          <div id="managerNotificationsList" class="row" style="flex-direction:column; gap:10px;"></div>
+        </div>
+
         <div class="card" style="margin-bottom:20px;">
           <h3 style="margin:0 0 12px; font-size:18px;">📅 Manager Date Brackets</h3>
           <div class="grid2" style="margin-bottom:10px;">
@@ -753,7 +856,7 @@
           <div class="row" style="margin-bottom:12px;">
             <h3 style="margin:0; font-size:18px;">👥 Today's Swimmers - Detailed View</h3>
             <div class="spacer"></div>
-            <select id="swimmerSortBy" style="padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+            <select id="swimmerSortBy" style="padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: #fff; color: #0f172a; border: 1px solid rgba(148,163,184,0.5);">
               <option value="name">Sort: Name A-Z</option>
               <option value="time">Sort: Time</option>
               <option value="instructor">Sort: Instructor</option>
@@ -822,77 +925,48 @@
       <div id="managerTabReports" class="hidden">
         <div class="card" style="margin-bottom:16px;">
           <h3 style="margin:0 0 8px; font-size:18px;">📁 Manager Reports</h3>
-          <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track retention (HTML), drop list (HTML), balance list (HTML), billing, and aged accounts reports per location.</div>
+          <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track retention (HTML), drop list (HTML), and aged accounts reports per location.</div>
 
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
-            <div class="card" style="background: rgba(255,255,255,0.04);">
-              <div class="row" style="gap:10px;">
-                <div>
-                  <div style="font-weight:800;">📈 Retention List (HTML)</div>
-                  <div class="tiny" id="reportMetaRetention">No report uploaded yet.</div>
-                </div>
-                <div class="spacer"></div>
-                <a class="secondary hidden" id="reportDownloadRetention" target="_blank" rel="noopener">View</a>
-                <button class="secondary reportUploadBtn" data-report-type="retention">Upload</button>
-                <input type="file" class="reportFileInput hidden" data-report-type="retention" accept=".html" />
+            <div class="report-card">
+              <div class="accent"></div>
+              <div>
+                <div style="font-weight:800;">📈 Retention List (HTML)</div>
+                <div class="tiny" id="reportMetaRetention">No report uploaded yet.</div>
               </div>
+              <div class="spacer"></div>
+              <a class="secondary hidden" id="reportDownloadRetention" target="_blank" rel="noopener">View</a>
+              <button class="secondary reportUploadBtn" data-report-type="retention">Upload</button>
+              <input type="file" class="reportFileInput hidden" data-report-type="retention" accept=".html" />
             </div>
 
-            <div class="card" style="background: rgba(255,255,255,0.04);">
-              <div class="row" style="gap:10px;">
-                <div>
-                  <div style="font-weight:800;">🧾 Aged Accounts</div>
-                  <div class="tiny" id="reportMetaAgedAccounts">No report uploaded yet.</div>
-                </div>
-                <div class="spacer"></div>
-                <a class="secondary hidden" id="reportDownloadAgedAccounts" target="_blank" rel="noopener">View</a>
-                <button class="secondary reportUploadBtn" data-report-type="aged_accounts">Upload</button>
-                <input type="file" class="reportFileInput hidden" data-report-type="aged_accounts" accept=".html,.pdf,.csv,.xls,.xlsx" />
+            <div class="report-card">
+              <div class="accent"></div>
+              <div>
+                <div style="font-weight:800;">🧾 Aged Accounts</div>
+                <div class="tiny" id="reportMetaAgedAccounts">No report uploaded yet.</div>
               </div>
+              <div class="spacer"></div>
+              <a class="secondary hidden" id="reportDownloadAgedAccounts" target="_blank" rel="noopener">View</a>
+              <button class="secondary reportUploadBtn" data-report-type="aged_accounts">Upload</button>
+              <input type="file" class="reportFileInput hidden" data-report-type="aged_accounts" accept=".html,.pdf,.csv,.xls,.xlsx" />
             </div>
 
-            <div class="card" style="background: rgba(255,255,255,0.04);">
-              <div class="row" style="gap:10px;">
-                <div>
-                  <div style="font-weight:800;">📉 Drop List (HTML)</div>
-                  <div class="tiny" id="reportMetaDropList">No report uploaded yet.</div>
-                </div>
-                <div class="spacer"></div>
-                <a class="secondary hidden" id="reportDownloadDropList" target="_blank" rel="noopener">View</a>
-                <button class="secondary reportUploadBtn" data-report-type="drop_list">Upload</button>
-                <input type="file" class="reportFileInput hidden" data-report-type="drop_list" accept=".html" />
+            <div class="report-card">
+              <div class="accent"></div>
+              <div>
+                <div style="font-weight:800;">📉 Drop List (HTML)</div>
+                <div class="tiny" id="reportMetaDropList">No report uploaded yet.</div>
               </div>
-            </div>
-
-            <div class="card" style="background: rgba(255,255,255,0.04);">
-              <div class="row" style="gap:10px;">
-                <div>
-                  <div style="font-weight:800;">⚖️ Balance List (HTML)</div>
-                  <div class="tiny" id="reportMetaBalanceList">No report uploaded yet.</div>
-                </div>
-                <div class="spacer"></div>
-                <a class="secondary hidden" id="reportDownloadBalanceList" target="_blank" rel="noopener">View</a>
-                <button class="secondary reportUploadBtn" data-report-type="balance_list">Upload</button>
-                <input type="file" class="reportFileInput hidden" data-report-type="balance_list" accept=".html" />
-              </div>
-            </div>
-
-            <div class="card" style="background: rgba(255,255,255,0.04);">
-              <div class="row" style="gap:10px;">
-                <div>
-                  <div style="font-weight:800;">💳 Billing Snapshot</div>
-                  <div class="tiny" id="reportMetaBilling">No report uploaded yet.</div>
-                </div>
-                <div class="spacer"></div>
-                <a class="secondary hidden" id="reportDownloadBilling" target="_blank" rel="noopener">View</a>
-                <button class="secondary reportUploadBtn" data-report-type="billing">Upload</button>
-                <input type="file" class="reportFileInput hidden" data-report-type="billing" accept=".html,.pdf,.csv,.xls,.xlsx" />
-              </div>
+              <div class="spacer"></div>
+              <a class="secondary hidden" id="reportDownloadDropList" target="_blank" rel="noopener">View</a>
+              <button class="secondary reportUploadBtn" data-report-type="drop_list">Upload</button>
+              <input type="file" class="reportFileInput hidden" data-report-type="drop_list" accept=".html" />
             </div>
           </div>
         </div>
 
-        <div class="card bg-gradient-to-br from-indigo-500/10 to-pink-500/10" id="managerBreakdownsCard">
+        <div class="card" id="managerBreakdownsCard">
           <h3 style="margin:0 0 12px; font-size:18px;">📊 Manager Breakdowns</h3>
           <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
             <button class="managerTabBtn active" data-breakdown="aged_accounts">Aged Accounts</button>
@@ -908,6 +982,7 @@
           </div>
 
           <div id="breakdownFilters" class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;"></div>
+          <div id="breakdownTrends" style="margin-bottom:12px;"></div>
           <div id="breakdownContent" style="max-height:420px; overflow:auto;"></div>
           <div class="row" style="margin-top:12px;">
             <button class="secondary" id="breakdownExportCsv">Export CSV</button>
@@ -967,7 +1042,7 @@
       <div class="tiny" style="color:var(--muted); margin-bottom:16px;">
         Manager: enter the guard names for the day. Guard numbers are randomized at the start of the day. Weekdays have no rotation unless manually updated. Weekends rotate Guard 2 + 3 first, then 3 + 1, then 1 + 2.
       </div>
-      <div class="tiny" style="color:rgba(248,250,252,0.9); font-weight:700; margin-bottom:16px;">
+      <div class="tiny" style="color:var(--text); font-weight:700; margin-bottom:16px;">
         IF YOU ARE DOWN AND DON'T KNOW WHAT TO WORK ON OR DO, SEE MANAGER.
       </div>
 
@@ -1016,7 +1091,7 @@
 
       <div class="guard-section" style="margin-top:16px;">
         <h4>📝 Notes</h4>
-        <textarea id="guardNotes" rows="4" style="width:100%; border-radius:12px; padding:10px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); color:#fff;" placeholder="Document incidents, reminders, or handoff notes..."></textarea>
+        <textarea id="guardNotes" rows="4" style="width:100%; border-radius:12px; padding:10px; background:#fff; border:1px solid rgba(148,163,184,.35); color:#0f172a;" placeholder="Document incidents, reminders, or handoff notes..."></textarea>
       </div>
     </div>
   </div>
@@ -1489,12 +1564,14 @@
   let managerRole = null;
   let readOnlyMode = false;
   let wakeLock = null;
+  let managerReportsCache = null;
+  let managerNotificationsCache = [];
+  let retentionTrendChart = null;
+  let dropTrendChart = null;
   const managerReportTypes = [
     { type: 'retention', metaId: 'reportMetaRetention', downloadId: 'reportDownloadRetention', label: 'Retention list (HTML)' },
     { type: 'aged_accounts', metaId: 'reportMetaAgedAccounts', downloadId: 'reportDownloadAgedAccounts', label: 'Aged accounts' },
-    { type: 'drop_list', metaId: 'reportMetaDropList', downloadId: 'reportDownloadDropList', label: 'Drop list (HTML)' },
-    { type: 'balance_list', metaId: 'reportMetaBalanceList', downloadId: 'reportDownloadBalanceList', label: 'Balance list (HTML)' },
-    { type: 'billing', metaId: 'reportMetaBilling', downloadId: 'reportDownloadBilling', label: 'Billing snapshot' }
+    { type: 'drop_list', metaId: 'reportMetaDropList', downloadId: 'reportDownloadDropList', label: 'Drop list (HTML)' }
   ];
 
   const el = (id) => document.getElementById(id);
@@ -1617,7 +1694,11 @@
     if (reportsBtn) reportsBtn.classList.toggle('active', isReports);
     if (overviewPanel) overviewPanel.classList.toggle('hidden', isReports);
     if (reportsPanel) reportsPanel.classList.toggle('hidden', !isReports);
-    if (isReports) loadManagerReports();
+    if (isReports) {
+      loadManagerReports();
+    } else if (managerReportsCache) {
+      loadManagerNotifications(managerReportsCache);
+    }
   }
 
   document.querySelectorAll('[data-breakdown]').forEach((btn) => {
@@ -1630,6 +1711,7 @@
       const role = managerRole || 'manager';
       const resp = await api(`/api/manager-reports?location_id=${currentLocation.id}&role=${role}`);
       if (!resp.ok) throw new Error(resp.error || 'Failed to load manager reports');
+      managerReportsCache = resp;
       managerReportTypes.forEach((report) => {
         const metaEl = el(report.metaId);
         const linkEl = el(report.downloadId);
@@ -1645,6 +1727,7 @@
           if (linkEl) linkEl.classList.add('hidden');
         }
       });
+      loadManagerNotifications(resp);
     } catch (e) {
       console.error('Failed to load manager reports:', e);
     }
@@ -1658,7 +1741,7 @@
     dropRange: '7',
     dropStart: '',
     dropEnd: '',
-    retentionTrend: false
+    showTrends: true
   };
 
   function setBreakdownType(type) {
@@ -1684,6 +1767,7 @@
         <input type="date" id="dropStartDate" />
         <input type="date" id="dropEndDate" />
         <button class="secondary miniBtn" id="dropApplyBtn">Apply</button>
+        <button class="secondary miniBtn" id="trendToggle">${breakdownFilters.showTrends ? 'Hide' : 'Show'} trends</button>
       `;
       el('dropRangeSelect').value = breakdownFilters.dropRange;
       el('dropStartDate').value = breakdownFilters.dropStart;
@@ -1694,16 +1778,22 @@
         breakdownFilters.dropEnd = el('dropEndDate').value;
         loadBreakdown();
       });
-    } else if (currentBreakdownType === 'retention') {
-      container.innerHTML = `
-        <button class="secondary miniBtn" id="retentionTrendToggle">
-          ${breakdownFilters.retentionTrend ? 'Hide' : 'Show'} last 4 uploads
-        </button>
-      `;
-      el('retentionTrendToggle').addEventListener('click', () => {
-        breakdownFilters.retentionTrend = !breakdownFilters.retentionTrend;
+      el('trendToggle').addEventListener('click', () => {
+        breakdownFilters.showTrends = !breakdownFilters.showTrends;
         loadBreakdown();
       });
+    } else if (currentBreakdownType === 'retention') {
+      container.innerHTML = `
+        <button class="secondary miniBtn" id="trendToggle">
+          ${breakdownFilters.showTrends ? 'Hide' : 'Show'} trends
+        </button>
+      `;
+      el('trendToggle').addEventListener('click', () => {
+        breakdownFilters.showTrends = !breakdownFilters.showTrends;
+        loadBreakdown();
+      });
+    } else {
+      container.innerHTML = '';
     }
   }
 
@@ -1742,6 +1832,336 @@
     });
   }
 
+  function formatPercent(value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+    return `${Number(value).toFixed(1)}%`;
+  }
+
+  function formatDelta(value, suffix = '%', digits = 1) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+    const num = Number(value);
+    const sign = num > 0 ? '+' : '';
+    const fixed = digits === 0 ? Math.round(num).toString() : num.toFixed(digits);
+    return `${sign}${fixed}${suffix}`;
+  }
+
+  function parseDropDetails(raw) {
+    const rawString = Array.isArray(raw) ? raw.join(' • ') : String(raw || '');
+    const tokens = rawString.split(' • ').map((t) => t.trim()).filter(Boolean);
+    const tags = [];
+    const details = [];
+    let name = '';
+    let instructor = '';
+    const tagKeywords = ['makeup', 'trial', 'policy', 'owes', 'balance', 'add-on', 'addon', 'new'];
+    tokens.forEach((token) => {
+      const lower = token.toLowerCase();
+      if (!name && /[a-z]/i.test(token) && !/am|pm/.test(lower) && !/\d{1,2}\/\d{1,2}/.test(token) && !/^\d/.test(token)) {
+        name = token;
+        return;
+      }
+      if (lower.includes('with ')) {
+        instructor = token.replace(/.*with\s+/i, '').trim();
+        return;
+      }
+      if (tagKeywords.some((tag) => lower.includes(tag))) {
+        tags.push(token);
+        return;
+      }
+      details.push(token);
+    });
+    return { rawString, name, instructor, details, tags };
+  }
+
+  function renderDropDetails(entry) {
+    const parsed = parseDropDetails(entry.raw || []);
+    if (!parsed.rawString) {
+      return '<div class="drop-details"><div class="meta">No details available.</div></div>';
+    }
+    if (!parsed.name && !parsed.details.length && !parsed.instructor && !parsed.tags.length) {
+      return `<div class="drop-details"><div class="meta">${escapeHtml(parsed.rawString)}</div></div>`;
+    }
+    const line2Parts = [];
+    if (parsed.details.length) line2Parts.push(parsed.details.join(' • '));
+    if (parsed.instructor) line2Parts.push(`with ${parsed.instructor}`);
+    const chips = parsed.tags.map((tag) => renderBadge(tag, 'amber')).join(' ');
+    return `
+      <div class="drop-details">
+        ${parsed.name ? `<div class="name">${escapeHtml(parsed.name)}</div>` : ''}
+        ${line2Parts.length ? `<div class="meta">${escapeHtml(line2Parts.join(' • '))}</div>` : ''}
+        ${chips ? `<div class="chips">${chips}</div>` : ''}
+        ${!parsed.name && !line2Parts.length && !chips ? `<div class="meta">${escapeHtml(parsed.rawString)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function getWeekKey(dateStr) {
+    if (!dateStr) return null;
+    const date = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return null;
+    const day = date.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    date.setDate(date.getDate() + diff);
+    return date.toISOString().split('T')[0];
+  }
+
+  function renderTrendChart(type, reports) {
+    const container = el('breakdownTrends');
+    if (!container) return;
+    if (type !== 'retention' && type !== 'drop_list') {
+      container.innerHTML = '';
+      return;
+    }
+    if (!breakdownFilters.showTrends) {
+      container.innerHTML = '';
+      return;
+    }
+    if (!reports || !reports.length) {
+      container.innerHTML = '<div class="trend-card"><div class="tiny" style="color:var(--muted);">No trend data available yet.</div></div>';
+      return;
+    }
+    if (type === 'retention') {
+      const points = reports
+        .map((report) => {
+          const entries = report.data_json ? JSON.parse(report.data_json).instructors || [] : [];
+          const vals = entries.map((e) => Number(e.retention_percent)).filter((v) => !Number.isNaN(v));
+          const avg = vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : null;
+          return { label: formatShortDate(report.uploaded_at), value: avg };
+        })
+        .filter((p) => p.value !== null)
+        .slice(0, 8)
+        .reverse();
+      if (!points.length) {
+        container.innerHTML = '<div class="trend-card"><div class="tiny" style="color:var(--muted);">No retention trend data yet.</div></div>';
+        return;
+      }
+      container.innerHTML = `
+        <div class="trend-card">
+          <div style="font-weight:700; margin-bottom:8px;">Overall Retention Trend</div>
+          <canvas id="retentionTrendChart" height="220"></canvas>
+        </div>
+      `;
+      const ctx = el('retentionTrendChart');
+      if (retentionTrendChart) retentionTrendChart.destroy();
+      retentionTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: points.map((p) => p.label),
+          datasets: [{
+            label: 'Retention %',
+            data: points.map((p) => Number(p.value.toFixed(1))),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16,185,129,.15)',
+            tension: 0.35,
+            fill: true,
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { ticks: { callback: (v) => `${v}%` } }
+          }
+        }
+      });
+    }
+    if (type === 'drop_list') {
+      const allEntries = reports.flatMap((report) => {
+        const reportParsed = report.data_json ? JSON.parse(report.data_json) : {};
+        return reportParsed.entries || [];
+      });
+      const counts = new Map();
+      allEntries.forEach((entry) => {
+        const key = getWeekKey(entry.drop_date);
+        if (!key) return;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+      const labels = Array.from(counts.keys()).sort();
+      if (!labels.length) {
+        container.innerHTML = '<div class="trend-card"><div class="tiny" style="color:var(--muted);">No drop trends yet.</div></div>';
+        return;
+      }
+      container.innerHTML = `
+        <div class="trend-card">
+          <div style="font-weight:700; margin-bottom:8px;">Drops per Week</div>
+          <canvas id="dropTrendChart" height="220"></canvas>
+        </div>
+      `;
+      const ctx = el('dropTrendChart');
+      if (dropTrendChart) dropTrendChart.destroy();
+      dropTrendChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Drops',
+            data: labels.map((key) => counts.get(key)),
+            backgroundColor: 'rgba(16,185,129,.35)',
+            borderColor: '#10b981'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+  }
+
+  function getDismissedNotifications() {
+    try {
+      return JSON.parse(localStorage.getItem('dismissedNotifications') || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function dismissNotification(id) {
+    const dismissed = new Set(getDismissedNotifications());
+    dismissed.add(id);
+    localStorage.setItem('dismissedNotifications', JSON.stringify(Array.from(dismissed)));
+    renderManagerNotifications(managerNotificationsCache);
+  }
+
+  function renderManagerNotifications(notifications) {
+    const list = el('managerNotificationsList');
+    if (!list) return;
+    const dismissed = new Set(getDismissedNotifications());
+    const active = notifications.filter((note) => !dismissed.has(note.id));
+    if (!active.length) {
+      list.innerHTML = '<div class="tiny" style="color:var(--muted);">No notifications right now.</div>';
+      return;
+    }
+    list.innerHTML = active.map((note) => `
+      <div class="notification-card ${note.variant}">
+        <div style="flex:1;">
+          <div style="font-weight:700;">${escapeHtml(note.title)}</div>
+          <div class="tiny" style="color:var(--muted); margin-top:4px;">${escapeHtml(note.description)}</div>
+          ${note.actionLabel ? `<button class="secondary miniBtn" data-action="${note.action}" style="margin-top:8px;">${escapeHtml(note.actionLabel)}</button>` : ''}
+        </div>
+        <button class="dismiss" data-dismiss="${note.id}" aria-label="Dismiss notification">✕</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-dismiss]').forEach((btn) => {
+      btn.addEventListener('click', () => dismissNotification(btn.dataset.dismiss));
+    });
+    list.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.action;
+        if (action === 'retention') setBreakdownType('retention');
+        if (action === 'drop_list') setBreakdownType('drop_list');
+        if (action === 'aged_accounts') setBreakdownType('aged_accounts');
+        setManagerTab('reports');
+      });
+    });
+  }
+
+  function parseDateFromCell(value) {
+    const match = String(value || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!match) return null;
+    const mm = String(match[1]).padStart(2, '0');
+    const dd = String(match[2]).padStart(2, '0');
+    return new Date(`${match[3]}-${mm}-${dd}T00:00:00`);
+  }
+
+  async function loadManagerNotifications(reportSummary) {
+    if (!currentLocation) return;
+    const notifications = [];
+    const latest = reportSummary?.latest || {};
+    const now = new Date();
+    managerReportTypes.forEach((report) => {
+      const latestReport = latest[report.type];
+      if (!latestReport) {
+        notifications.push({
+          id: `missing-${report.type}-${currentLocation.id}`,
+          title: `${report.label} missing`,
+          description: 'No report uploaded yet.',
+          action: report.type,
+          actionLabel: 'Upload report',
+          variant: 'warning'
+        });
+        return;
+      }
+      const uploadedAt = latestReport.uploaded_at ? new Date(latestReport.uploaded_at) : null;
+      if (uploadedAt && (now - uploadedAt) / (1000 * 60 * 60 * 24) > 30) {
+        notifications.push({
+          id: `stale-${report.type}-${latestReport.uploaded_at}`,
+          title: `${report.label} stale`,
+          description: `Last upload ${formatShortDate(latestReport.uploaded_at)}.`,
+          action: report.type,
+          actionLabel: 'Review report',
+          variant: 'warning'
+        });
+      }
+    });
+
+    try {
+      const retentionResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=retention`);
+      const retentionReports = retentionResp.reports || [];
+      const latestRetention = retentionReports[0];
+      const prevRetention = retentionReports[1];
+      if (latestRetention && prevRetention) {
+        const current = latestRetention.data_json ? JSON.parse(latestRetention.data_json).instructors || [] : [];
+        const prevMap = new Map((prevRetention.data_json ? JSON.parse(prevRetention.data_json).instructors || [] : [])
+          .map((row) => [normalizeKey(row.instructor), row]));
+        const drops = current.filter((row) => {
+          const prev = prevMap.get(normalizeKey(row.instructor));
+          if (!prev || row.retention_percent == null || prev.retention_percent == null) return false;
+          return Number(row.retention_percent) - Number(prev.retention_percent) < 0;
+        });
+        if (drops.length) {
+          notifications.push({
+            id: `retention-drop-${latestRetention.uploaded_at}`,
+            title: 'Retention drops detected',
+            description: `${drops.length} instructor${drops.length === 1 ? '' : 's'} down vs last upload.`,
+            action: 'retention',
+            actionLabel: 'View retention',
+            variant: 'danger'
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Retention notification check failed', e);
+    }
+
+    try {
+      const agedResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=aged_accounts`);
+      const agedReports = agedResp.reports || [];
+      const latestAged = agedReports[0];
+      if (latestAged) {
+        const parsed = latestAged.data_json ? JSON.parse(latestAged.data_json) : {};
+        const rows = parsed.rows || [];
+        let bundleExpiring = 0;
+        rows.forEach((row) => {
+          const rowText = row.join(' ').toLowerCase();
+          if (!rowText.includes('bundle') && !rowText.includes('package')) return;
+          row.forEach((cell) => {
+            const dt = parseDateFromCell(cell);
+            if (!dt) return;
+            const days = (dt - now) / (1000 * 60 * 60 * 24);
+            if (days >= 0 && days <= 7) bundleExpiring += 1;
+          });
+        });
+        if (bundleExpiring) {
+          notifications.push({
+            id: `bundle-expiring-${latestAged.uploaded_at}`,
+            title: 'Bundles expiring soon',
+            description: `${bundleExpiring} bundle${bundleExpiring === 1 ? '' : 's'} expiring within 7 days.`,
+            action: 'aged_accounts',
+            actionLabel: 'Review aged accounts',
+            variant: 'warning'
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Bundle notification check failed', e);
+    }
+
+    managerNotificationsCache = notifications;
+    renderManagerNotifications(notifications);
+  }
+
   function buildCsvRow(values) {
     return values.map((val) => {
       const s = String(val ?? '');
@@ -1778,6 +2198,7 @@
     const latest = reports[0];
     const content = el('breakdownContent');
     content.innerHTML = '<div class="tiny" style="color:var(--muted); padding:10px;">No report data available.</div>';
+    renderTrendChart(currentBreakdownType, reports);
     if (!latest) return;
     const deleteBtn = el('breakdownDeleteBtn');
     if (deleteBtn) {
@@ -1807,66 +2228,60 @@
     if (currentBreakdownType === 'aged_accounts') {
       const headers = parsed.headers || [];
       const rows = parsed.rows || [];
-      let html = '<table><thead><tr>';
-      headers.forEach((h) => { html += `<th>${escapeHtml(h)}</th>`; });
-      html += '</tr></thead><tbody>';
-      rows.forEach((row) => {
-        html += '<tr>';
-        row.forEach((col) => { html += `<td>${escapeHtml(col)}</td>`; });
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-      content.innerHTML = html;
+      const tableRows = rows.map((row) => row.map((col) => escapeHtml(col)));
+      content.innerHTML = renderTable(headers, tableRows);
     }
 
     if (currentBreakdownType === 'retention') {
       const current = parsed.instructors || [];
       const previous = reports[1]?.data_json ? JSON.parse(reports[1].data_json).instructors || [] : [];
-      const trendReports = breakdownFilters.retentionTrend ? reports.slice(0, 4) : [];
-      const trendMap = new Map();
-      if (trendReports.length) {
-        trendReports.forEach((report) => {
-          const entries = report.data_json ? JSON.parse(report.data_json).instructors || [] : [];
-          entries.forEach((entry) => {
-            const key = String(entry.instructor || '').toLowerCase();
-            if (!trendMap.has(key)) trendMap.set(key, []);
-            trendMap.get(key).push(entry.retention_percent);
-          });
-        });
-      }
       const prevMap = new Map(previous.map((i) => [String(i.instructor || '').toLowerCase(), i]));
       const rows = current.map((row) => {
         const prev = prevMap.get(String(row.instructor || '').toLowerCase());
         if (!prev) {
-          return { ...row, deltaPercent: 'NEW', deltaCount: 'NEW' };
+          return {
+            instructor: row.instructor,
+            newPercent: row.retention_percent,
+            lastPercent: null,
+            deltaPercent: null,
+            newSwimmers: row.swimmer_count,
+            lastSwimmers: null,
+            deltaSwimmers: null,
+            status: renderBadge('NEW', 'teal')
+          };
         }
         const deltaPercent = row.retention_percent != null && prev.retention_percent != null
           ? row.retention_percent - prev.retention_percent
           : null;
-        const deltaCount = row.swimmer_count != null && prev.swimmer_count != null
+        const deltaSwimmers = row.swimmer_count != null && prev.swimmer_count != null
           ? row.swimmer_count - prev.swimmer_count
           : null;
-        return { ...row, deltaPercent, deltaCount };
+        const status = typeof deltaPercent === 'number' && deltaPercent < 0
+          ? renderBadge('⚠️ Drop', 'rose')
+          : renderBadge('Stable', 'slate');
+        return {
+          instructor: row.instructor,
+          newPercent: row.retention_percent,
+          lastPercent: prev.retention_percent,
+          deltaPercent,
+          newSwimmers: row.swimmer_count,
+          lastSwimmers: prev.swimmer_count,
+          deltaSwimmers,
+          status
+        };
       });
-      let html = '<table><thead><tr><th>Instructor</th><th>Retention %</th><th>Swimmers</th><th>Δ%</th><th>Δ Swimmers</th>';
-      if (breakdownFilters.retentionTrend) html += '<th>Trend (last 4)</th>';
-      html += '</tr></thead><tbody>';
-      rows.forEach((row) => {
-        const hazard = typeof row.deltaPercent === 'number' && row.deltaPercent < 0 ? '⚠️' : '';
-        html += '<tr>';
-        html += `<td>${escapeHtml(row.instructor)} ${hazard}</td>`;
-        html += `<td>${row.retention_percent ?? '—'}</td>`;
-        html += `<td>${row.swimmer_count ?? '—'}</td>`;
-        html += `<td>${row.deltaPercent === 'NEW' ? 'NEW' : (row.deltaPercent ?? '—')}</td>`;
-        html += `<td>${row.deltaCount === 'NEW' ? 'NEW' : (row.deltaCount ?? '—')}</td>`;
-        if (breakdownFilters.retentionTrend) {
-          const trend = trendMap.get(String(row.instructor || '').toLowerCase()) || [];
-          html += `<td>${trend.slice(0, 4).map((val) => val ?? '—').join(' → ') || '—'}</td>`;
-        }
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-      content.innerHTML = html;
+      const headers = ['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'];
+      const tableRows = rows.map((row) => [
+        escapeHtml(row.instructor || '—'),
+        `<span class="table-num">${formatPercent(row.newPercent)}</span>`,
+        `<span class="table-num">${formatPercent(row.lastPercent)}</span>`,
+        `<span class="table-num">${formatDelta(row.deltaPercent, '%', 1)}</span>`,
+        `<span class="table-num">${row.newSwimmers ?? '—'}</span>`,
+        `<span class="table-num">${row.lastSwimmers ?? '—'}</span>`,
+        `<span class="table-num">${formatDelta(row.deltaSwimmers, '', 0)}</span>`,
+        row.status
+      ]);
+      content.innerHTML = renderTable(headers, tableRows);
     }
 
     if (currentBreakdownType === 'drop_list') {
@@ -1875,15 +2290,12 @@
         return reportParsed.entries || [];
       });
       const entries = applyDropFilters(allEntries);
-      let html = '<table><thead><tr><th>Drop Date</th><th>Details</th></tr></thead><tbody>';
-      entries.forEach((entry) => {
-        html += '<tr>';
-        html += `<td>${entry.drop_date || '—'}</td>`;
-        html += `<td>${escapeHtml((entry.raw || []).join(' • '))}</td>`;
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-      content.innerHTML = html;
+      const headers = ['Drop Date', 'Details'];
+      const tableRows = entries.map((entry) => [
+        escapeHtml(entry.drop_date || '—'),
+        renderDropDetails(entry)
+      ]);
+      content.innerHTML = renderTable(headers, tableRows);
     }
 
     el('breakdownExportCsv').onclick = () => {
@@ -1899,8 +2311,32 @@
       if (currentBreakdownType === 'aged_accounts') {
         headers = [[...parsed.headers], ...parsed.rows];
       } else if (currentBreakdownType === 'retention') {
-        headers = [['Instructor', 'Retention %', 'Swimmers', 'Δ%', 'Δ Swimmers'],
-          ...(parsed.instructors || []).map((row) => [row.instructor, row.retention_percent, row.swimmer_count, '', ''])
+        const previous = reports[1]?.data_json ? JSON.parse(reports[1].data_json).instructors || [] : [];
+        const prevMap = new Map(previous.map((i) => [String(i.instructor || '').toLowerCase(), i]));
+        headers = [['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'],
+          ...(parsed.instructors || []).map((row) => {
+            const prev = prevMap.get(String(row.instructor || '').toLowerCase());
+            if (!prev) {
+              return [row.instructor, formatPercent(row.retention_percent), '', '', row.swimmer_count ?? '', '', '', 'NEW'];
+            }
+            const deltaPercent = row.retention_percent != null && prev.retention_percent != null
+              ? row.retention_percent - prev.retention_percent
+              : null;
+            const deltaSwimmers = row.swimmer_count != null && prev.swimmer_count != null
+              ? row.swimmer_count - prev.swimmer_count
+              : null;
+            const status = typeof deltaPercent === 'number' && deltaPercent < 0 ? 'Drop' : 'Stable';
+            return [
+              row.instructor,
+              formatPercent(row.retention_percent),
+              formatPercent(prev.retention_percent),
+              formatDelta(deltaPercent, '%', 1),
+              row.swimmer_count ?? '',
+              prev.swimmer_count ?? '',
+              formatDelta(deltaSwimmers, '', 0),
+              status
+            ];
+          })
         ];
       } else {
         const allEntries = reports.flatMap((report) => {
@@ -2015,6 +2451,50 @@
       .replace(/'/g,'&#039;');
   }
 
+  function renderBadge(text, variant = 'slate') {
+    return `<span class="chip ${variant}">${escapeHtml(text)}</span>`;
+  }
+
+  function renderCard(title, body, actions = '') {
+    return `
+      <div class="card">
+        <div class="row" style="margin-bottom:10px;">
+          <h3 style="margin:0; font-size:18px;">${escapeHtml(title)}</h3>
+          <div class="spacer"></div>
+          ${actions || ''}
+        </div>
+        ${body || ''}
+      </div>
+    `;
+  }
+
+  function renderTable(headers, rows) {
+    let html = '<table><thead><tr>';
+    headers.forEach((h) => { html += `<th>${escapeHtml(h)}</th>`; });
+    html += '</tr></thead><tbody>';
+    rows.forEach((row) => {
+      html += '<tr>';
+      row.forEach((col) => { html += `<td>${col}</td>`; });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function renderIconButton(icon, title, extraClass = '') {
+    return `<button class="secondary actionIconBtn ${extraClass}" title="${escapeHtml(title)}">${escapeHtml(icon)}</button>`;
+  }
+
+  function renderModal(title, content, actions = '') {
+    return `
+      <div class="modal">
+        <h3>${escapeHtml(title)}</h3>
+        <div>${content || ''}</div>
+        <div class="modalFooter">${actions || ''}</div>
+      </div>
+    `;
+  }
+
   function fmtTime(time24){
     if(!time24) return '—';
     const parts = String(time24).split(':');
@@ -2064,10 +2544,20 @@
     return { type: p, level: '—' };
   }
 
+  function cleanInstructorLabel(name){
+    const raw = String(name || '');
+    const withoutDates = raw
+      .replace(/\s+\(?\d{1,2}\/\d{1,2}\/\d{2,4}\)?/g, '')
+      .replace(/\s+\d{4}-\d{2}-\d{2}/g, '')
+      .replace(/\s+\d{1,2}-\d{1,2}-\d{2,4}/g, '');
+    const cleaned = withoutDates.replace(/\s+/g, ' ').trim();
+    return cleaned || '—';
+  }
+
   function getSubMeta(kid){
-    const rawInstructor = String(kid?.instructor_name || '');
-    const rawSub = String(kid?.substitute_instructor || '');
-    const rawOriginal = String(kid?.original_instructor || '');
+    const rawInstructor = cleanInstructorLabel(kid?.instructor_name || '');
+    const rawSub = cleanInstructorLabel(kid?.substitute_instructor || '');
+    const rawOriginal = cleanInstructorLabel(kid?.original_instructor || '');
     const hasMarker = /\*|\(sub\)|\bsub\b/i.test(rawInstructor);
     const cleanedInstructor = rawInstructor.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
     const cleanedSub = rawSub.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
@@ -2836,10 +3326,8 @@
       tr.appendChild(tdAtt);
 
       const hasSub = kid.is_substitute || kid.original_instructor || kid.substitute_instructor;
-      const originalSubLabel = kid.original_instructor ||
-        ((kid.substitute_instructor && kid.instructor_name && kid.substitute_instructor !== kid.instructor_name)
-          ? kid.instructor_name
-          : '');
+      const instructorDisplay = cleanInstructorLabel(kid.instructor_name || '');
+      const originalSubLabel = cleanInstructorLabel(kid.original_instructor || '');
 
       // Swimmer (with badges + flags)
       const tdName = document.createElement('td');
@@ -2859,14 +3347,6 @@
         const b = document.createElement('span');
         b.className = 'badge over';
         b.textContent = 'OVERRIDE';
-        nameLine.appendChild(b);
-      }
-
-      if (hasSub) {
-        const b = document.createElement('span');
-        b.className = 'badge sub';
-        b.textContent = 'SUB';
-        b.title = originalSubLabel ? `Subbing for ${originalSubLabel}` : 'Substitute';
         nameLine.appendChild(b);
       }
 
@@ -2924,44 +3404,30 @@
       tdLevel.textContent = tl.level;
       tr.appendChild(tdLevel);
 
-      // Instructor (show substitute name + original when applicable)
+      // Instructor (compact, no date, optional sub line)
       const tdInst = document.createElement('td');
       tdInst.className = 'rosterCell';
+      const instStack = document.createElement('div');
+      instStack.style.display = 'flex';
+      instStack.style.flexDirection = 'column';
+      instStack.style.gap = '4px';
+
+      const instLine = document.createElement('div');
+      instLine.style.fontWeight = '700';
+      instLine.textContent = instructorDisplay;
+      instStack.appendChild(instLine);
+
       if (hasSub) {
-        const instDiv = document.createElement('div');
-        instDiv.style.display = 'flex';
-        instDiv.style.alignItems = 'center';
-        instDiv.style.gap = '8px';
-        instDiv.style.flexWrap = 'wrap';
-
-        const subNameValue = kid.substitute_instructor || kid.instructor_name || '—';
-        const originalValue = originalSubLabel;
-
-        const instName = document.createElement('span');
-        instName.textContent = `${subNameValue} (Sub)`;
-        instName.style.fontWeight = '900';
-
-        const subBadge = document.createElement('span');
-        subBadge.className = 'badge sub';
-        subBadge.textContent = 'SUB';
-        subBadge.title = originalValue ? `Subbing for ${originalValue}` : 'Substitute';
-
-        instDiv.appendChild(instName);
-        instDiv.appendChild(subBadge);
-
-        if (originalValue) {
-          const originalName = document.createElement('span');
-          originalName.className = 'tiny';
-          originalName.style.cssText = 'color:var(--muted);';
-          originalName.textContent = `(${originalValue})`;
-          instDiv.appendChild(originalName);
+        const subLine = document.createElement('div');
+        if (originalSubLabel && originalSubLabel !== '—') {
+          subLine.innerHTML = `<span class="chip amber">SUB for ${escapeHtml(originalSubLabel)}</span>`;
+        } else {
+          subLine.innerHTML = `<span class="chip amber">SUB</span>`;
         }
-
-        tdInst.appendChild(instDiv);
-      } else {
-        // Regular instructor - no substitute
-        tdInst.textContent = kid.instructor_name || '—';
+        instStack.appendChild(subLine);
       }
+
+      tdInst.appendChild(instStack);
       tr.appendChild(tdInst);
 
       // Zone
@@ -2973,10 +3439,8 @@
       // Action
       const tdAction = document.createElement('td');
       tdAction.className = 'rosterCell';
-      const callBtn = document.createElement('button');
-      callBtn.className = 'secondary actionIconBtn';
-      callBtn.textContent = '📣';
-      callBtn.title = 'Announce swimmer';
+      tdAction.innerHTML = renderIconButton('📣', 'Announce swimmer');
+      const callBtn = tdAction.querySelector('button');
       callBtn.addEventListener('click', async () => {
         try{
           await api('/api/call-parent', {
@@ -2987,7 +3451,6 @@
           alert(e.message);
         }
       });
-      tdAction.appendChild(callBtn);
 
       tr.appendChild(tdAction);
 
@@ -4031,14 +4494,17 @@
       const warningText = (summary.warnings || []).join(' • ') || 'No warnings detected.';
       const messageLines = [
         `Report type: ${reportType.replace('_',' ')}`,
-        `Detected location: ${detectedLocation || 'Not found'}`,
+        `Detected location: ${detectedLocation || 'Not detected'}`,
         `Report date: ${summary.report_date || 'Unknown'}`,
         `Rows detected: ${summary.row_count ?? '—'}`,
         `Warnings: ${warningText}`
       ];
 
       let locationOptions = null;
-      if (reportType === 'drop_list' && !detectedLocation) {
+      const matchedLocation = detectedLocation
+        ? allLocations.find(loc => loc.name.toLowerCase() === detectedLocation.toLowerCase())
+        : null;
+      if (!matchedLocation) {
         locationOptions = (allLocations || []).map(loc => ({ value: String(loc.id), label: loc.name }));
       }
 
@@ -4052,12 +4518,9 @@
       });
       if (!confirmResult.ok) return;
 
-      const matchedLocation = detectedLocation
-        ? allLocations.find(loc => loc.name.toLowerCase() === detectedLocation.toLowerCase())
-        : null;
       const selectedLocationId = locationOptions
         ? confirmResult.location_value
-        : (matchedLocation ? matchedLocation.id : currentLocation.id);
+        : matchedLocation.id;
 
       const formData = new FormData();
       formData.append('report', file);
