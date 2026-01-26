@@ -1,4 +1,19 @@
 <!doctype html>
+<!--
+QA checklist (v4.8.5-beta):
+1) Roster: Upload HTML roster → auto-absent should detect ⊘ glyph or cancel.png in far-right cell; auto-absent rows highlight + chip, override to Here keeps chip.
+2) Roster UI: Attendance icon buttons, single-line rows, instructor cell shows SUB for original instructor or SUB chip only.
+3) Admin/System: MASTER ROSTER RESET requires DELETE + initials, logs in Admin Activity Log.
+4) Manager: Sidebar navigation, alert strip, stat tiles, global trends toggle, global search + preview drawer, keyboard shortcuts modal.
+5) Reports: Attendance Report (summary), Absence Tracker (actionable), Attendance History (read-only) are distinct.
+6) Manager Reports cards: only Retention, Aged Accounts, Drop List.
+7) Reports upload: strict location enforcement + pre-commit summary modal; Drop List always requires location selection.
+8) Drop List: structured details (name, class/time, chips), date bracket filter, delete wrong-location upload.
+9) Retention parser: multi-instructor blocks parsed, retention % from table[1] row0 col1.
+10) Instructor Trainer: Retention, Drop Impact attribution, Attendance Impact views.
+11) Billing Bundle Tracker: 12/24/52 week rules, expiring alerts, export scope modal.
+12) Location visibility: Lifeguard/Guard Tasks/Announcements only for SwimLabs Westchester.
+-->
 <html>
 <head>
   <meta charset="utf-8" />
@@ -24,8 +39,17 @@
       --chip:rgba(15,23,42,.04);
       --accent:#10b981;
       --accent-soft:#ecfdf5;
+      --cat-client:#bff3ea;
+      --cat-billing:#e6d9ff;
+      --cat-instructors:#cfe4ff;
+      --cat-guards:#f8d8bf;
+      --cat-system:#e2e8f0;
+      --cat-danger:#fecdd3;
+      --cat-strong:#0f172a;
+      --cat-border:rgba(15,23,42,.08);
     }
     *{ box-sizing:border-box; }
+    body *{ transition: none !important; }
     body{
       margin:0;
       padding:18px;
@@ -34,7 +58,16 @@
       color:var(--text);
     }
     .wrap{ max-width: 1250px; margin: 0 auto; }
-    .topbar{ display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; padding-bottom: 4px; }
+    .topbar{
+      display:flex;
+      align-items:flex-end;
+      gap:12px;
+      flex-wrap:wrap;
+      padding:12px 12px 10px;
+      border-radius:18px;
+      border:1px solid var(--cat-border);
+      background: var(--category-bg, #fff);
+    }
     h1{ margin:0; font-size:22px; letter-spacing:.2px; color: var(--text); }
     .muted{ color:var(--muted); font-size:14px; }
     .tiny{ font-size:12px; }
@@ -79,6 +112,13 @@
       font-size:12px;
       min-height:34px;
       border-radius:10px;
+    }
+    button.disabled{
+      opacity: .5;
+      cursor: not-allowed;
+    }
+    button.admin-only.disabled::after{
+      content: " 🔒";
     }
 
     button.tab{ padding:9px 12px; border-radius:999px; background: transparent; border-color: transparent; color:#334155; }
@@ -231,7 +271,7 @@
       margin-top:10px;
       overflow:hidden;
       border-radius:14px;
-      border:1px solid var(--line);
+      border:1px solid var(--category-border, var(--line));
       background: #fff;
     }
     .roster-table{
@@ -241,9 +281,9 @@
     thead th{
       position: sticky;
       top: 0;
-      background: #f1f5f9;
+      background: var(--category-soft, #f1f5f9);
       z-index: 5;
-      border-bottom: 1px solid var(--line2);
+      border-bottom: 1px solid var(--category-border, var(--line2));
       color:#0f172a;
       font-weight:700;
     }
@@ -257,8 +297,8 @@
     }
     th{ color:#0f172a; font-weight:700; font-size:12px; text-transform: uppercase; letter-spacing: .5px; }
     tbody tr:nth-child(odd){ background:#fff; }
-    tbody tr:nth-child(even){ background:#f8fafc; }
-    tbody tr:hover{ background: #eef2f7; }
+    tbody tr:nth-child(even){ background: var(--category-row, #f8fafc); }
+    tbody tr:hover{ background: var(--category-hover, #eef2f7); }
 
     /* Keep roster rows neutral */
     tbody tr.program-group,
@@ -324,8 +364,6 @@
     
     .badge.sub:hover {
       background: rgba(249,115,22,0.25);
-      transform: scale(1.05);
-      transition: all 0.15s ease;
     }
 
     tbody tr.row-sub { background: rgba(249,115,22,0.06); }
@@ -342,6 +380,11 @@
       border:1px solid rgba(148,163,184,.4);
       background:#fff;
       color:#0f172a;
+    }
+    .chip.auto-absent{
+      border-color: rgba(225,29,72,.35);
+      background: rgba(225,29,72,.08);
+      color: #9f1239;
     }
     .chip.teal{ border-color: rgba(16,185,129,.35); background: var(--accent-soft); color:#065f46; }
     .chip.rose{ border-color: rgba(225,29,72,.35); background: rgba(225,29,72,.08); color:#9f1239; }
@@ -453,6 +496,12 @@
       border-radius: 12px;
       font-size: 18px;
       min-height: 38px;
+    }
+    .row-auto-absent{
+      background: rgba(250,204,214,0.4) !important;
+    }
+    .row-auto-absent:hover{
+      background: rgba(250,204,214,0.55) !important;
     }
 
     .guard-section {
@@ -610,6 +659,243 @@
     .modalFooter{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
     body.deck-mode .deck-hide { display: none !important; }
 
+    .category-client{
+      --category-bg: var(--cat-client);
+      --category-soft: rgba(191,243,234,0.55);
+      --category-row: rgba(191,243,234,0.18);
+      --category-hover: rgba(191,243,234,0.32);
+      --category-border: rgba(14,116,144,.2);
+    }
+    .category-billing{
+      --category-bg: var(--cat-billing);
+      --category-soft: rgba(230,217,255,0.6);
+      --category-row: rgba(230,217,255,0.2);
+      --category-hover: rgba(230,217,255,0.3);
+      --category-border: rgba(79,70,229,.18);
+    }
+    .category-instructors{
+      --category-bg: var(--cat-instructors);
+      --category-soft: rgba(207,228,255,0.6);
+      --category-row: rgba(207,228,255,0.2);
+      --category-hover: rgba(207,228,255,0.3);
+      --category-border: rgba(37,99,235,.18);
+    }
+    .category-guards{
+      --category-bg: var(--cat-guards);
+      --category-soft: rgba(248,216,191,0.6);
+      --category-row: rgba(248,216,191,0.22);
+      --category-hover: rgba(248,216,191,0.35);
+      --category-border: rgba(234,88,12,.2);
+    }
+    .category-system{
+      --category-bg: var(--cat-system);
+      --category-soft: rgba(226,232,240,0.7);
+      --category-row: rgba(226,232,240,0.25);
+      --category-hover: rgba(226,232,240,0.35);
+      --category-border: rgba(71,85,105,.2);
+    }
+    .category-danger{
+      --category-bg: var(--cat-danger);
+      --category-soft: rgba(254,205,211,0.6);
+      --category-row: rgba(254,205,211,0.25);
+      --category-hover: rgba(254,205,211,0.35);
+      --category-border: rgba(225,29,72,.25);
+    }
+
+    .icon-circle{
+      width:28px;
+      height:28px;
+      border-radius:50%;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(255,255,255,.7);
+      border:1px solid rgba(15,23,42,.12);
+      font-size:15px;
+    }
+
+    .manager-shell{
+      display:grid;
+      grid-template-columns: 260px 1fr;
+      gap:16px;
+      align-items:start;
+    }
+    .manager-sidebar{
+      position: sticky;
+      top: 12px;
+      align-self: start;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      padding:12px;
+      border-radius:18px;
+      border:1px solid var(--line);
+      background: #fff;
+      min-height: 70vh;
+    }
+    .manager-sidebar.collapsed{
+      transform: translateX(-120%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .manager-sidebar h3{
+      margin:0 0 6px;
+      font-size:14px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+    }
+    .sidebar-item{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(148,163,184,.35);
+      background:#fff;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .sidebar-item.active{
+      background: var(--category-soft, rgba(15,23,42,.05));
+      border-color: var(--category-border, rgba(15,23,42,.2));
+    }
+    .sidebar-item.disabled{
+      opacity: .55;
+      cursor: not-allowed;
+      position: relative;
+    }
+    .sidebar-item .lock{
+      font-size:12px;
+      margin-left:auto;
+      color:#64748b;
+    }
+    .sidebar-toggle{
+      position: fixed;
+      left: 16px;
+      bottom: 18px;
+      z-index: 1001;
+      display:none;
+    }
+    .sidebar-toggle.show{
+      display:inline-flex;
+    }
+    .manager-content{
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+    .manager-section{
+      display:none;
+    }
+    .manager-section.active{
+      display:block;
+    }
+    .alert-strip{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      padding:10px;
+      border-radius:14px;
+      background: var(--category-soft, rgba(15,23,42,.05));
+      border:1px solid var(--category-border, rgba(15,23,42,.12));
+    }
+    .alert-strip .pill{
+      cursor: pointer;
+    }
+    .alert-strip button.pill{
+      border:1px solid var(--line);
+      background:#fff;
+    }
+    .stat-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+      gap:12px;
+    }
+    .stat-card{
+      padding:12px;
+      border-radius:16px;
+      border:1px solid var(--category-border, rgba(15,23,42,.12));
+      background:#fff;
+    }
+    .stat-card .value{
+      font-size:22px;
+      font-weight:900;
+    }
+    .stat-card.alert{
+      border-color: rgba(245,158,11,.35);
+      background: rgba(245,158,11,.08);
+    }
+    .stat-card.danger{
+      border-color: rgba(225,29,72,.35);
+      background: rgba(225,29,72,.08);
+    }
+    .manager-subnav{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .manager-subnav button.active{
+      background: var(--category-soft, rgba(15,23,42,.05));
+      border-color: var(--category-border, rgba(15,23,42,.2));
+      color:#0f172a;
+    }
+    .drawer-backdrop{
+      position: fixed;
+      inset:0;
+      background: rgba(15,23,42,.35);
+      display:none;
+      z-index: 10000;
+    }
+    .preview-drawer{
+      position: fixed;
+      top:0;
+      right:0;
+      width: 360px;
+      max-width: 90vw;
+      height: 100%;
+      background:#fff;
+      border-left: 1px solid var(--line);
+      box-shadow: -10px 0 24px rgba(15,23,42,.2);
+      padding:16px;
+      transform: translateX(100%);
+      transition: none;
+      z-index: 10001;
+      overflow:auto;
+    }
+    .preview-drawer.open{
+      transform: translateX(0);
+    }
+    .global-error{
+      padding:12px;
+      border-radius:14px;
+      border:1px solid rgba(225,29,72,.35);
+      background: rgba(225,29,72,.08);
+      color:#9f1239;
+      font-size:13px;
+      display:none;
+    }
+    .inline-error{
+      padding:10px;
+      border-radius:12px;
+      border:1px dashed rgba(225,29,72,.35);
+      background: rgba(225,29,72,.06);
+      color:#9f1239;
+      font-size:12px;
+    }
+    .inline-error button{
+      margin-top:8px;
+    }
+    @media (max-width: 980px){
+      .manager-shell{
+        grid-template-columns: 1fr;
+      }
+      .manager-sidebar{
+        position: relative;
+        min-height: auto;
+      }
+    }
+
     /* TABLET & MOBILE OPTIMIZATION */
     @media (max-width: 900px) {
       body { padding: 10px; }
@@ -659,6 +945,7 @@
         <option value="admin">⚙️ Admin</option>
       </select>
       <span class="pill">Device: <strong id="deviceModeLabel">Deck</strong></span>
+      <button id="globalSearchBtn" title="Global search">🔍</button>
       <button id="settingsBtn" title="Settings">⚙️</button>
       <span class="pill">
         <span style="font-size:11px; color:var(--muted);">Current Time:</span>
@@ -787,213 +1074,258 @@
   </div>
 
   <div id="panelVirtualDesk" class="hidden">
-    <div class="card">
-      <h2 style="margin:0 0 16px; font-size:20px;">Manager Dashboard</h2>
+    <div class="manager-shell">
+      <aside class="manager-sidebar category-client" id="managerSidebar">
+        <h3>Manager</h3>
+        <button class="sidebar-item active" data-manager-section="client" id="managerNavClient">
+          <span class="icon-circle">🫧</span> Client Relations
+        </button>
+        <button class="sidebar-item" data-manager-section="billing" id="managerNavBilling">
+          <span class="icon-circle">🧾</span> Billing
+        </button>
+        <button class="sidebar-item" data-manager-section="instructors" id="managerNavInstructors">
+          <span class="icon-circle">🎓</span> Instructors
+        </button>
+        <button class="sidebar-item" data-manager-section="guards" id="managerNavGuards">
+          <span class="icon-circle">🛟</span> Guards (SLW)
+        </button>
+        <h3 style="margin-top:10px;">System/Admin</h3>
+        <button class="sidebar-item" data-manager-section="system" id="managerNavSystem">
+          <span class="icon-circle">⚙️</span> System/Admin
+          <span class="lock hidden" id="managerNavSystemLock">🔒</span>
+        </button>
+      </aside>
+      <button class="secondary sidebar-toggle" id="sidebarToggleBtn">☰ Menu</button>
 
-      <div class="row" style="margin-bottom:16px; flex-wrap:wrap; gap:8px;">
-        <button class="managerTabBtn active" id="managerTabOverviewBtn">Overview</button>
-        <button class="managerTabBtn" id="managerTabReportsBtn">Manager Reports</button>
-      </div>
+      <div class="manager-content">
+        <div class="global-error" id="managerErrorBanner"></div>
 
-      <div id="managerTabOverview">
-        <!-- Quick Stats -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
-          <div class="card" style="background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
-            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Swimmers Today</div>
-            <div style="font-size:28px; font-weight:900; color:#22c55e;" id="adminStatSwimmers">—</div>
-          </div>
+        <section id="managerSectionClient" class="manager-section active category-client">
+          <div class="alert-strip" id="clientAlertStrip"></div>
+          <div class="stat-grid" id="clientStatGrid"></div>
 
-          <div class="card" style="background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);">
-            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Attendance Rate</div>
-            <div style="font-size:28px; font-weight:900; color:#3b82f6;" id="adminStatAttendance">—</div>
-          </div>
-
-          <div class="card" style="background: rgba(234,179,8,0.08); border-color: rgba(234,179,8,0.2);">
-            <div class="tiny" style="color:var(--muted); margin-bottom:4px;">Trials This Week</div>
-            <div style="font-size:28px; font-weight:900; color:#eab308;" id="adminStatTrials">—</div>
-          </div>
-        </div>
-
-        <div class="card" id="managerNotifications">
-          <div class="row" style="margin-bottom:10px;">
-            <h3 style="margin:0; font-size:18px;">🔔 Notifications</h3>
-            <div class="spacer"></div>
-            <span class="chip teal">Persistent</span>
-          </div>
-          <div id="managerNotificationsList" class="row" style="flex-direction:column; gap:10px;"></div>
-        </div>
-
-        <div class="card" style="margin-bottom:20px;">
-          <h3 style="margin:0 0 12px; font-size:18px;">📅 Manager Date Brackets</h3>
-          <div class="grid2" style="margin-bottom:10px;">
-            <div class="field">
-              <label>Start date</label>
-              <input type="date" id="managerRangeStart" />
-            </div>
-            <div class="field">
-              <label>End date</label>
-              <input type="date" id="managerRangeEnd" />
-            </div>
-          </div>
-          <div class="row" style="flex-wrap:wrap; gap:8px;">
-            <button class="secondary" id="managerRangeWeek">This Week</button>
-            <button class="secondary" id="managerRangeNextTwo">Next 14 Days</button>
-            <button class="secondary" id="managerRangeMonth">This Month</button>
-            <div class="spacer"></div>
-            <button class="primary" id="managerRangeSave">Save Brackets</button>
-          </div>
-          <div class="tiny" style="margin-top:8px; color:var(--muted);" id="managerRangeHint">Saved range syncs report defaults and guard tasks.</div>
-        </div>
-
-        <div class="card" style="margin-bottom:20px; background: rgba(14,116,144,0.08); border-color: rgba(14,116,144,0.3);">
-          <h3 style="margin:0 0 12px; font-size:18px;">🔒 Read-only Mode</h3>
-          <div class="tiny" style="color:var(--muted); margin-bottom:10px;">Toggle read-only mode for this device.</div>
-          <button id="toggleReadOnlyBtnManager" class="secondary">Toggle Read-only Mode</button>
-        </div>
-
-        <!-- Swimmer Details View -->
-        <div class="card" id="swimmerDetailsView">
-          <div class="row" style="margin-bottom:12px;">
-            <h3 style="margin:0; font-size:18px;">👥 Today's Swimmers - Detailed View</h3>
-            <div class="spacer"></div>
-            <select id="swimmerSortBy" style="padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; background: #fff; color: #0f172a; border: 1px solid rgba(148,163,184,0.5);">
-              <option value="name">Sort: Name A-Z</option>
-              <option value="time">Sort: Time</option>
-              <option value="instructor">Sort: Instructor</option>
-              <option value="attendance_rate">Sort: Attendance Rate</option>
-              <option value="missed">Sort: Missed Classes</option>
-              <option value="balance">Sort: Balance Status</option>
-            </select>
-            <button id="refreshSwimmers" class="secondary" style="padding:6px 12px; font-size:13px;">🔄 Refresh</button>
-            <button id="exportVirtualDeskBtn" class="secondary" style="padding:6px 12px; font-size:13px;">📥 Export</button>
-          </div>
-
-          <div id="swimmerDetailsTable"></div>
-        </div>
-
-        <!-- Reports Section -->
-        <div class="card" style="margin-top:20px;">
-          <div class="row" style="margin-bottom:12px;">
-            <h3 style="margin:0; font-size:18px;">📈 Reports & Analytics</h3>
-          </div>
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
-            <button id="openAttendanceReportBtn" class="secondary" style="padding:12px; text-align:left;">
-              <div style="font-weight:700;">📊 Attendance Report</div>
-              <div class="tiny" style="color:var(--muted); margin-top:4px;">Daily/weekly/monthly attendance analytics</div>
-            </button>
-            <button id="openInstructorReportBtn" class="secondary" style="padding:12px; text-align:left;">
-              <div style="font-weight:700;">👨‍🏫 Instructor Analytics</div>
-              <div class="tiny" style="color:var(--muted); margin-top:4px;">Performance metrics per instructor</div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Navigation Cards -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:14px; margin-top:20px;">
-          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavAbsence">
-            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📊 Absence Tracker</div>
-            <div class="tiny" style="color:var(--muted); line-height:1.4;">Track multi-week absences and follow up with families</div>
-          </div>
-
-          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavTrials">
-            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🧪 Trial Follow-up</div>
-            <div class="tiny" style="color:var(--muted); line-height:1.4;">Manage trial swimmers and conversion tracking</div>
-          </div>
-
-          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavGuards">
-            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">🛟 Guard Tasks</div>
-            <div class="tiny" style="color:var(--muted); line-height:1.4;">Opening, midday, closing checklists + rotation plan</div>
-          </div>
-
-          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavHistory">
-            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📅 Attendance History</div>
-            <div class="tiny" style="color:var(--muted); line-height:1.4;">View 30-day attendance patterns and reports</div>
-          </div>
-
-          <div class="card" style="cursor:pointer; transition: all .15s ease;" id="adminNavObservations">
-            <div style="font-size:16px; font-weight:900; margin-bottom:6px;">📝 Instructor Observations</div>
-            <div class="tiny" style="color:var(--muted); line-height:1.4;">Generate evaluation forms and track progress</div>
-          </div>
-
-          <div class="card" style="cursor:pointer; transition: all .15s ease; background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.3);" id="adminNavClearRoster">
-            <div style="font-size:16px; font-weight:900; margin-bottom:6px; color:#ef4444;">🗑️ Clear Roster</div>
-            <div class="tiny" style="color:var(--muted); line-height:1.4;">Remove all uploaded roster data for current location</div>
-          </div>
-        </div>
-      </div>
-
-      <div id="managerTabReports" class="hidden">
-        <div class="card" style="margin-bottom:16px;">
-          <h3 style="margin:0 0 8px; font-size:18px;">📁 Manager Reports</h3>
-          <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track retention (HTML), drop list (HTML), and aged accounts reports per location.</div>
-
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
-            <div class="report-card">
-              <div class="accent"></div>
-              <div>
-                <div style="font-weight:800;">📈 Retention List (HTML)</div>
-                <div class="tiny" id="reportMetaRetention">No report uploaded yet.</div>
-              </div>
+          <div class="card">
+            <div class="row" style="flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+              <div class="pill">Date Range</div>
+              <input type="date" id="clientRangeStart" />
+              <input type="date" id="clientRangeEnd" />
+              <button class="secondary miniBtn" id="clientFiltersToggle">Filters</button>
               <div class="spacer"></div>
-              <a class="secondary hidden" id="reportDownloadRetention" target="_blank" rel="noopener">View</a>
-              <button class="secondary reportUploadBtn" data-report-type="retention">Upload</button>
-              <input type="file" class="reportFileInput hidden" data-report-type="retention" accept=".html" />
+              <button class="secondary miniBtn" id="clientTrendsToggle">Hide trends</button>
             </div>
+            <div id="clientFiltersAdvanced" class="row hidden" style="flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+              <select id="clientInstructorFilter"></select>
+              <select id="clientStatusFilter">
+                <option value="">All statuses</option>
+                <option value="new">New</option>
+                <option value="contacted">Contacted</option>
+                <option value="rescheduled">Rescheduled</option>
+                <option value="complete">Complete</option>
+              </select>
+            </div>
+            <div class="manager-subnav" style="margin-bottom:10px;">
+              <button class="secondary active" id="clientTabAttendance">Attendance Report</button>
+              <button class="secondary" id="clientTabAbsence">Absence Tracker</button>
+              <button class="secondary" id="clientTabHistory">Attendance History</button>
+            </div>
+            <div id="clientAttendanceReport">
+              <div id="attendanceTrends" class="trend-card" style="margin-bottom:12px;"></div>
+              <div id="attendanceSummaryTable"></div>
+              <div id="attendanceInstructorTable" style="margin-top:12px;"></div>
+            </div>
+            <div id="clientAbsenceTracker" class="hidden">
+              <div id="absenceTrackerTable"></div>
+            </div>
+            <div id="clientAttendanceHistory" class="hidden">
+              <div id="attendanceHistoryTable"></div>
+            </div>
+          </div>
 
-            <div class="report-card">
-              <div class="accent"></div>
-              <div>
-                <div style="font-weight:800;">🧾 Aged Accounts</div>
-                <div class="tiny" id="reportMetaAgedAccounts">No report uploaded yet.</div>
-              </div>
+          <div class="card" id="clientDropListCard">
+            <div class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+              <h3 style="margin:0; font-size:18px;">📉 Drop List</h3>
               <div class="spacer"></div>
-              <a class="secondary hidden" id="reportDownloadAgedAccounts" target="_blank" rel="noopener">View</a>
-              <button class="secondary reportUploadBtn" data-report-type="aged_accounts">Upload</button>
-              <input type="file" class="reportFileInput hidden" data-report-type="aged_accounts" accept=".html,.pdf,.csv,.xls,.xlsx" />
+              <select id="clientDropRange">
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="custom">Custom</option>
+              </select>
+              <input type="date" id="clientDropStart" />
+              <input type="date" id="clientDropEnd" />
+              <button class="secondary miniBtn" id="clientDropApply">Apply</button>
             </div>
+            <div id="clientDropListTable"></div>
+          </div>
 
-            <div class="report-card">
-              <div class="accent"></div>
-              <div>
-                <div style="font-weight:800;">📉 Drop List (HTML)</div>
-                <div class="tiny" id="reportMetaDropList">No report uploaded yet.</div>
-              </div>
+          <div class="card" id="managerNotifications">
+            <div class="row" style="margin-bottom:10px;">
+              <h3 style="margin:0; font-size:18px;">🔔 Notifications</h3>
               <div class="spacer"></div>
-              <a class="secondary hidden" id="reportDownloadDropList" target="_blank" rel="noopener">View</a>
-              <button class="secondary reportUploadBtn" data-report-type="drop_list">Upload</button>
-              <input type="file" class="reportFileInput hidden" data-report-type="drop_list" accept=".html" />
+              <span class="chip teal">Persistent</span>
+            </div>
+            <div id="managerNotificationsList" class="row" style="flex-direction:column; gap:10px;"></div>
+          </div>
+        </section>
+
+        <section id="managerSectionBilling" class="manager-section category-billing">
+          <div class="alert-strip" id="billingAlertStrip"></div>
+          <div class="stat-grid" id="billingStatGrid"></div>
+
+          <div class="card">
+            <h3 style="margin:0 0 10px; font-size:18px;">💜 Bundle Tracker</h3>
+            <div class="grid2">
+              <div class="field">
+                <label>Location</label>
+                <select id="bundleLocation"></select>
+              </div>
+              <div class="field">
+                <label>Customer name</label>
+                <input type="text" id="bundleCustomer" placeholder="Customer name" />
+              </div>
+              <div class="field">
+                <label>Phone</label>
+                <input type="text" id="bundlePhone" placeholder="(555) 555-5555" />
+              </div>
+              <div class="field">
+                <label>Start date</label>
+                <input type="date" id="bundleStartDate" />
+              </div>
+              <div class="field">
+                <label>Duration</label>
+                <select id="bundleDuration">
+                  <option value="12">12 weeks</option>
+                  <option value="24">24 weeks</option>
+                  <option value="52">52 weeks</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Monthly price</label>
+                <input type="text" id="bundleMonthlyPrice" placeholder="0.00" />
+              </div>
+              <div class="field" style="grid-column: 1 / -1;">
+                <label>Notes</label>
+                <input type="text" id="bundleNotes" placeholder="Optional notes..." />
+              </div>
+            </div>
+            <div class="row" style="margin-top:10px; flex-wrap:wrap; gap:8px;">
+              <button class="primary" id="bundleSaveBtn">Save bundle</button>
+              <button class="secondary" id="bundleResetBtn">Clear</button>
+              <div class="spacer"></div>
+              <button class="secondary" id="bundleExportBtn">Export</button>
+            </div>
+            <div id="bundleFormHint" class="tiny" style="color:var(--muted); margin-top:8px;">Discounts auto-calculate by duration.</div>
+          </div>
+
+          <div class="card">
+            <div class="row" style="margin-bottom:8px;">
+              <h3 style="margin:0; font-size:18px;">⏰ Needs Follow-Up</h3>
+            </div>
+            <div id="bundleNeedsFollowUp"></div>
+          </div>
+
+          <div class="card">
+            <div class="row" style="margin-bottom:8px;">
+              <h3 style="margin:0; font-size:18px;">📦 Bundles</h3>
+              <div class="spacer"></div>
+              <span class="pill tiny">Sorted by soonest expiration</span>
+            </div>
+            <div id="bundleTable"></div>
+          </div>
+        </section>
+
+        <section id="managerSectionInstructors" class="manager-section category-instructors">
+          <div class="alert-strip" id="instructorsAlertStrip"></div>
+          <div class="stat-grid" id="instructorsStatGrid"></div>
+
+          <div class="card">
+            <div class="row" style="margin-bottom:10px;">
+              <div class="pill tiny">Global trends</div>
+              <button class="secondary miniBtn" id="instructorTrendsToggle">Hide trends</button>
+            </div>
+            <div class="manager-subnav" style="margin-bottom:10px;">
+              <button class="secondary active" id="trainerTabRetention">Retention</button>
+              <button class="secondary" id="trainerTabDropImpact">Drop Impact</button>
+              <button class="secondary" id="trainerTabAttendanceImpact">Attendance Impact</button>
+            </div>
+            <div id="trainerRetentionPanel">
+              <div id="retentionTrends" class="trend-card" style="margin-bottom:12px;"></div>
+              <div id="retentionTable"></div>
+            </div>
+            <div id="trainerDropImpactPanel" class="hidden">
+              <div id="dropImpactTable"></div>
+            </div>
+            <div id="trainerAttendanceImpactPanel" class="hidden">
+              <div id="attendanceImpactTable"></div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="card" id="managerBreakdownsCard">
-          <h3 style="margin:0 0 12px; font-size:18px;">📊 Manager Breakdowns</h3>
-          <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-            <button class="managerTabBtn active" data-breakdown="aged_accounts">Aged Accounts</button>
-            <button class="managerTabBtn" data-breakdown="retention">Retention</button>
-            <button class="managerTabBtn" data-breakdown="drop_list">Drop List</button>
-            <div class="spacer"></div>
-            <span class="pill tiny" id="breakdownMeta">Latest upload</span>
+        <section id="managerSectionGuards" class="manager-section category-guards">
+          <div class="alert-strip" id="guardsAlertStrip"></div>
+          <div class="stat-grid" id="guardsStatGrid"></div>
+          <div class="card">
+            <h3 style="margin:0 0 10px; font-size:18px;">🛟 Guard Tasks (SLW)</h3>
+            <div class="tiny" style="color:var(--muted); margin-bottom:8px;">
+              Guard Tasks are available only for SwimLabs Westchester.
+            </div>
+            <button class="secondary" id="openGuardTasksBtn">Open Guard Tasks</button>
+          </div>
+        </section>
+
+        <section id="managerSectionSystem" class="manager-section category-system">
+          <div class="alert-strip" id="systemAlertStrip"></div>
+          <div class="stat-grid" id="systemStatGrid"></div>
+
+          <div class="card" style="margin-bottom:16px;">
+            <h3 style="margin:0 0 8px; font-size:18px;">📁 Manager Reports</h3>
+            <div class="tiny" style="color:var(--muted); margin-bottom:16px;">Upload and track retention (HTML), drop list (HTML), and aged accounts reports per location.</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+              <div class="report-card">
+                <div class="accent"></div>
+                <div>
+                  <div style="font-weight:800;">📈 Retention List (HTML)</div>
+                  <div class="tiny" id="reportMetaRetention">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <a class="secondary hidden" id="reportDownloadRetention" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="retention">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="retention" accept=".html" />
+              </div>
+              <div class="report-card">
+                <div class="accent"></div>
+                <div>
+                  <div style="font-weight:800;">🧾 Aged Accounts</div>
+                  <div class="tiny" id="reportMetaAgedAccounts">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <a class="secondary hidden" id="reportDownloadAgedAccounts" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="aged_accounts">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="aged_accounts" accept=".html,.pdf,.csv,.xls,.xlsx" />
+              </div>
+              <div class="report-card">
+                <div class="accent"></div>
+                <div>
+                  <div style="font-weight:800;">📉 Drop List (HTML)</div>
+                  <div class="tiny" id="reportMetaDropList">No report uploaded yet.</div>
+                </div>
+                <div class="spacer"></div>
+                <a class="secondary hidden" id="reportDownloadDropList" target="_blank" rel="noopener">View</a>
+                <button class="secondary reportUploadBtn" data-report-type="drop_list">Upload</button>
+                <input type="file" class="reportFileInput hidden" data-report-type="drop_list" accept=".html" />
+              </div>
+            </div>
+            <div class="row" style="margin-top:12px; gap:8px;">
+              <button class="danger admin-only" id="deleteLatestDropListBtn">Delete latest Drop List upload</button>
+            </div>
           </div>
 
-          <div id="breakdownWarning" class="hidden" style="margin-bottom:10px; padding:10px; border-radius:12px; border:1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.1);">
-            <div style="font-weight:900;">⚠️ Parse warnings</div>
-            <div class="tiny" id="breakdownWarningText" style="color:var(--muted);"></div>
+          <div class="card">
+            <h3 style="margin:0 0 10px; font-size:18px;">🧨 MASTER ROSTER RESET</h3>
+            <div class="tiny" style="color:var(--muted); margin-bottom:10px;">Wipes all roster data for all locations and dates. Admin only.</div>
+            <button class="danger admin-only" id="masterRosterResetBtn">MASTER ROSTER RESET</button>
           </div>
-
-          <div id="breakdownFilters" class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;"></div>
-          <div id="breakdownTrends" style="margin-bottom:12px;"></div>
-          <div id="breakdownContent" style="max-height:420px; overflow:auto;"></div>
-          <div class="row" style="margin-top:12px;">
-            <button class="secondary" id="breakdownExportCsv">Export CSV</button>
-            <button class="secondary" id="breakdownExportPdf">Export PDF</button>
-            <button class="danger admin-only" id="breakdownDeleteBtn">Delete latest upload</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
-        Manager features are protected by PIN authentication. Session expires after 2 hours.
+        </section>
       </div>
     </div>
   </div>
@@ -1103,9 +1435,9 @@
 
       <!-- Roster Controls -->
       <div class="card" style="margin-bottom:20px; border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.12);">
-        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900; color:#ef4444;">🧨 Master Delete All Rosters</h3>
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900; color:#ef4444;">🧨 MASTER ROSTER RESET</h3>
         <div class="tiny" style="color:var(--muted); line-height:1.4; margin-bottom:12px;">Permanently delete all roster data for every location</div>
-        <button class="danger" id="adminNavClearAllRosters">Full Clear (All Locations)</button>
+        <button class="danger" id="adminNavClearAllRosters">MASTER ROSTER RESET</button>
       </div>
 
       <!-- Location Management -->
@@ -1191,6 +1523,10 @@
   <div class="modal" style="max-width: 520px;">
     <h3 id="confirmTitle">Confirm action</h3>
     <div class="tiny" id="confirmMessage" style="color:var(--muted); margin-bottom:12px; white-space:pre-line;"></div>
+    <div id="confirmImpactField" class="card hidden" style="margin-top:0; margin-bottom:12px; padding:10px; background: rgba(248,250,252,.9); border-radius:12px;">
+      <div class="tiny" style="font-weight:900; margin-bottom:6px;">Impact summary</div>
+      <div class="tiny" id="confirmImpactText" style="color:var(--muted); white-space:pre-line;"></div>
+    </div>
     <div class="grid2">
       <div class="field" id="confirmDeleteField">
         <label>Type DELETE to confirm</label>
@@ -1207,6 +1543,13 @@
       <div class="field" id="confirmLocationField">
         <label>Location</label>
         <select id="confirmLocationSelect"></select>
+      </div>
+    </div>
+    <div class="field hidden" id="confirmCheckboxField">
+      <label style="text-transform:none; letter-spacing:0;">Confirmation checkbox</label>
+      <div class="row" style="gap:8px; align-items:center;">
+        <input type="checkbox" id="confirmCheckboxInput" />
+        <span class="tiny" id="confirmCheckboxLabel" style="color:var(--muted);">I understand the impact.</span>
       </div>
     </div>
     <div class="modalFooter">
@@ -1228,9 +1571,82 @@
       </select>
       <div class="hint">Deck requires manager approval to change zones.</div>
     </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="secondary" id="openShortcutsBtn">⌨️ Keyboard Shortcuts</button>
+    </div>
     <div class="modalFooter">
       <button class="secondary" id="settingsClose">Close</button>
       <button class="primary" id="settingsSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Keyboard Shortcuts Modal -->
+<div class="modalBackdrop" id="shortcutsModal">
+  <div class="modal">
+    <h3>Keyboard shortcuts</h3>
+    <div class="card" style="background: #f8fafc; border-radius:12px;">
+      <div class="tiny" style="font-weight:800;">Global</div>
+      <ul class="tiny" style="margin:8px 0 0 16px; color:var(--muted); line-height:1.6;">
+        <li><strong>Ctrl/⌘ + B</strong> — Toggle manager sidebar</li>
+        <li><strong>Ctrl/⌘ + K</strong> — Global search</li>
+        <li><strong>Ctrl/⌘ + E</strong> — Export modal</li>
+      </ul>
+      <div class="tiny" style="font-weight:800; margin-top:12px;">Manager navigation</div>
+      <ul class="tiny" style="margin:8px 0 0 16px; color:var(--muted); line-height:1.6;">
+        <li><strong>Ctrl/⌘ + 1</strong> — Client Relations</li>
+        <li><strong>Ctrl/⌘ + 2</strong> — Billing</li>
+      </ul>
+    </div>
+    <div class="modalFooter">
+      <button class="secondary" id="shortcutsClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Global Search Modal -->
+<div class="modalBackdrop" id="globalSearchModal">
+  <div class="modal" style="max-width:620px;">
+    <h3>Global Search</h3>
+    <div class="field">
+      <label>Search roster + manager + reports</label>
+      <input type="text" id="globalSearchInput" placeholder="Search swimmers, instructors, reports..." />
+    </div>
+    <div id="globalSearchResults" style="max-height:360px; overflow:auto;"></div>
+    <div class="modalFooter">
+      <button class="secondary" id="globalSearchClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="drawer-backdrop" id="previewBackdrop"></div>
+<div class="preview-drawer" id="previewDrawer">
+  <div class="row" style="margin-bottom:10px;">
+    <strong id="previewTitle">Preview</strong>
+    <div class="spacer"></div>
+    <button class="secondary miniBtn" id="previewClose">✕</button>
+  </div>
+  <div id="previewContent" class="tiny" style="color:var(--muted);"></div>
+  <div class="row" style="margin-top:12px;">
+    <button class="primary miniBtn" id="previewJumpBtn">Jump to item</button>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modalBackdrop" id="exportModal">
+  <div class="modal">
+    <h3 id="exportModalTitle">Export</h3>
+    <div class="field">
+      <label>Export scope</label>
+      <select id="exportScopeSelect">
+        <option value="">Select scope…</option>
+        <option value="view">Current view</option>
+        <option value="full">Full data</option>
+      </select>
+    </div>
+    <div class="modalFooter">
+      <button class="secondary" id="exportModalCancel">Cancel</button>
+      <button class="primary" id="exportModalConfirm">Export</button>
     </div>
   </div>
 </div>
@@ -1568,6 +1984,22 @@
   let managerNotificationsCache = [];
   let retentionTrendChart = null;
   let dropTrendChart = null;
+  let attendanceTrendChart = null;
+  let managerSection = 'client';
+  let globalSearchResults = [];
+  let previewTarget = null;
+  let managerSidebarCollapsed = false;
+  let bundleEditingId = null;
+  let rosterCache = [];
+  let globalAttendanceSummary = null;
+  const dismissedNotificationsKey = 'manager_notifications_dismissed';
+  const managerSectionFilters = {
+    client: { start: null, end: null, instructor: '', status: '', showTrends: true, dropRange: '7', dropStart: '', dropEnd: '' },
+    instructors: { showTrends: true },
+    billing: {},
+    system: {},
+    guards: {}
+  };
   const managerReportTypes = [
     { type: 'retention', metaId: 'reportMetaRetention', downloadId: 'reportDownloadRetention', label: 'Retention list (HTML)' },
     { type: 'aged_accounts', metaId: 'reportMetaAgedAccounts', downloadId: 'reportDownloadAgedAccounts', label: 'Aged accounts' },
@@ -1701,6 +2133,74 @@
     }
   }
 
+  function setManagerSection(section) {
+    managerSection = section;
+    const sections = document.querySelectorAll('[data-manager-section]');
+    sections.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.managerSection === section);
+    });
+    const panels = document.querySelectorAll('.manager-section');
+    panels.forEach((panel) => {
+      panel.classList.toggle('active', panel.id === `managerSection${section.charAt(0).toUpperCase()}${section.slice(1)}`);
+    });
+    const category = categoryForManagerSection(section);
+    setCategoryTheme(category);
+    const sidebar = el('managerSidebar');
+    if (sidebar) {
+      sidebar.classList.remove(...categoryClasses);
+      sidebar.classList.add(`category-${category}`);
+    }
+    if (section === 'guards' && !isWestchesterLocation()) {
+      showInlineError('guardsAlertStrip', 'Guard Tasks are only available for SwimLabs Westchester.');
+    }
+  }
+
+  function toggleManagerSidebar(force) {
+    const sidebar = el('managerSidebar');
+    if (!sidebar) return;
+    const next = typeof force === 'boolean' ? force : !managerSidebarCollapsed;
+    managerSidebarCollapsed = next;
+    sidebar.classList.toggle('collapsed', managerSidebarCollapsed);
+    const toggleBtn = el('sidebarToggleBtn');
+    if (toggleBtn) toggleBtn.classList.toggle('show', managerSidebarCollapsed);
+  }
+
+  function handleManagerScroll() {
+    if (window.scrollY > 120) {
+      toggleManagerSidebar(true);
+    }
+  }
+
+  function showGlobalError(message, retryFn) {
+    const banner = el('managerErrorBanner');
+    if (!banner) return;
+    banner.style.display = message ? 'block' : 'none';
+    if (!message) {
+      banner.textContent = '';
+      return;
+    }
+    banner.innerHTML = `${escapeHtml(message)}${retryFn ? ' <button class="secondary miniBtn" id="managerRetryBtn">Retry</button>' : ''}`;
+    if (retryFn) {
+      const retryBtn = el('managerRetryBtn');
+      if (retryBtn) retryBtn.addEventListener('click', retryFn);
+    }
+  }
+
+  function showInlineError(targetId, message, retryFn) {
+    const container = el(targetId);
+    if (!container) return;
+    container.innerHTML = `
+      <div class="inline-error">
+        ${escapeHtml(message)}
+        ${retryFn ? '<div><button class="secondary miniBtn" data-inline-retry>Retry</button></div>' : ''}
+      </div>
+    `;
+    if (retryFn) {
+      const btn = container.querySelector('[data-inline-retry]');
+      if (btn) btn.addEventListener('click', retryFn);
+    }
+  }
+
   document.querySelectorAll('[data-breakdown]').forEach((btn) => {
     btn.addEventListener('click', () => setBreakdownType(btn.dataset.breakdown));
   });
@@ -1727,11 +2227,27 @@
           if (linkEl) linkEl.classList.add('hidden');
         }
       });
+      const systemGrid = el('systemStatGrid');
+      if (systemGrid) {
+        const latestCount = Object.values(resp.latest || {}).filter(Boolean).length;
+        systemGrid.innerHTML = `
+          <div class="stat-card">
+            <div class="tiny" style="color:var(--muted);">Reports available</div>
+            <div class="value">${latestCount}</div>
+          </div>
+          <div class="stat-card">
+            <div class="tiny" style="color:var(--muted);">Uploads tracked</div>
+            <div class="value">${resp.reports?.length || 0}</div>
+          </div>
+        `;
+      }
       loadManagerNotifications(resp);
+      renderRetentionPanel();
+      renderDropImpactPanel();
     } catch (e) {
       console.error('Failed to load manager reports:', e);
     }
-    if (el('managerTabReports') && !el('managerTabReports').classList.contains('hidden')) {
+    if (el('managerBreakdownsCard') && !el('managerBreakdownsCard').classList.contains('hidden')) {
       loadBreakdown();
     }
   }
@@ -1845,6 +2361,17 @@
     return `${sign}${fixed}${suffix}`;
   }
 
+  function todayISO() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  function formatDateUS(value) {
+    if (!value) return '—';
+    const d = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleDateString('en-US');
+  }
+
   function parseDropDetails(raw) {
     const rawString = Array.isArray(raw) ? raw.join(' • ') : String(raw || '');
     const tokens = rawString.split(' • ').map((t) => t.trim()).filter(Boolean);
@@ -1872,7 +2399,7 @@
     return { rawString, name, instructor, details, tags };
   }
 
-  function renderDropDetails(entry) {
+  function renderDropDetails(entry, id = '') {
     const parsed = parseDropDetails(entry.raw || []);
     if (!parsed.rawString) {
       return '<div class="drop-details"><div class="meta">No details available.</div></div>';
@@ -1884,12 +2411,19 @@
     if (parsed.details.length) line2Parts.push(parsed.details.join(' • '));
     if (parsed.instructor) line2Parts.push(`with ${parsed.instructor}`);
     const chips = parsed.tags.map((tag) => renderBadge(tag, 'amber')).join(' ');
+    const longText = parsed.rawString.length > 120;
+    const truncated = longText ? `${parsed.rawString.slice(0, 120)}...` : parsed.rawString;
+    const expand = longText ? `
+      <button class="secondary miniBtn" data-drop-toggle="${id}">View</button>
+      <div class="tiny hidden" data-drop-full="${id}" style="margin-top:6px; color:var(--muted);">${escapeHtml(parsed.rawString)}</div>
+    ` : '';
     return `
       <div class="drop-details">
         ${parsed.name ? `<div class="name">${escapeHtml(parsed.name)}</div>` : ''}
         ${line2Parts.length ? `<div class="meta">${escapeHtml(line2Parts.join(' • '))}</div>` : ''}
         ${chips ? `<div class="chips">${chips}</div>` : ''}
-        ${!parsed.name && !line2Parts.length && !chips ? `<div class="meta">${escapeHtml(parsed.rawString)}</div>` : ''}
+        ${!parsed.name && !line2Parts.length && !chips ? `<div class="meta">${escapeHtml(truncated)}</div>` : ''}
+        ${expand}
       </div>
     `;
   }
@@ -2011,7 +2545,7 @@
 
   function getDismissedNotifications() {
     try {
-      return JSON.parse(localStorage.getItem('dismissedNotifications') || '[]');
+      return JSON.parse(localStorage.getItem(dismissedNotificationsKey) || '[]');
     } catch (e) {
       return [];
     }
@@ -2020,7 +2554,7 @@
   function dismissNotification(id) {
     const dismissed = new Set(getDismissedNotifications());
     dismissed.add(id);
-    localStorage.setItem('dismissedNotifications', JSON.stringify(Array.from(dismissed)));
+    localStorage.setItem(dismissedNotificationsKey, JSON.stringify(Array.from(dismissed)));
     renderManagerNotifications(managerNotificationsCache);
   }
 
@@ -2049,10 +2583,20 @@
     list.querySelectorAll('[data-action]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const action = btn.dataset.action;
-        if (action === 'retention') setBreakdownType('retention');
-        if (action === 'drop_list') setBreakdownType('drop_list');
-        if (action === 'aged_accounts') setBreakdownType('aged_accounts');
-        setManagerTab('reports');
+        if (action === 'retention') {
+          setManagerSection('instructors');
+          setTrainerTab('retention');
+        }
+        if (action === 'drop_list') {
+          setManagerSection('instructors');
+          setTrainerTab('drop');
+        }
+        if (action === 'aged_accounts') {
+          setManagerSection('system');
+        }
+        if (action === 'bundle_followup') {
+          setManagerSection('billing');
+        }
       });
     });
   }
@@ -2158,8 +2702,1125 @@
       console.warn('Bundle notification check failed', e);
     }
 
+    try {
+      const bundleResp = await api(`/api/bundles?location_id=${currentLocation.id}`);
+      const bundles = bundleResp.bundles || [];
+      const expiring = bundles.filter((bundle) => {
+        if (!bundle.expiration_date) return false;
+        const dt = new Date(`${bundle.expiration_date}T00:00:00`);
+        const days = (dt - now) / (1000 * 60 * 60 * 24);
+        return days >= 0 && days <= 7;
+      });
+      if (expiring.length) {
+        notifications.push({
+          id: `bundle-followup-${currentLocation.id}-${expiring.length}`,
+          title: 'Bundles expiring within 7 days',
+          description: `${expiring.length} bundle${expiring.length === 1 ? '' : 's'} need follow-up.`,
+          action: 'bundle_followup',
+          actionLabel: 'Open bundle tracker',
+          variant: 'warning'
+        });
+      }
+    } catch (e) {
+      console.warn('Bundle tracker notification check failed', e);
+    }
+
     managerNotificationsCache = notifications;
     renderManagerNotifications(notifications);
+  }
+
+  function ensureClientDateRange() {
+    if (!managerSectionFilters.client.start) managerSectionFilters.client.start = todayISO();
+    if (!managerSectionFilters.client.end) managerSectionFilters.client.end = todayISO();
+    if (el('clientRangeStart')) el('clientRangeStart').value = managerSectionFilters.client.start;
+    if (el('clientRangeEnd')) el('clientRangeEnd').value = managerSectionFilters.client.end;
+  }
+
+  function getClientDateRange() {
+    ensureClientDateRange();
+    return {
+      start: managerSectionFilters.client.start,
+      end: managerSectionFilters.client.end
+    };
+  }
+
+  async function loadAttendanceSummary() {
+    if (!currentLocation) return;
+    const { start, end } = getClientDateRange();
+    try {
+      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start}&end=${end}`);
+      const summary = resp.summary || { totals: {}, dateStats: [], instructorStats: [] };
+      renderAttendanceSummary(summary);
+      renderAttendanceTrend(summary);
+    } catch (e) {
+      showInlineError('attendanceSummaryTable', `Attendance summary failed: ${e.message}`, loadAttendanceSummary);
+    }
+  }
+
+  async function loadGlobalAttendanceTrends() {
+    if (!currentLocation) return;
+    try {
+      const end = todayISO();
+      const start = new Date();
+      start.setDate(start.getDate() - 60);
+      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start.toISOString().split('T')[0]}&end=${end}`);
+      globalAttendanceSummary = resp.summary || null;
+      if (globalAttendanceSummary) renderAttendanceTrend(globalAttendanceSummary);
+    } catch (e) {
+      console.warn('Global attendance trends failed', e);
+    }
+  }
+
+  function renderAttendanceSummary(summary) {
+    const totals = summary.totals || { total: 0, present: 0, absent: 0, rate: 0 };
+    const grid = el('clientStatGrid');
+    if (grid) {
+      grid.innerHTML = `
+        <div class="stat-card">
+          <div class="tiny" style="color:var(--muted);">Attendance rate</div>
+          <div class="value">${totals.rate || 0}%</div>
+        </div>
+        <div class="stat-card">
+          <div class="tiny" style="color:var(--muted);">Present</div>
+          <div class="value">${totals.present || 0}</div>
+        </div>
+        <div class="stat-card danger">
+          <div class="tiny" style="color:var(--muted);">Absent</div>
+          <div class="value">${totals.absent || 0}</div>
+        </div>
+      `;
+    }
+    const alertStrip = el('clientAlertStrip');
+    if (alertStrip) {
+      alertStrip.innerHTML = [
+        renderAlertPill('Absences', totals.absent || 0, totals.absent ? 'rose' : 'slate', 'absences', '❌'),
+        renderAlertPill('Attendance rate', `${totals.rate || 0}%`, 'teal', 'attendance', '✅'),
+        renderAlertPill('Roster marked', totals.total || 0, 'slate', 'history', '👥')
+      ].join('');
+      alertStrip.querySelectorAll('[data-alert]').forEach((pill) => {
+        pill.addEventListener('click', () => {
+          const action = pill.dataset.alert;
+          if (action === 'absences') el('clientTabAbsence')?.click();
+          if (action === 'attendance') el('clientTabAttendance')?.click();
+          if (action === 'history') el('clientTabHistory')?.click();
+        });
+      });
+    }
+    const dateRows = (summary.dateStats || []).map((entry) => [
+      formatDateUS(entry.date),
+      entry.present,
+      entry.absent,
+      `${entry.rate}%`
+    ]);
+    const tableHtml = renderTable(['Date', 'Present', 'Absent', 'Rate'], dateRows);
+    const target = el('attendanceSummaryTable');
+    if (target) target.innerHTML = tableHtml;
+
+    const instructorRows = (summary.instructorStats || []).map((entry) => [
+      entry.instructor,
+      entry.present,
+      entry.absent,
+      `${entry.rate}%`
+    ]);
+    const instTarget = el('attendanceInstructorTable');
+    if (instTarget) instTarget.innerHTML = renderTable(['Instructor', 'Present', 'Absent', 'Rate'], instructorRows);
+  }
+
+  function renderAttendanceTrend(summary) {
+    const container = el('attendanceTrends');
+    if (!container) return;
+    if (!managerSectionFilters.client.showTrends) {
+      container.innerHTML = '<div class="tiny" style="color:var(--muted);">Trends hidden.</div>';
+      return;
+    }
+    const stats = (globalAttendanceSummary?.dateStats || summary.dateStats || []);
+    if (!stats.length) {
+      container.innerHTML = '<div class="tiny" style="color:var(--muted);">No attendance trends yet.</div>';
+      return;
+    }
+    container.innerHTML = '<canvas id="attendanceTrendChart" height="220"></canvas>';
+    const ctx = el('attendanceTrendChart');
+    if (attendanceTrendChart) attendanceTrendChart.destroy();
+    attendanceTrendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: stats.map((s) => formatDateUS(s.date)),
+        datasets: [{
+          label: 'Attendance %',
+          data: stats.map((s) => s.rate),
+          borderColor: '#0ea5e9',
+          backgroundColor: 'rgba(14,165,233,0.15)',
+          tension: 0
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, max: 100 } }
+      }
+    });
+  }
+
+  async function loadAbsenceTracker() {
+    if (!currentLocation) return;
+    const { start, end } = getClientDateRange();
+    try {
+      const resp = await api(`/api/absence-tracker?location_id=${currentLocation.id}&start=${start}&end=${end}`);
+      renderAbsenceTracker(resp.rows || []);
+    } catch (e) {
+      showInlineError('absenceTrackerTable', `Absence tracker failed: ${e.message}`, loadAbsenceTracker);
+    }
+  }
+
+  function renderAbsenceTracker(rows) {
+    const filtered = rows.filter((row) => {
+      const inst = managerSectionFilters.client.instructor;
+      const status = managerSectionFilters.client.status;
+      if (inst && (row.instructor_name || '') !== inst) return false;
+      if (status && (row.status || 'new') !== status) return false;
+      return true;
+    });
+    if (!filtered.length) {
+      el('absenceTrackerTable').innerHTML = renderEmptyState({
+        icon: '🫧',
+        title: 'No absences in this range',
+        description: 'Try adjusting the date range or filters.',
+        actionLabel: 'Adjust filters',
+        action: 'filters'
+      });
+      el('absenceTrackerTable').querySelector('[data-empty-action]')?.addEventListener('click', () => {
+        el('clientFiltersAdvanced')?.classList.remove('hidden');
+      });
+      return;
+    }
+    const displayRows = filtered.slice(0, 20);
+    const rowsHtml = displayRows.map((row) => {
+      const status = row.status || 'new';
+      const sourceLabel = row.attendance_auto_absent ? 'Auto' : 'Manual';
+      const level = parseTypeLevel(row.program || '').level;
+      const encodedName = encodeURIComponent(row.swimmer_name);
+      const encodedNotes = encodeURIComponent(row.notes || '');
+      return `
+        <tr>
+          <td>${escapeHtml(row.swimmer_name)}</td>
+          <td>${formatDateUS(row.date)}<div class="tiny">${escapeHtml(row.start_time || '')}</div></td>
+          <td>${escapeHtml(row.instructor_name || '—')}</td>
+          <td>${escapeHtml(level || '—')}</td>
+          <td>${sourceLabel}</td>
+          <td><span class="chip">${escapeHtml(status)}</span></td>
+          <td>
+            <button class="secondary miniBtn" data-action="contacted" data-row="${encodedName}" data-date="${row.date}" data-time="${row.start_time || ''}">Contacted</button>
+            <button class="secondary miniBtn" data-action="rescheduled" data-row="${encodedName}" data-date="${row.date}" data-time="${row.start_time || ''}">Rescheduled</button>
+            <button class="secondary miniBtn" data-action="complete" data-row="${encodedName}" data-date="${row.date}" data-time="${row.start_time || ''}">Complete</button>
+            <button class="secondary miniBtn" data-action="notes" data-row="${encodedName}" data-date="${row.date}" data-time="${row.start_time || ''}" data-notes="${encodedNotes}">Notes</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+    const moreCount = filtered.length - displayRows.length;
+    el('absenceTrackerTable').innerHTML = `
+      ${moreCount > 0 ? `<div class="tiny" style="color:var(--muted); margin-bottom:6px;">Showing first 20 of ${filtered.length} absences.</div>` : ''}
+      <table>
+        <thead>
+          <tr>
+            <th>Swimmer</th>
+            <th>Date/Time</th>
+            <th>Instructor</th>
+            <th>Level</th>
+            <th>Absent Source</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `;
+    el('absenceTrackerTable').querySelectorAll('[data-action]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const action = btn.dataset.action;
+        const swimmerName = decodeURIComponent(btn.dataset.row || '');
+        const date = btn.dataset.date;
+        const time = btn.dataset.time;
+        let nextStatus = action;
+        let notes = decodeURIComponent(btn.dataset.notes || '');
+        if (action === 'notes') {
+          const input = prompt('Update notes', notes || '');
+          if (input === null) return;
+          notes = input;
+          nextStatus = null;
+        }
+        const confirmed = await openProtectedAction({
+          title: 'Update absence follow-up',
+          message: `Update ${swimmerName} (${formatDateUS(date)})`,
+          requireInitials: true,
+          requirePin: true
+        });
+        if (!confirmed.ok) return;
+        await api('/api/absence-tracker/update', {
+          method: 'POST',
+          body: JSON.stringify({
+            location_id: currentLocation.id,
+            swimmer_name: swimmerName,
+            date,
+            start_time: time || null,
+            status: nextStatus,
+            notes,
+            pin: confirmed.pin
+          })
+        });
+        loadAbsenceTracker();
+      });
+    });
+  }
+
+  async function loadAttendanceHistory() {
+    if (!currentLocation) return;
+    const { start, end } = getClientDateRange();
+    try {
+      const resp = await api(`/api/attendance-history?location_id=${currentLocation.id}&start=${start}&end=${end}&limit=500`);
+      renderAttendanceHistory(resp.rows || []);
+    } catch (e) {
+      showInlineError('attendanceHistoryTable', `Attendance history failed: ${e.message}`, loadAttendanceHistory);
+    }
+  }
+
+  function getClientDropRange() {
+    const range = managerSectionFilters.client.dropRange;
+    const start = managerSectionFilters.client.dropStart;
+    const end = managerSectionFilters.client.dropEnd;
+    return { range, start, end };
+  }
+
+  function applyClientDropFilters(entries) {
+    if (!entries.length) return entries;
+    const { range, start, end } = getClientDropRange();
+    const now = new Date();
+    let startDate = null;
+    let endDate = null;
+    if (range !== 'custom') {
+      const days = parseInt(range, 10);
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - (days - 1));
+      endDate = now;
+    } else {
+      if (start) startDate = new Date(`${start}T00:00:00`);
+      if (end) endDate = new Date(`${end}T23:59:59`);
+    }
+    return entries.filter((entry) => {
+      if (!entry.drop_date) return false;
+      const dt = new Date(`${entry.drop_date}T00:00:00`);
+      if (startDate && dt < startDate) return false;
+      if (endDate && dt > endDate) return false;
+      return true;
+    });
+  }
+
+  async function loadClientDropList() {
+    if (!currentLocation) return;
+    try {
+      const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=drop_list&include_archived=true`);
+      const entries = resp.reports.flatMap((report) => {
+        const parsed = report.data_json ? JSON.parse(report.data_json) : {};
+        return parsed.entries || [];
+      });
+      renderClientDropList(entries);
+    } catch (e) {
+      showInlineError('clientDropListTable', `Drop list failed: ${e.message}`, loadClientDropList);
+    }
+  }
+
+  function renderClientDropList(entries) {
+    const filtered = applyClientDropFilters(entries);
+    if (!filtered.length) {
+      el('clientDropListTable').innerHTML = renderEmptyState({
+        icon: '📉',
+        title: 'No drop list entries',
+        description: 'Upload a drop list report or widen the date range.',
+        actionLabel: 'Go to reports',
+        action: 'system'
+      });
+      el('clientDropListTable').querySelector('[data-empty-action]')?.addEventListener('click', () => setManagerSection('system'));
+      return;
+    }
+    const displayRows = filtered.slice(0, 20);
+    const rows = displayRows.map((entry, idx) => [
+      formatDateUS(entry.drop_date),
+      renderDropDetails(entry, `client-drop-${idx}`)
+    ]);
+    const moreCount = filtered.length - displayRows.length;
+    el('clientDropListTable').innerHTML = `
+      ${moreCount > 0 ? `<div class="tiny" style="color:var(--muted); margin-bottom:6px;">Showing first 20 of ${filtered.length} drops.</div>` : ''}
+      ${renderTable(['Drop Date', 'Details'], rows)}
+    `;
+    el('clientDropListTable').querySelectorAll('[data-drop-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.dropToggle;
+        const target = el('clientDropListTable').querySelector(`[data-drop-full="${key}"]`);
+        if (target) target.classList.toggle('hidden');
+      });
+    });
+  }
+
+  function renderAttendanceHistory(rows) {
+    if (!rows.length) {
+      el('attendanceHistoryTable').innerHTML = renderEmptyState({
+        icon: '📅',
+        title: 'No attendance history',
+        description: 'Select a wider date range to view historical snapshots.'
+      });
+      return;
+    }
+    const displayRows = rows.slice(0, 20);
+    const tableRows = displayRows.map((row) => [
+      formatDateUS(row.date),
+      row.start_time || '—',
+      row.swimmer_name,
+      row.instructor_name || '—',
+      row.attendance === 1 ? 'Here' : row.attendance === 0 ? 'Absent' : '—',
+      row.attendance_auto_absent ? 'Auto' : 'Manual',
+      row.attendance_at || row.updated_at || '—'
+    ]);
+    const moreCount = rows.length - displayRows.length;
+    el('attendanceHistoryTable').innerHTML = `
+      ${moreCount > 0 ? `<div class="tiny" style="color:var(--muted); margin-bottom:6px;">Showing first 20 of ${rows.length} history rows.</div>` : ''}
+      ${renderTable(
+        ['Date', 'Time', 'Swimmer', 'Instructor', 'Attendance', 'Source', 'Updated at'],
+        tableRows
+      )}
+    `;
+  }
+
+  function loadManagerDashboard() {
+    ensureClientDateRange();
+    renderSidebarLocationOptions();
+    if (el('clientDropRange')) {
+      el('clientDropRange').value = managerSectionFilters.client.dropRange;
+      el('clientDropStart').value = managerSectionFilters.client.dropStart;
+      el('clientDropEnd').value = managerSectionFilters.client.dropEnd;
+      const isCustom = managerSectionFilters.client.dropRange === 'custom';
+      el('clientDropStart').classList.toggle('hidden', !isCustom);
+      el('clientDropEnd').classList.toggle('hidden', !isCustom);
+    }
+    loadManagerReports();
+    loadAttendanceSummary();
+    loadGlobalAttendanceTrends();
+    loadAbsenceTracker();
+    loadAttendanceHistory();
+    loadClientDropList();
+    loadBundles();
+    renderRetentionPanel();
+    renderDropImpactPanel();
+    renderAttendanceImpactPanel();
+    const guardAlert = el('guardsAlertStrip');
+    if (guardAlert) {
+      guardAlert.innerHTML = renderAlertPill('Guard tasks', isWestchesterLocation() ? 'Available' : 'Unavailable', isWestchesterLocation() ? 'teal' : 'slate', 'guard_tasks', '🛟');
+    }
+    const systemAlert = el('systemAlertStrip');
+    if (systemAlert) {
+      systemAlert.innerHTML = renderAlertPill('Reports', managerReportsCache?.reports?.length || 0, 'slate', 'reports', '📁');
+    }
+  }
+
+  async function renderSidebarLocationOptions() {
+    const bundleSelect = el('bundleLocation');
+    if (bundleSelect) {
+      bundleSelect.innerHTML = '';
+      allLocations.forEach((loc) => {
+        const opt = document.createElement('option');
+        opt.value = loc.id;
+        opt.textContent = loc.name;
+        bundleSelect.appendChild(opt);
+      });
+      bundleSelect.value = currentLocation?.id || allLocations[0]?.id || '';
+    }
+    const instructorSelect = el('clientInstructorFilter');
+    if (instructorSelect) {
+      instructorSelect.innerHTML = '<option value="">All instructors</option>';
+      try {
+        const locId = currentLocation?.id || 1;
+        const resp = await api(`/api/instructors?location_id=${locId}`);
+        (resp.instructors || []).forEach((inst) => {
+          const opt = document.createElement('option');
+          opt.value = inst.displayName;
+          opt.textContent = inst.displayName;
+          instructorSelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('Failed to load instructor filter', e);
+      }
+    }
+  }
+
+  function calculateBundlePreview({ durationWeeks, monthlyPrice, startDate }) {
+    const weeks = Number(durationWeeks || 0);
+    const monthly = Number(monthlyPrice || 0);
+    if (![12, 24, 52].includes(weeks) || !monthly) return null;
+    const months = weeks / 4;
+    const discountRate = weeks === 12 ? 0.15 : 0.2;
+    const discountedMonthly = monthly * (1 - discountRate);
+    const totalBilled = discountedMonthly * months;
+    const baseTotal = monthly * months;
+    const discountAmount = baseTotal - totalBilled;
+    const houseCredit = discountAmount + (weeks === 52 ? 50 : 0);
+    let expirationDate = '';
+    if (startDate) {
+      const d = new Date(`${startDate}T00:00:00`);
+      d.setDate(d.getDate() + weeks * 7);
+      expirationDate = d.toISOString().split('T')[0];
+    }
+    return { discountedMonthly, totalBilled, houseCredit, expirationDate };
+  }
+
+  async function loadBundles() {
+    if (!currentLocation) return;
+    try {
+      const locId = Number(el('bundleLocation')?.value || currentLocation.id);
+      const resp = await api(`/api/bundles?location_id=${locId}`);
+      renderBundles(resp.bundles || []);
+    } catch (e) {
+      showInlineError('bundleTable', `Bundle tracker failed: ${e.message}`, loadBundles);
+    }
+  }
+
+  function renderBundles(bundles) {
+    const sorted = [...bundles].sort((a, b) => (a.expiration_date || '').localeCompare(b.expiration_date || ''));
+    const now = new Date();
+    const expiring = sorted.filter((bundle) => {
+      if (!bundle.expiration_date) return false;
+      const dt = new Date(`${bundle.expiration_date}T00:00:00`);
+      const days = (dt - now) / (1000 * 60 * 60 * 24);
+      return days >= 0 && days <= 7;
+    });
+
+    const statGrid = el('billingStatGrid');
+    if (statGrid) {
+      statGrid.innerHTML = `
+        <div class="stat-card">
+          <div class="tiny" style="color:var(--muted);">Active bundles</div>
+          <div class="value">${sorted.length}</div>
+        </div>
+        <div class="stat-card alert">
+          <div class="tiny" style="color:var(--muted);">Expiring in 7 days</div>
+          <div class="value">${expiring.length}</div>
+        </div>
+      `;
+    }
+    const billingAlert = el('billingAlertStrip');
+    if (billingAlert) {
+      billingAlert.innerHTML = [
+        renderAlertPill('Bundles', sorted.length, 'slate', 'bundles', '📦'),
+        renderAlertPill('Expiring soon', expiring.length, expiring.length ? 'amber' : 'slate', 'bundle_followup', '⏰')
+      ].join('');
+      billingAlert.querySelectorAll('[data-alert]').forEach((pill) => {
+        pill.addEventListener('click', () => {
+          if (pill.dataset.alert === 'bundle_followup') setManagerSection('billing');
+        });
+      });
+    }
+
+    const followUp = el('bundleNeedsFollowUp');
+    if (followUp) {
+      if (!expiring.length) {
+        followUp.innerHTML = '<div class="tiny" style="color:var(--muted);">No bundles expiring in the next 7 days.</div>';
+      } else {
+        followUp.innerHTML = expiring.map((bundle) => `
+          <div class="notification-card warning" style="margin-bottom:8px;">
+            <div style="flex:1;">
+              <div style="font-weight:700;">${escapeHtml(bundle.customer_name)}</div>
+              <div class="tiny" style="color:var(--muted);">Expires ${formatDateUS(bundle.expiration_date)} • ${escapeHtml(bundle.phone || 'No phone')}</div>
+            </div>
+            <span class="chip amber">Follow up</span>
+          </div>
+        `).join('');
+      }
+    }
+
+    if (!sorted.length) {
+      el('bundleTable').innerHTML = renderEmptyState({
+        icon: '📦',
+        title: 'No bundles saved yet',
+        description: 'Add a bundle above to track billing follow-ups.'
+      });
+      return;
+    }
+    const rows = sorted.map((bundle) => `
+      <tr data-bundle-id="${bundle.id}">
+        <td>${escapeHtml(bundle.customer_name)}</td>
+        <td>${escapeHtml(bundle.phone || '—')}</td>
+        <td>${formatDateUS(bundle.start_date)}</td>
+        <td>${bundle.duration_weeks}w</td>
+        <td class="table-num">$${Number(bundle.discounted_monthly || 0).toFixed(2)}</td>
+        <td class="table-num">$${Number(bundle.total_billed || 0).toFixed(2)}</td>
+        <td class="table-num">$${Number(bundle.house_credit || 0).toFixed(2)}</td>
+        <td>${formatDateUS(bundle.expiration_date)}</td>
+        <td>
+          <button class="secondary miniBtn" data-bundle-action="edit" data-bundle-id="${bundle.id}">Edit</button>
+          <button class="danger miniBtn" data-bundle-action="delete" data-bundle-id="${bundle.id}">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+    el('bundleTable').innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Start</th>
+            <th>Duration</th>
+            <th class="table-num">Discounted Monthly</th>
+            <th class="table-num">Total Billed</th>
+            <th class="table-num">House Credit</th>
+            <th>Expires</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+    el('bundleTable').querySelectorAll('[data-bundle-action]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.bundleId;
+        const action = btn.dataset.bundleAction;
+        const bundle = sorted.find((b) => String(b.id) === String(id));
+        if (!bundle) return;
+        if (action === 'edit') {
+          populateBundleForm(bundle);
+        } else if (action === 'delete') {
+          deleteBundle(bundle);
+        }
+      });
+    });
+  }
+
+  function populateBundleForm(bundle) {
+    bundleEditingId = bundle.id;
+    el('bundleLocation').value = bundle.location_id;
+    el('bundleCustomer').value = bundle.customer_name || '';
+    el('bundlePhone').value = bundle.phone || '';
+    el('bundleStartDate').value = bundle.start_date || '';
+    el('bundleDuration').value = bundle.duration_weeks || '12';
+    el('bundleMonthlyPrice').value = bundle.monthly_price || '';
+    el('bundleNotes').value = bundle.notes || '';
+    el('bundleSaveBtn').textContent = 'Update bundle';
+  }
+
+  function resetBundleForm() {
+    bundleEditingId = null;
+    el('bundleCustomer').value = '';
+    el('bundlePhone').value = '';
+    el('bundleStartDate').value = '';
+    el('bundleDuration').value = '12';
+    el('bundleMonthlyPrice').value = '';
+    el('bundleNotes').value = '';
+    el('bundleSaveBtn').textContent = 'Save bundle';
+  }
+
+  async function deleteBundle(bundle) {
+    const confirmed = await openProtectedAction({
+      title: 'Delete bundle',
+      message: `Delete bundle for ${bundle.customer_name}?`,
+      impactSummary: 'This will permanently remove the bundle record.',
+      requireDelete: true,
+      requireInitials: true,
+      requirePin: true,
+      requireConfirmCheckbox: true
+    });
+    if (!confirmed.ok) return;
+    await api(`/api/bundles/${bundle.id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ pin: confirmed.pin })
+    });
+    resetBundleForm();
+    loadBundles();
+  }
+
+  let exportContext = null;
+  function openExportModal({ title, onExport }) {
+    exportContext = { onExport };
+    el('exportModalTitle').textContent = title || 'Export';
+    el('exportScopeSelect').value = '';
+    showModal('exportModal', true);
+  }
+
+  async function exportBundles(scope) {
+    const locId = Number(el('bundleLocation')?.value || currentLocation?.id || 1);
+    let list = [];
+    if (scope === 'full') {
+      const results = await Promise.all((allLocations || []).map(async (loc) => {
+        const resp = await api(`/api/bundles?location_id=${loc.id}`);
+        return (resp.bundles || []).map((bundle) => ({ ...bundle, location_name: loc.name }));
+      }));
+      list = results.flat();
+    } else {
+      const resp = await api(`/api/bundles?location_id=${locId}`);
+      list = resp.bundles || [];
+    }
+    if (!list.length) {
+      alert('No bundles to export.');
+      return;
+    }
+    const headers = [
+      'Location','Customer','Phone','Start Date','Duration Weeks','Monthly Price','Discounted Monthly','Total Billed','House Credit','Expiration Date','Notes'
+    ];
+    const rows = list.map((b) => [
+      b.location_name || currentLocation?.name || '',
+      b.customer_name,
+      b.phone || '',
+      b.start_date || '',
+      b.duration_weeks,
+      b.monthly_price,
+      b.discounted_monthly,
+      b.total_billed,
+      b.house_credit,
+      b.expiration_date,
+      b.notes || ''
+    ]);
+    const csv = [headers, ...rows].map(buildCsvRow).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bundles_${locId}_${todayISO()}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function buildGlobalSearchIndex() {
+    const results = [];
+    rosterCache.forEach((kid) => {
+      results.push({
+        type: 'Roster',
+        title: kid.swimmer_name,
+        subtitle: `${kid.instructor_name || 'Unassigned'} • ${kid.start_time || ''}`,
+        jump: () => {
+          el('viewSelect').value = 'roster';
+          el('panelRoster').classList.remove('hidden');
+          el('panelVirtualDesk').classList.add('hidden');
+          setCategoryTheme('instructors');
+          if (el('rosterSearch')) {
+            el('rosterSearch').value = kid.swimmer_name || '';
+            searchFilter = kid.swimmer_name || '';
+            el('searchClear')?.classList.toggle('hidden', !searchFilter);
+          }
+          loadRoster();
+        }
+      });
+    });
+
+    if (managerReportsCache?.latest) {
+      Object.values(managerReportsCache.latest).forEach((report) => {
+        results.push({
+          type: 'Report',
+          title: `${report.report_type.replace('_', ' ')} report`,
+          subtitle: `Uploaded ${formatShortDate(report.uploaded_at)}`,
+          jump: () => setManagerSection('system')
+        });
+      });
+    }
+
+    try {
+      const bundleResp = await api(`/api/bundles?location_id=${currentLocation?.id || 1}`);
+      (bundleResp.bundles || []).forEach((bundle) => {
+        results.push({
+          type: 'Bundle',
+          title: bundle.customer_name,
+          subtitle: `Expires ${formatDateUS(bundle.expiration_date)}`,
+          jump: () => setManagerSection('billing')
+        });
+      });
+    } catch (e) {
+      console.warn('Global search bundle fetch failed', e);
+    }
+
+    globalSearchResults = results;
+  }
+
+  function openGlobalSearch() {
+    showModal('globalSearchModal', true);
+    el('globalSearchInput').value = '';
+    el('globalSearchResults').innerHTML = '<div class="tiny" style="color:var(--muted);">Type to search...</div>';
+    buildGlobalSearchIndex().then(() => {
+      const query = el('globalSearchInput').value;
+      if (query) runGlobalSearch(query);
+    });
+    el('globalSearchInput').focus();
+  }
+
+  function runGlobalSearch(query) {
+    const list = el('globalSearchResults');
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) {
+      list.innerHTML = '<div class="tiny" style="color:var(--muted);">Type to search...</div>';
+      return;
+    }
+    const results = globalSearchResults.filter((item) => {
+      return item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q);
+    }).slice(0, 20);
+    if (!results.length) {
+      list.innerHTML = '<div class="tiny" style="color:var(--muted);">No matches found.</div>';
+      return;
+    }
+    list.innerHTML = results.map((item, idx) => `
+      <div class="card" data-search-index="${idx}" style="margin-top:8px; cursor:pointer;">
+        <div style="font-weight:700;">${escapeHtml(item.title)}</div>
+        <div class="tiny" style="color:var(--muted);">${escapeHtml(item.type)} • ${escapeHtml(item.subtitle)}</div>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-search-index]').forEach((row) => {
+      row.addEventListener('click', () => {
+        const index = Number(row.dataset.searchIndex);
+        const selected = results[index];
+        openPreviewDrawer(selected);
+      });
+    });
+  }
+
+  function openPreviewDrawer(item) {
+    previewTarget = item;
+    el('previewTitle').textContent = `${item.type} preview`;
+    el('previewContent').innerHTML = `
+      <div style="font-weight:700;">${escapeHtml(item.title)}</div>
+      <div class="tiny" style="color:var(--muted); margin-top:4px;">${escapeHtml(item.subtitle)}</div>
+    `;
+    el('previewBackdrop').style.display = 'block';
+    el('previewDrawer').classList.add('open');
+  }
+
+  function closePreviewDrawer() {
+    previewTarget = null;
+    el('previewBackdrop').style.display = 'none';
+    el('previewDrawer').classList.remove('open');
+  }
+
+  function setTrainerTab(tab) {
+    const retentionBtn = el('trainerTabRetention');
+    const dropBtn = el('trainerTabDropImpact');
+    const attendanceBtn = el('trainerTabAttendanceImpact');
+    retentionBtn?.classList.toggle('active', tab === 'retention');
+    dropBtn?.classList.toggle('active', tab === 'drop');
+    attendanceBtn?.classList.toggle('active', tab === 'attendance');
+    el('trainerRetentionPanel')?.classList.toggle('hidden', tab !== 'retention');
+    el('trainerDropImpactPanel')?.classList.toggle('hidden', tab !== 'drop');
+    el('trainerAttendanceImpactPanel')?.classList.toggle('hidden', tab !== 'attendance');
+  }
+
+  async function renderRetentionPanel() {
+    if (!currentLocation || !el('retentionTable')) return;
+    try {
+      const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=retention`);
+      const reports = resp.reports || [];
+      const latest = reports[0];
+      const previous = reports[1];
+      const currentRows = latest?.data_json ? JSON.parse(latest.data_json).instructors || [] : [];
+      const prevRows = previous?.data_json ? JSON.parse(previous.data_json).instructors || [] : [];
+      const prevMap = new Map(prevRows.map((row) => [normalizeKey(row.instructor), row]));
+
+      let sortMode = el('retentionSortSelect')?.value || 'alpha';
+      const rows = currentRows.map((row) => {
+        const prev = prevMap.get(normalizeKey(row.instructor)) || {};
+        const deltaPercent = row.retention_percent != null && prev.retention_percent != null
+          ? row.retention_percent - prev.retention_percent
+          : null;
+        const deltaSwimmers = row.swimmer_count != null && prev.swimmer_count != null
+          ? row.swimmer_count - prev.swimmer_count
+          : null;
+        const status = prev.retention_percent == null ? 'NEW' : (deltaPercent < 0 ? 'Drop' : 'Stable');
+        return {
+          instructor: row.instructor,
+          newPercent: row.retention_percent,
+          lastPercent: prev.retention_percent,
+          deltaPercent,
+          newSwimmers: row.swimmer_count,
+          lastSwimmers: prev.swimmer_count,
+          deltaSwimmers,
+          status
+        };
+      });
+
+      if (sortMode === 'best') {
+        rows.sort((a, b) => (b.newPercent ?? -999) - (a.newPercent ?? -999));
+      } else if (sortMode === 'worst') {
+        rows.sort((a, b) => (a.newPercent ?? 999) - (b.newPercent ?? 999));
+      } else {
+        rows.sort((a, b) => String(a.instructor || '').localeCompare(String(b.instructor || '')));
+      }
+
+      const tableRows = rows.map((row) => [
+        row.instructor,
+        formatPercent(row.newPercent),
+        formatPercent(row.lastPercent),
+        formatDelta(row.deltaPercent, '%', 1),
+        row.newSwimmers ?? '—',
+        row.lastSwimmers ?? '—',
+        formatDelta(row.deltaSwimmers, '', 0),
+        row.status === 'Drop' ? '⚠️ Drop' : row.status
+      ]);
+
+      el('retentionTable').innerHTML = `
+        <div class="row" style="margin-bottom:8px;">
+          <span class="pill tiny">Sort</span>
+          <select id="retentionSortSelect">
+            <option value="alpha">A → Z</option>
+            <option value="best">Best → Worst</option>
+            <option value="worst">Worst → Best</option>
+          </select>
+        </div>
+        ${tableRows.length ? renderTable(
+          ['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'],
+          tableRows,
+          { alignRight: [1,2,3,4,5,6] }
+        ) : '<div class="tiny" style="color:var(--muted);">No retention uploads yet.</div>'}
+      `;
+      const sortSelect = el('retentionSortSelect');
+      if (sortSelect) {
+        sortSelect.value = sortMode;
+        sortSelect.onchange = () => renderRetentionPanel();
+      }
+
+      renderRetentionTrends(reports);
+      const drops = rows.filter((row) => row.deltaPercent != null && row.deltaPercent < 0).length;
+      const alertStrip = el('instructorsAlertStrip');
+      if (alertStrip) {
+        alertStrip.innerHTML = [
+          renderAlertPill('Instructors', rows.length, 'slate', 'retention', '🎓'),
+          renderAlertPill('Retention drops', drops, drops ? 'rose' : 'slate', 'drop', '⚠️')
+        ].join('');
+        alertStrip.querySelectorAll('[data-alert]').forEach((pill) => {
+          pill.addEventListener('click', () => {
+            if (pill.dataset.alert === 'retention') setTrainerTab('retention');
+            if (pill.dataset.alert === 'drop') setTrainerTab('drop');
+          });
+        });
+      }
+      const statsGrid = el('instructorsStatGrid');
+      if (statsGrid) {
+        const avgRetention = rows.length
+          ? Math.round((rows.reduce((acc, r) => acc + (Number(r.newPercent) || 0), 0) / rows.length) * 10) / 10
+          : 0;
+        statsGrid.innerHTML = `
+          <div class="stat-card">
+            <div class="tiny" style="color:var(--muted);">Avg retention</div>
+            <div class="value">${avgRetention}%</div>
+          </div>
+          <div class="stat-card ${drops ? 'danger' : ''}">
+            <div class="tiny" style="color:var(--muted);">Retention drops</div>
+            <div class="value">${drops}</div>
+          </div>
+        `;
+      }
+    } catch (e) {
+      showInlineError('retentionTable', `Retention data failed: ${e.message}`, renderRetentionPanel);
+    }
+  }
+
+  async function deleteLatestReport(reportType) {
+    if (!currentLocation) return;
+    const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=${reportType}`);
+    const latest = resp.reports?.[0];
+    if (!latest) {
+      alert('No uploads available to delete.');
+      return;
+    }
+    const confirmed = await openProtectedAction({
+      title: 'Delete latest upload',
+      message: `Delete latest ${reportType.replace('_',' ')} upload?`,
+      impactSummary: `Upload date: ${formatShortDate(latest.uploaded_at)}\nThis will remove the upload from this location.`,
+      requireDelete: true,
+      requireInitials: true,
+      requirePin: true,
+      requireConfirmCheckbox: true
+    });
+    if (!confirmed.ok) return;
+    await api('/api/manager-reports/delete', {
+      method: 'POST',
+      body: JSON.stringify({ report_id: latest.id, initials: confirmed.initials, pin: confirmed.pin })
+    });
+    loadManagerReports();
+    if (reportType === 'drop_list') {
+      loadClientDropList();
+      renderDropImpactPanel();
+    }
+  }
+
+  function renderRetentionTrends(reports) {
+    const container = el('retentionTrends');
+    if (!container) return;
+    if (!managerSectionFilters.instructors.showTrends) {
+      container.innerHTML = '<div class="tiny" style="color:var(--muted);">Trends hidden.</div>';
+      return;
+    }
+    if (!reports.length) {
+      container.innerHTML = '<div class="tiny" style="color:var(--muted);">No retention trend data yet.</div>';
+      return;
+    }
+    const points = reports.map((report) => {
+      const parsed = report.data_json ? JSON.parse(report.data_json) : {};
+      const values = (parsed.instructors || []).map((r) => Number(r.retention_percent)).filter((v) => !Number.isNaN(v));
+      const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+      return { date: report.uploaded_at, value: avg };
+    }).reverse();
+    container.innerHTML = '<canvas id="retentionTrendChart" height="220"></canvas>';
+    const ctx = el('retentionTrendChart');
+    if (retentionTrendChart) retentionTrendChart.destroy();
+    retentionTrendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: points.map((p) => formatShortDate(p.date)),
+        datasets: [{
+          label: 'Retention %',
+          data: points.map((p) => Number(p.value.toFixed(1))),
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37,99,235,0.15)',
+          tension: 0
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, max: 100 } }
+      }
+    });
+  }
+
+  async function renderDropImpactPanel() {
+    if (!currentLocation || !el('dropImpactTable')) return;
+    try {
+      const dropResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=drop_list&include_archived=true`);
+      const allEntries = dropResp.reports.flatMap((report) => {
+        const parsed = report.data_json ? JSON.parse(report.data_json) : {};
+        return parsed.entries || [];
+      });
+      const entries = applyDropFilters(allEntries);
+      if (!entries.length) {
+        el('dropImpactTable').innerHTML = '<div class="tiny" style="color:var(--muted);">No drop list entries yet.</div>';
+        return;
+      }
+
+      const endDate = todayISO();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 180);
+      const historyResp = await api(`/api/attendance-history?location_id=${currentLocation.id}&start=${startDate.toISOString().split('T')[0]}&end=${endDate}&limit=2000`);
+      const history = historyResp.rows || [];
+
+      const bySwimmer = new Map();
+      history.forEach((row) => {
+        const key = normalizeKey(row.swimmer_name);
+        if (!bySwimmer.has(key)) bySwimmer.set(key, []);
+        bySwimmer.get(key).push(row);
+      });
+
+      const instructorMap = new Map();
+      entries.forEach((entry) => {
+        const parsed = parseDropDetails(entry.raw || []);
+        if (!parsed.name) return;
+        const key = normalizeKey(parsed.name);
+        const historyRows = bySwimmer.get(key) || [];
+        if (!historyRows.length) return;
+        const dropDate = entry.drop_date || endDate;
+        const lastFourStart = new Date(`${dropDate}T00:00:00`);
+        lastFourStart.setDate(lastFourStart.getDate() - 28);
+        const lastFourCounts = {};
+        const historicalCounts = {};
+        historyRows.forEach((row) => {
+          const inst = row.instructor_name || 'Unassigned';
+          historicalCounts[inst] = (historicalCounts[inst] || 0) + 1;
+          const rowDate = new Date(`${row.date}T00:00:00`);
+          if (rowDate >= lastFourStart) {
+            lastFourCounts[inst] = (lastFourCounts[inst] || 0) + 1;
+          }
+        });
+        const pickInstructor = (counts) => {
+          const entries = Object.entries(counts);
+          if (!entries.length) return null;
+          entries.sort((a, b) => b[1] - a[1]);
+          if (entries.length > 1 && entries[0][1] === entries[1][1]) return null;
+          return entries[0][0];
+        };
+        let attribution = pickInstructor(lastFourCounts);
+        let source = 'last 4 weeks';
+        if (!attribution) {
+          attribution = pickInstructor(historicalCounts) || 'Unassigned';
+          source = 'historical';
+        }
+        if (!instructorMap.has(attribution)) {
+          instructorMap.set(attribution, []);
+        }
+        instructorMap.get(attribution).push({
+          swimmer: parsed.name,
+          dropDate: entry.drop_date,
+          source
+        });
+      });
+
+      if (!instructorMap.size) {
+        el('dropImpactTable').innerHTML = '<div class="tiny" style="color:var(--muted);">No instructor attribution yet.</div>';
+        return;
+      }
+
+      const rows = Array.from(instructorMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      const tableRows = rows.map(([instructor, swimmers], idx) => `
+        <tr>
+          <td>${escapeHtml(instructor)}</td>
+          <td class="table-num">${swimmers.length}</td>
+          <td><button class="secondary miniBtn" data-drop-expand="${idx}">View</button></td>
+        </tr>
+        <tr class="hidden" id="dropImpactDetail-${idx}">
+          <td colspan="3">
+            <div class="tiny" style="color:var(--muted);">
+              ${swimmers.map((s) => `${escapeHtml(s.swimmer)} • ${formatDateUS(s.dropDate)} (${escapeHtml(s.source)})`).join('<br>')}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      el('dropImpactTable').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Instructor</th>
+              <th class="table-num">Drops</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      `;
+      el('dropImpactTable').querySelectorAll('[data-drop-expand]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = btn.dataset.dropExpand;
+          const row = el(`dropImpactDetail-${idx}`);
+          if (row) row.classList.toggle('hidden');
+        });
+      });
+    } catch (e) {
+      showInlineError('dropImpactTable', `Drop impact failed: ${e.message}`, renderDropImpactPanel);
+    }
+  }
+
+  async function renderAttendanceImpactPanel() {
+    if (!currentLocation || !el('attendanceImpactTable')) return;
+    try {
+      const end = todayISO();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start.toISOString().split('T')[0]}&end=${end}`);
+      const allRows = (resp.summary?.instructorStats || []).map((row) => [
+        row.instructor,
+        row.present,
+        row.absent,
+        `${row.rate}%`
+      ]);
+      if (!allRows.length) {
+        el('attendanceImpactTable').innerHTML = '<div class="tiny" style="color:var(--muted);">No attendance impact data yet.</div>';
+        return;
+      }
+      const displayRows = allRows.slice(0, 20);
+      const moreCount = allRows.length - displayRows.length;
+      el('attendanceImpactTable').innerHTML = `
+        ${moreCount > 0 ? `<div class="tiny" style="color:var(--muted); margin-bottom:6px;">Showing first 20 of ${allRows.length} instructors.</div>` : ''}
+        ${renderTable(['Instructor', 'Present', 'Absent', 'Attendance %'], displayRows)}
+      `;
+    } catch (e) {
+      showInlineError('attendanceImpactTable', `Attendance impact failed: ${e.message}`, renderAttendanceImpactPanel);
+    }
   }
 
   function buildCsvRow(values) {
@@ -2209,12 +3870,15 @@
           title: 'Delete report upload',
           message: 'Type DELETE and enter initials to delete this upload.',
           requireDelete: true,
-          requireInitials: true
+          requireInitials: true,
+          requirePin: true,
+          requireConfirmCheckbox: true,
+          impactSummary: 'This will permanently remove the selected report upload.'
         });
         if (!confirmed.ok) return;
         await api('/api/manager-reports/delete', {
           method: 'POST',
-          body: JSON.stringify({ report_id: latest.id, initials: confirmed.initials })
+          body: JSON.stringify({ report_id: latest.id, initials: confirmed.initials, pin: confirmed.pin })
         });
         await loadManagerReports();
         loadBreakdown();
@@ -2291,11 +3955,18 @@
       });
       const entries = applyDropFilters(allEntries);
       const headers = ['Drop Date', 'Details'];
-      const tableRows = entries.map((entry) => [
-        escapeHtml(entry.drop_date || '—'),
-        renderDropDetails(entry)
+      const tableRows = entries.map((entry, idx) => [
+        escapeHtml(formatDateUS(entry.drop_date)),
+        renderDropDetails(entry, `breakdown-${idx}`)
       ]);
       content.innerHTML = renderTable(headers, tableRows);
+      content.querySelectorAll('[data-drop-toggle]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const key = btn.dataset.dropToggle;
+          const target = content.querySelector(`[data-drop-full="${key}"]`);
+          if (target) target.classList.toggle('hidden');
+        });
+      });
     }
 
     el('breakdownExportCsv').onclick = () => {
@@ -2390,10 +4061,9 @@
   }
 
   function updateGuardTasksVisibility() {
-    const guardCard = el('adminNavGuards');
-    if (!guardCard) return;
     const isWestchester = isWestchesterLocation();
-    guardCard.style.display = isWestchester ? '' : 'none';
+    const guardNav = el('managerNavGuards');
+    if (guardNav) guardNav.style.display = isWestchester ? '' : 'none';
     const lifeguardOption = el('viewSelect')?.querySelector('option[value="lifeguard"]');
     if (lifeguardOption) lifeguardOption.hidden = !isWestchester;
     if (!isWestchester && el('viewSelect')?.value === 'lifeguard') {
@@ -2407,6 +4077,10 @@
       guardTasksPanel.classList.add('hidden');
       el('panelRoster').classList.remove('hidden');
     }
+    const guardSection = el('managerSectionGuards');
+    if (guardSection) guardSection.style.display = isWestchester ? '' : 'none';
+    const guardBtn = el('openGuardTasksBtn');
+    if (guardBtn) guardBtn.style.display = isWestchester ? '' : 'none';
   }
 
   el('locationSelect').addEventListener('change', async (e) => {
@@ -2433,6 +4107,9 @@
         }
       }
       await loadManagerReports();
+      if (el('panelVirtualDesk') && !el('panelVirtualDesk').classList.contains('hidden')) {
+        loadManagerDashboard();
+      }
       await loadStatus();
       await loadBlocks();
       if (currentBlock) await loadRoster();
@@ -2455,6 +4132,14 @@
     return `<span class="chip ${variant}">${escapeHtml(text)}</span>`;
   }
 
+  function renderAlertPill(label, value, variant = '', action = '', icon = '') {
+    const cls = variant ? `chip ${variant}` : 'chip';
+    const tag = action ? 'button' : 'span';
+    const attrs = action ? ` data-alert="${action}"` : '';
+    const iconHtml = icon ? `<span class="icon-circle" style="width:22px; height:22px;">${escapeHtml(icon)}</span>` : '';
+    return `<${tag} class="pill"${attrs}>${iconHtml}<span class="${cls}">${escapeHtml(label)}</span> <strong>${escapeHtml(String(value))}</strong></${tag}>`;
+  }
+
   function renderCard(title, body, actions = '') {
     return `
       <div class="card">
@@ -2468,13 +4153,31 @@
     `;
   }
 
-  function renderTable(headers, rows) {
+  function renderEmptyState({ icon = '✨', title = 'All set!', description = '', actionLabel = '', action = '' } = {}) {
+    return `
+      <div class="card" style="text-align:center;">
+        <div class="icon-circle" style="width:42px; height:42px; margin:0 auto 8px;">${escapeHtml(icon)}</div>
+        <div style="font-weight:800;">${escapeHtml(title)}</div>
+        <div class="tiny" style="color:var(--muted); margin-top:6px;">${escapeHtml(description)}</div>
+        ${actionLabel ? `<button class="secondary miniBtn" data-empty-action="${action}" style="margin-top:10px;">${escapeHtml(actionLabel)}</button>` : ''}
+      </div>
+    `;
+  }
+
+  function renderTable(headers, rows, options = {}) {
+    const alignRight = new Set(options.alignRight || []);
     let html = '<table><thead><tr>';
-    headers.forEach((h) => { html += `<th>${escapeHtml(h)}</th>`; });
+    headers.forEach((h, idx) => {
+      const cls = alignRight.has(idx) ? ' class="table-num"' : '';
+      html += `<th${cls}>${escapeHtml(h)}</th>`;
+    });
     html += '</tr></thead><tbody>';
     rows.forEach((row) => {
       html += '<tr>';
-      row.forEach((col) => { html += `<td>${col}</td>`; });
+      row.forEach((col, idx) => {
+        const cls = alignRight.has(idx) ? ' class="table-num"' : '';
+        html += `<td${cls}>${col}</td>`;
+      });
       html += '</tr>';
     });
     html += '</tbody></table>';
@@ -2657,6 +4360,30 @@
     s.classList.remove('ok','warn');
     if(kind) s.classList.add(kind);
   }
+
+  const categoryClasses = ['category-client', 'category-billing', 'category-instructors', 'category-guards', 'category-system', 'category-danger'];
+  function setCategoryTheme(category) {
+    document.body.classList.remove(...categoryClasses);
+    const cls = `category-${category}`;
+    if (categoryClasses.includes(cls)) {
+      document.body.classList.add(cls);
+    }
+  }
+
+  function categoryForManagerSection(section) {
+    switch (section) {
+      case 'billing':
+        return 'billing';
+      case 'instructors':
+        return 'instructors';
+      case 'guards':
+        return 'guards';
+      case 'system':
+        return 'system';
+      default:
+        return 'client';
+    }
+  }
   function toast(msg){
     const prev = el('status').textContent;
     setStatus(msg, 'ok');
@@ -2680,11 +4407,18 @@
     el('pinInput').focus();
   }
 
-  function openProtectedAction({ title, message, requireDelete = false, requireInitials = true, requirePin = false, locationOptions = null } = {}) {
+  function openProtectedAction({ title, message, requireDelete = false, requireInitials = true, requirePin = false, locationOptions = null, locationSelected = null, impactSummary = '', requireConfirmCheckbox = false, confirmLabel = 'I understand the impact.' } = {}) {
     return new Promise((resolve) => {
       const modalId = 'confirmModal';
       el('confirmTitle').textContent = title || 'Confirm action';
       el('confirmMessage').textContent = message || '';
+      const impactField = el('confirmImpactField');
+      const checkboxField = el('confirmCheckboxField');
+      impactField.classList.toggle('hidden', !impactSummary);
+      el('confirmImpactText').textContent = impactSummary || '';
+      checkboxField.classList.toggle('hidden', !requireConfirmCheckbox);
+      el('confirmCheckboxInput').checked = false;
+      el('confirmCheckboxLabel').textContent = confirmLabel;
       el('confirmDeleteField').style.display = requireDelete ? 'block' : 'none';
       el('confirmInitialsField').style.display = requireInitials ? 'block' : 'none';
       el('confirmPinField').style.display = requirePin ? 'block' : 'none';
@@ -2699,6 +4433,9 @@
           const o = document.createElement('option');
           o.value = opt.value;
           o.textContent = opt.label;
+          if (locationSelected && String(locationSelected) === String(opt.value)) {
+            o.selected = true;
+          }
           select.appendChild(o);
         });
       }
@@ -2718,6 +4455,7 @@
         const deleteValue = el('confirmDeleteInput').value.trim().toUpperCase();
         const initials = el('confirmInitialsInput').value.trim().toUpperCase();
         const pin = el('confirmPinInput').value.trim();
+        const confirmChecked = el('confirmCheckboxInput').checked;
         if (requireDelete && deleteValue !== 'DELETE') {
           alert('Please type DELETE to confirm.');
           return;
@@ -2730,9 +4468,17 @@
           alert('Manager PIN is required.');
           return;
         }
+        if (requireConfirmCheckbox && !confirmChecked) {
+          alert('Please confirm the impact checkbox.');
+          return;
+        }
+        const locationValue = locationOptions ? el('confirmLocationSelect').value : null;
+        if (locationOptions && !locationValue) {
+          alert('Please select a location.');
+          return;
+        }
         cleanup();
         showModal(modalId, false);
-        const locationValue = locationOptions ? el('confirmLocationSelect').value : null;
         resolve({ ok: true, initials, pin, location_value: locationValue });
       };
 
@@ -2754,7 +4500,9 @@
       'addSwimmerBtn', 'exportVirtualDeskBtn', 'attendanceReportExportCSV',
       'attendanceReportExportJSON', 'instructorReportExportCSV', 'instructorReportExportJSON',
       'guardTasksReset', 'guardRotationAdd', 'guardTasksShuffle', 'guardTasksSnapshot',
-      'bulkMarkPresent', 'bulkClearAttendance'
+      'bulkMarkPresent', 'bulkClearAttendance',
+      'bundleSaveBtn', 'bundleResetBtn', 'bundleExportBtn',
+      'deleteLatestDropListBtn'
     ];
     disableIds.forEach((id) => {
       const node = el(id);
@@ -2770,8 +4518,19 @@
     const bulkActions = el('bulkAttendanceActions');
     if (bulkActions) bulkActions.style.display = canManage ? 'flex' : 'none';
     document.querySelectorAll('.admin-only').forEach((node) => {
-      node.classList.toggle('hidden', managerRole !== 'admin');
+      const isAdmin = managerRole === 'admin';
+      node.disabled = !isAdmin;
+      node.classList.toggle('disabled', !isAdmin);
+      if (!isAdmin) {
+        node.setAttribute('title', 'Admin only. Request Admin Access.');
+      } else {
+        node.removeAttribute('title');
+      }
     });
+    const systemLock = el('managerNavSystemLock');
+    if (systemLock) {
+      systemLock.classList.add('hidden');
+    }
   }
 
   function syncDeviceUI(){
@@ -3284,7 +5043,8 @@
 
     const locId = currentLocation?.id || 1;
     const data = await api(`/api/blocks/${encodeURIComponent(currentBlock)}?location_id=${locId}`);
-    let kids = sortKids(data.kids || []);
+    rosterCache = data.kids || [];
+    let kids = sortKids(rosterCache);
 
     // Apply search filter
     const totalCount = kids.length;
@@ -3320,14 +5080,17 @@
     for(const kid of kids){
       const tr = document.createElement('tr');
 
+      if (kid.attendance_auto_absent) {
+        tr.classList.add('row-auto-absent');
+      }
+
       // Attendance
       const tdAtt = document.createElement('td');
       tdAtt.appendChild(renderAttendance(kid));
       tr.appendChild(tdAtt);
 
-      const hasSub = kid.is_substitute || kid.original_instructor || kid.substitute_instructor;
-      const instructorDisplay = cleanInstructorLabel(kid.instructor_name || '');
-      const originalSubLabel = cleanInstructorLabel(kid.original_instructor || '');
+      const subMeta = getSubMeta(kid);
+      const instructorDisplay = cleanInstructorLabel(subMeta.subName || kid.instructor_name || '');
 
       // Swimmer (with badges + flags)
       const tdName = document.createElement('td');
@@ -3335,6 +5098,13 @@
       const nameLine = document.createElement('div');
       nameLine.className = 'level rosterCell';
       nameLine.textContent = kid.swimmer_name || '—';
+
+      if (kid.attendance_auto_absent) {
+        const autoChip = document.createElement('span');
+        autoChip.className = 'chip auto-absent';
+        autoChip.textContent = 'auto-absent';
+        nameLine.appendChild(autoChip);
+      }
 
       if(kid.is_addon){
         const b = document.createElement('span');
@@ -3361,7 +5131,9 @@
             title: 'Remove add-on swimmer',
             message: `Type DELETE and enter initials to remove ${kid.swimmer_name}.`,
             requireDelete: true,
-            requireInitials: true
+            requireInitials: true,
+            impactSummary: 'This removes the add-on swimmer from the roster.',
+            requireConfirmCheckbox: true
           });
           if (!confirmed.ok) return;
           try{
@@ -3417,10 +5189,10 @@
       instLine.textContent = instructorDisplay;
       instStack.appendChild(instLine);
 
-      if (hasSub) {
+      if (subMeta.hasSub) {
         const subLine = document.createElement('div');
-        if (originalSubLabel && originalSubLabel !== '—') {
-          subLine.innerHTML = `<span class="chip amber">SUB for ${escapeHtml(originalSubLabel)}</span>`;
+        if (subMeta.originalName) {
+          subLine.innerHTML = `<span class="chip amber">SUB for ${escapeHtml(subMeta.originalName)}</span>`;
         } else {
           subLine.innerHTML = `<span class="chip amber">SUB</span>`;
         }
@@ -3480,10 +5252,13 @@
 
     if (view === 'roster') {
       el('panelRoster').classList.remove('hidden');
+      setCategoryTheme('instructors');
     } else if (view === 'lifeguard') {
       showLifeguardPanel();
+      setCategoryTheme('guards');
     } else if (view === 'announcements') {
       el('panelAnnouncements').classList.remove('hidden');
+      setCategoryTheme('guards');
     } else if (view === 'virtualDesk') {
       // Check PIN authentication
       const pinAuth = sessionStorage.getItem('manager_pin_auth');
@@ -3518,11 +5293,13 @@
     el('panelAdmin').classList.add('hidden');
     el('panelLifeguard').classList.add('hidden');
     el('panelGuardTasks').classList.add('hidden');
+    setCategoryTheme(categoryForManagerSection(managerSection));
     applyRoleUI();
+    setManagerSection(managerSection);
+    toggleManagerSidebar(false);
 
     // Load virtual desk stats and swimmer details
-    loadAdminStats();
-    loadSwimmerDetails();
+    loadManagerDashboard();
   }
 
   function showAdminPanel() {
@@ -3533,6 +5310,7 @@
     el('panelAdmin').classList.remove('hidden');
     el('panelLifeguard').classList.add('hidden');
     el('panelGuardTasks').classList.add('hidden');
+    setCategoryTheme('system');
 
     // Load locations and staff
     loadAdminLocations();
@@ -4391,8 +6169,8 @@
   }
 
   // Event handlers for swimmer details view
-  el('swimmerSortBy').addEventListener('change', loadSwimmerDetails);
-  el('refreshSwimmers').addEventListener('click', loadSwimmerDetails);
+  el('swimmerSortBy')?.addEventListener('change', loadSwimmerDetails);
+  el('refreshSwimmers')?.addEventListener('click', loadSwimmerDetails);
 
   // Show attendance history modal
   window.showAttendanceHistory = function(swimmerIndex) {
@@ -4500,12 +6278,16 @@
         `Warnings: ${warningText}`
       ];
 
-      let locationOptions = null;
       const matchedLocation = detectedLocation
         ? allLocations.find(loc => loc.name.toLowerCase() === detectedLocation.toLowerCase())
         : null;
-      if (!matchedLocation) {
-        locationOptions = (allLocations || []).map(loc => ({ value: String(loc.id), label: loc.name }));
+      const forceLocationPick = reportType === 'drop_list' || !matchedLocation;
+      let locationOptions = null;
+      if (forceLocationPick) {
+        locationOptions = [
+          { value: '', label: 'Select location…' },
+          ...(allLocations || []).map(loc => ({ value: String(loc.id), label: loc.name }))
+        ];
       }
 
       const confirmResult = await openProtectedAction({
@@ -4514,11 +6296,12 @@
         requireDelete: false,
         requireInitials: true,
         requirePin: true,
-        locationOptions
+        locationOptions,
+        locationSelected: matchedLocation?.id || null
       });
       if (!confirmResult.ok) return;
 
-      const selectedLocationId = locationOptions
+      const selectedLocationId = forceLocationPick
         ? confirmResult.location_value
         : matchedLocation.id;
 
@@ -4868,26 +6651,199 @@
     }
   });
 
-  // Admin navigation cards
-  el('adminNavAbsence').addEventListener('click', () => {
-    alert('Absence Tracker\n\nComing in Session 9!\n\nThis will track multi-week absences and help you follow up with families.');
+  // Manager navigation + tabs
+  ['managerNavClient', 'managerNavBilling', 'managerNavInstructors', 'managerNavGuards', 'managerNavSystem'].forEach((id) => {
+    const btn = el(id);
+    if (btn) {
+      btn.addEventListener('click', () => {
+        if (btn.classList.contains('disabled')) return;
+        const section = btn.dataset.managerSection;
+        if (!section) return;
+        setManagerSection(section);
+      });
+    }
   });
 
-  el('adminNavTrials').addEventListener('click', () => {
-    loadTrialReport();
-    showModal('trialFollowupModal', true);
+  const clientTabAttendance = el('clientTabAttendance');
+  if (clientTabAttendance) {
+    clientTabAttendance.addEventListener('click', () => {
+      clientTabAttendance.classList.add('active');
+      el('clientTabAbsence')?.classList.remove('active');
+      el('clientTabHistory')?.classList.remove('active');
+      el('clientAttendanceReport')?.classList.remove('hidden');
+      el('clientAbsenceTracker')?.classList.add('hidden');
+      el('clientAttendanceHistory')?.classList.add('hidden');
+    });
+  }
+  const clientTabAbsence = el('clientTabAbsence');
+  if (clientTabAbsence) {
+    clientTabAbsence.addEventListener('click', () => {
+      clientTabAbsence.classList.add('active');
+      el('clientTabAttendance')?.classList.remove('active');
+      el('clientTabHistory')?.classList.remove('active');
+      el('clientAttendanceReport')?.classList.add('hidden');
+      el('clientAbsenceTracker')?.classList.remove('hidden');
+      el('clientAttendanceHistory')?.classList.add('hidden');
+      loadAbsenceTracker();
+    });
+  }
+  const clientTabHistory = el('clientTabHistory');
+  if (clientTabHistory) {
+    clientTabHistory.addEventListener('click', () => {
+      clientTabHistory.classList.add('active');
+      el('clientTabAttendance')?.classList.remove('active');
+      el('clientTabAbsence')?.classList.remove('active');
+      el('clientAttendanceReport')?.classList.add('hidden');
+      el('clientAbsenceTracker')?.classList.add('hidden');
+      el('clientAttendanceHistory')?.classList.remove('hidden');
+      loadAttendanceHistory();
+    });
+  }
+
+  el('trainerTabRetention')?.addEventListener('click', () => setTrainerTab('retention'));
+  el('trainerTabDropImpact')?.addEventListener('click', () => setTrainerTab('drop'));
+  el('trainerTabAttendanceImpact')?.addEventListener('click', () => setTrainerTab('attendance'));
+  el('instructorTrendsToggle')?.addEventListener('click', () => {
+    managerSectionFilters.instructors.showTrends = !managerSectionFilters.instructors.showTrends;
+    el('instructorTrendsToggle').textContent = managerSectionFilters.instructors.showTrends ? 'Hide trends' : 'Show trends';
+    renderRetentionPanel();
   });
 
-  el('adminNavGuards').addEventListener('click', () => {
-    showGuardTasksPanel('virtualDesk');
+  el('openGuardTasksBtn')?.addEventListener('click', () => showGuardTasksPanel('virtualDesk'));
+
+  el('clientFiltersToggle')?.addEventListener('click', () => {
+    el('clientFiltersAdvanced')?.classList.toggle('hidden');
+  });
+  el('clientTrendsToggle')?.addEventListener('click', () => {
+    managerSectionFilters.client.showTrends = !managerSectionFilters.client.showTrends;
+    el('clientTrendsToggle').textContent = managerSectionFilters.client.showTrends ? 'Hide trends' : 'Show trends';
+    loadAttendanceSummary();
+  });
+  el('clientRangeStart')?.addEventListener('change', () => {
+    managerSectionFilters.client.start = el('clientRangeStart').value;
+    loadAttendanceSummary();
+    loadAbsenceTracker();
+    loadAttendanceHistory();
+  });
+  el('clientRangeEnd')?.addEventListener('change', () => {
+    managerSectionFilters.client.end = el('clientRangeEnd').value;
+    loadAttendanceSummary();
+    loadAbsenceTracker();
+    loadAttendanceHistory();
+  });
+  el('clientInstructorFilter')?.addEventListener('change', () => {
+    managerSectionFilters.client.instructor = el('clientInstructorFilter').value;
+    loadAbsenceTracker();
+  });
+  el('clientStatusFilter')?.addEventListener('change', () => {
+    managerSectionFilters.client.status = el('clientStatusFilter').value;
+    loadAbsenceTracker();
   });
 
-  el('adminNavHistory').addEventListener('click', () => {
-    openAttendanceReport();
+  el('clientDropApply')?.addEventListener('click', () => {
+    managerSectionFilters.client.dropRange = el('clientDropRange').value;
+    managerSectionFilters.client.dropStart = el('clientDropStart').value;
+    managerSectionFilters.client.dropEnd = el('clientDropEnd').value;
+    loadClientDropList();
+  });
+  el('clientDropRange')?.addEventListener('change', () => {
+    const isCustom = el('clientDropRange').value === 'custom';
+    el('clientDropStart').classList.toggle('hidden', !isCustom);
+    el('clientDropEnd').classList.toggle('hidden', !isCustom);
   });
 
-  el('adminNavObservations').addEventListener('click', () => {
-    openInstructorReport();
+  el('bundleSaveBtn')?.addEventListener('click', async () => {
+    const payload = {
+      location_id: Number(el('bundleLocation')?.value || currentLocation?.id || 1),
+      customer_name: el('bundleCustomer')?.value.trim(),
+      phone: el('bundlePhone')?.value.trim(),
+      notes: el('bundleNotes')?.value.trim(),
+      start_date: el('bundleStartDate')?.value,
+      duration_weeks: Number(el('bundleDuration')?.value || 12),
+      monthly_price: Number(el('bundleMonthlyPrice')?.value || 0)
+    };
+    const preview = calculateBundlePreview({
+      durationWeeks: payload.duration_weeks,
+      monthlyPrice: payload.monthly_price,
+      startDate: payload.start_date
+    });
+    if (!payload.customer_name) {
+      alert('Customer name is required.');
+      return;
+    }
+    if (!preview) {
+      alert('Please enter a valid monthly price and duration (12/24/52 weeks).');
+      return;
+    }
+    const confirmed = await openProtectedAction({
+      title: bundleEditingId ? 'Update bundle' : 'Save bundle',
+      message: `Discounted monthly: $${preview.discountedMonthly.toFixed(2)}\nTotal billed: $${preview.totalBilled.toFixed(2)}\nHouse credit: $${preview.houseCredit.toFixed(2)}\nExpires: ${formatDateUS(preview.expirationDate)}`,
+      requireInitials: true,
+      requirePin: true
+    });
+    if (!confirmed.ok) return;
+    if (bundleEditingId) {
+      await api(`/api/bundles/${bundleEditingId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...payload, pin: confirmed.pin })
+      });
+    } else {
+      await api('/api/bundles', {
+        method: 'POST',
+        body: JSON.stringify({ ...payload, pin: confirmed.pin })
+      });
+    }
+    resetBundleForm();
+    loadBundles();
+  });
+
+  el('bundleResetBtn')?.addEventListener('click', () => resetBundleForm());
+
+  el('bundleExportBtn')?.addEventListener('click', async () => {
+    openExportModal({
+      title: 'Export bundles',
+      onExport: (scope) => exportBundles(scope)
+    });
+  });
+  el('bundleLocation')?.addEventListener('change', () => {
+    loadBundles();
+  });
+
+  el('deleteLatestDropListBtn')?.addEventListener('click', () => deleteLatestReport('drop_list'));
+
+  el('sidebarToggleBtn')?.addEventListener('click', () => toggleManagerSidebar(false));
+  window.addEventListener('scroll', handleManagerScroll);
+
+  el('openShortcutsBtn')?.addEventListener('click', () => showModal('shortcutsModal', true));
+  el('shortcutsClose')?.addEventListener('click', () => showModal('shortcutsModal', false));
+
+  el('globalSearchBtn')?.addEventListener('click', () => openGlobalSearch());
+  el('globalSearchClose')?.addEventListener('click', () => showModal('globalSearchModal', false));
+  el('globalSearchInput')?.addEventListener('input', (e) => runGlobalSearch(e.target.value));
+  el('globalSearchModal')?.addEventListener('click', (e) => {
+    if (e.target === el('globalSearchModal')) showModal('globalSearchModal', false);
+  });
+
+  el('previewClose')?.addEventListener('click', closePreviewDrawer);
+  el('previewBackdrop')?.addEventListener('click', closePreviewDrawer);
+  el('previewJumpBtn')?.addEventListener('click', () => {
+    if (previewTarget && typeof previewTarget.jump === 'function') {
+      previewTarget.jump();
+    }
+    closePreviewDrawer();
+  });
+
+  el('exportModalCancel')?.addEventListener('click', () => showModal('exportModal', false));
+  el('exportModalConfirm')?.addEventListener('click', () => {
+    const scope = el('exportScopeSelect').value;
+    if (!scope) {
+      alert('Please choose an export scope.');
+      return;
+    }
+    if (exportContext?.onExport) {
+      exportContext.onExport(scope);
+    }
+    showModal('exportModal', false);
   });
 
   el('guardTasksBack').addEventListener('click', () => {
@@ -4994,7 +6950,7 @@
   });
 
   // Virtual Desk Export
-  el('exportVirtualDeskBtn').addEventListener('click', async () => {
+  el('exportVirtualDeskBtn')?.addEventListener('click', async () => {
     if (!currentLocation || !activeDateISO) {
       alert('Please select a location and date first.');
       return;
@@ -5007,8 +6963,8 @@
   });
 
   // Open Attendance Report Modal
-  el('openAttendanceReportBtn').addEventListener('click', openAttendanceReport);
-  el('openInstructorReportBtn').addEventListener('click', openInstructorReport);
+  el('openAttendanceReportBtn')?.addEventListener('click', openAttendanceReport);
+  el('openInstructorReportBtn')?.addEventListener('click', openInstructorReport);
 
   function openAttendanceReport() {
     if (managerDateRange?.start && managerDateRange?.end) {
@@ -5067,17 +7023,17 @@
     if (el('managerRangeEnd')) el('managerRangeEnd').value = range.end;
   }
 
-  el('managerRangeWeek').addEventListener('click', () => setManagerRangeInputsOnly(getWeekRange()));
-  el('managerRangeNextTwo').addEventListener('click', () => {
+  el('managerRangeWeek')?.addEventListener('click', () => setManagerRangeInputsOnly(getWeekRange()));
+  el('managerRangeNextTwo')?.addEventListener('click', () => {
     const start = new Date();
     const end = new Date();
     end.setDate(start.getDate() + 13);
     setManagerRangeInputsOnly({ start: toISODate(start), end: toISODate(end) });
   });
-  el('managerRangeMonth').addEventListener('click', () => setManagerRangeInputsOnly(getMonthRange()));
-  el('managerRangeSave').addEventListener('click', async () => {
-    const start = el('managerRangeStart').value;
-    const end = el('managerRangeEnd').value;
+  el('managerRangeMonth')?.addEventListener('click', () => setManagerRangeInputsOnly(getMonthRange()));
+  el('managerRangeSave')?.addEventListener('click', async () => {
+    const start = el('managerRangeStart')?.value;
+    const end = el('managerRangeEnd')?.value;
     if (!start || !end) {
       alert('Please select both start and end dates.');
       return;
@@ -5094,11 +7050,11 @@
     }
   });
 
-  el('managerTabOverviewBtn').addEventListener('click', () => setManagerTab('overview'));
-  el('managerTabReportsBtn').addEventListener('click', () => setManagerTab('reports'));
+  el('managerTabOverviewBtn')?.addEventListener('click', () => setManagerTab('overview'));
+  el('managerTabReportsBtn')?.addEventListener('click', () => setManagerTab('reports'));
 
   // Attendance Report Handlers
-  el('attendanceReportGenerate').addEventListener('click', async () => {
+  el('attendanceReportGenerate')?.addEventListener('click', async () => {
     const startDate = el('attendanceReportStartDate').value;
     const endDate = el('attendanceReportEndDate').value;
     if (!startDate || !endDate) {
@@ -5249,7 +7205,7 @@
   el('attendanceReportModal').addEventListener('click', (e) => { if(e.target === el('attendanceReportModal')) showModal('attendanceReportModal', false); });
 
   // Instructor Report Handlers
-  el('instructorReportGenerate').addEventListener('click', async () => {
+  el('instructorReportGenerate')?.addEventListener('click', async () => {
     const startDate = el('instructorReportStartDate').value;
     const endDate = el('instructorReportEndDate').value;
     if (!startDate || !endDate) {
@@ -5364,7 +7320,7 @@
   el('instructorReportClose').addEventListener('click', () => showModal('instructorReportModal', false));
   el('instructorReportModal').addEventListener('click', (e) => { if(e.target === el('instructorReportModal')) showModal('instructorReportModal', false); });
 
-  el('adminNavClearRoster').addEventListener('click', async () => {
+  el('adminNavClearRoster')?.addEventListener('click', async () => {
     if (blockIfReadOnly('Clear roster')) return;
     const locationName = currentLocation?.name || 'Unknown';
     const confirmed = await openProtectedAction({
@@ -5394,7 +7350,7 @@
     }
   });
 
-  async function runAdminClearAll({ startDate, endDate, label }) {
+  async function runAdminClearAll({ startDate, endDate, label, title = 'Clear all rosters' }) {
     if (blockIfReadOnly('Clear rosters')) return;
     if ((startDate && !endDate) || (!startDate && endDate)) {
       alert('Please set both a start and end date to delete a window.');
@@ -5405,10 +7361,13 @@
       ? `Date window: ${label || `${startDate} → ${endDate}`}\n\n`
       : 'Date window: ALL DATES\n\n';
     const confirmed = await openProtectedAction({
-      title: 'Clear all rosters',
+      title,
       message: `Type DELETE and enter initials to clear all rosters.\n\n${windowLabel}`,
+      impactSummary: 'This wipes every uploaded roster across all locations.',
       requireDelete: true,
-      requireInitials: true
+      requireInitials: true,
+      requirePin: true,
+      requireConfirmCheckbox: true
     });
     if (!confirmed.ok) return;
 
@@ -5418,7 +7377,8 @@
         body: JSON.stringify({
           start_date: startDate || null,
           end_date: endDate || null,
-          initials: confirmed.initials
+          initials: confirmed.initials,
+          pin: confirmed.pin
         })
       });
 
@@ -5452,8 +7412,12 @@
     });
   }
 
-  el('adminNavClearAllRosters').addEventListener('click', async () => {
+  el('adminNavClearAllRosters')?.addEventListener('click', async () => {
     await runAdminClearAll({ startDate: null, endDate: null, label: 'ALL DATES' });
+  });
+
+  el('masterRosterResetBtn')?.addEventListener('click', async () => {
+    await runAdminClearAll({ startDate: null, endDate: null, label: 'ALL DATES', title: 'MASTER ROSTER RESET' });
   });
 
   async function handleReadOnlyToggle() {
@@ -5496,6 +7460,43 @@
     syncDeviceUI();
     showModal('settingsModal', false);
     loadRoster();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (el('previewDrawer')?.classList.contains('open')) {
+        closePreviewDrawer();
+      }
+      if (el('globalSearchModal')?.style.display === 'flex') {
+        showModal('globalSearchModal', false);
+      }
+      return;
+    }
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      toggleManagerSidebar(!managerSidebarCollapsed);
+    }
+    if (e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      openGlobalSearch();
+    }
+    if (e.key.toLowerCase() === 'e') {
+      e.preventDefault();
+      openExportModal({
+        title: 'Export bundles',
+        onExport: (scope) => exportBundles(scope)
+      });
+    }
+    if (e.key === '1') {
+      e.preventDefault();
+      setManagerSection('client');
+    }
+    if (e.key === '2') {
+      e.preventDefault();
+      setManagerSection('billing');
+    }
   });
 
   el('importBtn').addEventListener('click', async () => {
@@ -5652,7 +7653,9 @@
       title: 'Mark all present',
       message: 'Type DELETE and enter initials to mark all swimmers present for this block.',
       requireDelete: true,
-      requireInitials: true
+      requireInitials: true,
+      impactSummary: `This will mark every swimmer as Here for ${fmtTime(currentBlock)}.`,
+      requireConfirmCheckbox: true
     });
     if (!confirmed.ok) return;
     await api('/api/attendance/bulk', {
@@ -5677,7 +7680,9 @@
       title: 'Clear attendance',
       message: 'Type DELETE and enter initials to clear all attendance for this block.',
       requireDelete: true,
-      requireInitials: true
+      requireInitials: true,
+      impactSummary: `This will clear attendance for every swimmer in ${fmtTime(currentBlock)}.`,
+      requireConfirmCheckbox: true
     });
     if (!confirmed.ok) return;
     await api('/api/attendance/bulk', {

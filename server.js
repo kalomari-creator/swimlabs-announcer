@@ -141,6 +141,7 @@ function ensureSchema() {
 
       attendance INTEGER DEFAULT NULL,
       attendance_at TEXT,
+      attendance_auto_absent INTEGER DEFAULT 0,
 
       is_addon INTEGER DEFAULT 0,
 
@@ -215,6 +216,43 @@ function ensureSchema() {
   `);
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS absence_followups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id INTEGER NOT NULL,
+      swimmer_name TEXT NOT NULL,
+      date TEXT NOT NULL,
+      start_time TEXT,
+      status TEXT DEFAULT 'new',
+      notes TEXT,
+      contacted_at TEXT,
+      rescheduled_at TEXT,
+      completed_at TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      UNIQUE(location_id, swimmer_name, date, start_time)
+    );
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bundle_tracker (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id INTEGER NOT NULL,
+      customer_name TEXT NOT NULL,
+      phone TEXT,
+      notes TEXT,
+      start_date TEXT,
+      duration_weeks INTEGER,
+      monthly_price REAL,
+      discounted_monthly REAL,
+      total_billed REAL,
+      house_credit REAL,
+      expiration_date TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+  `);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS guard_tasks (
       location_id INTEGER NOT NULL,
       task_date TEXT NOT NULL,
@@ -276,6 +314,7 @@ function ensureSchema() {
   addIfMissing("age_text", `ALTER TABLE roster ADD COLUMN age_text TEXT;`);
   addIfMissing("attendance", `ALTER TABLE roster ADD COLUMN attendance INTEGER DEFAULT NULL;`);
   addIfMissing("attendance_at", `ALTER TABLE roster ADD COLUMN attendance_at TEXT;`);
+  addIfMissing("attendance_auto_absent", `ALTER TABLE roster ADD COLUMN attendance_auto_absent INTEGER DEFAULT 0;`);
   addIfMissing("is_addon", `ALTER TABLE roster ADD COLUMN is_addon INTEGER DEFAULT 0;`);
 
   addIfMissing("flag_new", `ALTER TABLE roster ADD COLUMN flag_new INTEGER DEFAULT 0;`);
@@ -545,25 +584,98 @@ function parseHTMLTable(html) {
 }
 
 function parseRetentionReport(html) {
-  const { headers, rows } = parseHTMLTable(html);
+  const $ = cheerio.load(html || "");
   const warnings = [];
-  if (!rows.length) warnings.push("No retention rows detected.");
-  const headerMap = headers.map((h) => h.toLowerCase());
-  const instructorIdx = headerMap.findIndex((h) => h.includes("instructor") || h.includes("coach"));
-  const percentIdx = headerMap.findIndex((h) => h.includes("%") || h.includes("retention"));
-  const countIdx = headerMap.findIndex((h) => h.includes("swimmer") || h.includes("count"));
-  const instructors = rows.map((cols) => {
-    const instructor = cols[instructorIdx >= 0 ? instructorIdx : 0] || "";
-    const percentRaw = cols[percentIdx >= 0 ? percentIdx : 1] || "";
-    const countRaw = cols[countIdx >= 0 ? countIdx : 2] || "";
-    const percentMatch = String(percentRaw).match(/-?\d+(\.\d+)?/);
-    const countMatch = String(countRaw).match(/-?\d+(\.\d+)?/);
-    return {
-      instructor: instructor.trim(),
-      retention_percent: percentMatch ? parseFloat(percentMatch[0]) : null,
-      swimmer_count: countMatch ? parseFloat(countMatch[0]) : null
-    };
-  }).filter((row) => row.instructor);
+  const instructors = [];
+  const tables = $("table").toArray();
+  if (!tables.length) warnings.push("No retention tables detected.");
+
+  const tableSet = new Set(tables);
+  const nodes = $("body").find("*").toArray();
+
+  const extractPercent = (table) => {
+    const cell = $(table).find("tr").first().find("th,td").eq(1);
+    const text = cell.text().trim();
+    const match = text.match(/-?\d+(\.\d+)?/);
+    return match ? parseFloat(match[0]) : null;
+  };
+
+  const extractSwimmerCount = (tableList) => {
+    for (const table of tableList) {
+      const rows = $(table).find("tr");
+      for (let i = 0; i < rows.length; i += 1) {
+        const cells = $(rows[i]).find("th,td").toArray();
+        for (let j = 0; j < cells.length; j += 1) {
+          const text = $(cells[j]).text().trim().toLowerCase();
+          if (text.includes("swimmer") || text.includes("student") || text.includes("count")) {
+            const nextCell = cells[j + 1];
+            if (nextCell) {
+              const numMatch = $(nextCell).text().match(/-?\d+(\.\d+)?/);
+              if (numMatch) return parseFloat(numMatch[0]);
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  let i = 0;
+  while (i < nodes.length) {
+    const node = nodes[i];
+    if (tableSet.has(node)) {
+      i += 1;
+      continue;
+    }
+    const text = $(node).text().replace(/\s+/g, " ").trim();
+    const isCandidate = text.length > 1 && text.length < 60 && /[a-z]/i.test(text);
+    if (!isCandidate) {
+      i += 1;
+      continue;
+    }
+    const tableList = [];
+    let j = i + 1;
+    while (j < nodes.length && tableList.length < 4) {
+      if (tableSet.has(nodes[j])) tableList.push(nodes[j]);
+      j += 1;
+    }
+    if (tableList.length === 4) {
+      const retentionPercent = extractPercent(tableList[1]);
+      const swimmerCount = extractSwimmerCount(tableList);
+      instructors.push({
+        instructor: text,
+        retention_percent: retentionPercent,
+        swimmer_count: swimmerCount
+      });
+      i = j;
+      continue;
+    }
+    i += 1;
+  }
+
+  if (!instructors.length) {
+    const { headers, rows } = parseHTMLTable(html);
+    if (!rows.length) warnings.push("No retention rows detected.");
+    const headerMap = headers.map((h) => h.toLowerCase());
+    const instructorIdx = headerMap.findIndex((h) => h.includes("instructor") || h.includes("coach"));
+    const percentIdx = headerMap.findIndex((h) => h.includes("%") || h.includes("retention"));
+    const countIdx = headerMap.findIndex((h) => h.includes("swimmer") || h.includes("count"));
+    rows.forEach((cols) => {
+      const instructor = cols[instructorIdx >= 0 ? instructorIdx : 0] || "";
+      const percentRaw = cols[percentIdx >= 0 ? percentIdx : 1] || "";
+      const countRaw = cols[countIdx >= 0 ? countIdx : 2] || "";
+      const percentMatch = String(percentRaw).match(/-?\d+(\.\d+)?/);
+      const countMatch = String(countRaw).match(/-?\d+(\.\d+)?/);
+      if (instructor.trim()) {
+        instructors.push({
+          instructor: instructor.trim(),
+          retention_percent: percentMatch ? parseFloat(percentMatch[0]) : null,
+          swimmer_count: countMatch ? parseFloat(countMatch[0]) : null
+        });
+      }
+    });
+  }
+
   if (!instructors.length) warnings.push("No instructors detected in retention report.");
   return { instructors, warnings };
 }
@@ -586,6 +698,37 @@ function parseDropListReport(html) {
   });
   if (!entries.some((e) => e.drop_date)) warnings.push("No drop dates detected in drop list.");
   return { headers, entries, warnings };
+}
+
+function calculateBundle({ durationWeeks, monthlyPrice, startDate }) {
+  const weeks = Number(durationWeeks || 0);
+  const monthly = Number(monthlyPrice || 0);
+  if (![12, 24, 52].includes(weeks)) {
+    return { ok: false, error: "Invalid duration weeks" };
+  }
+  if (!monthly || Number.isNaN(monthly) || monthly <= 0) {
+    return { ok: false, error: "Invalid monthly price" };
+  }
+  const months = weeks / 4;
+  const discountRate = weeks === 12 ? 0.15 : 0.2;
+  const discountedMonthly = monthly * (1 - discountRate);
+  const totalBilled = discountedMonthly * months;
+  const baseTotal = monthly * months;
+  const discountAmount = baseTotal - totalBilled;
+  const houseCredit = discountAmount + (weeks === 52 ? 50 : 0);
+  let expirationDate = null;
+  if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate))) {
+    const start = new Date(`${startDate}T00:00:00`);
+    start.setDate(start.getDate() + weeks * 7);
+    expirationDate = start.toISOString().split("T")[0];
+  }
+  return {
+    ok: true,
+    discountedMonthly,
+    totalBilled,
+    houseCredit,
+    expirationDate
+  };
 }
 
 
@@ -704,6 +847,25 @@ function parseRosterDateColumns($, $table, range, fallbackTime) {
   return [];
 }
 
+function hasAutoAbsentIndicator($cell, $) {
+  if (!$cell || !$cell.length) return false;
+  const text = $cell.text().toLowerCase();
+  if (text.includes("ø") || text.includes("⌀") || text.includes("⊘")) return true;
+
+  let hasCancel = false;
+  $cell.find("img").each((_, img) => {
+    const src = String($(img).attr("src") || "").toLowerCase();
+    const alt = String($(img).attr("alt") || "").toLowerCase();
+    const title = String($(img).attr("title") || "").toLowerCase();
+    const filename = src.split("/").pop() || "";
+    const blob = `${src} ${alt} ${title} ${filename}`;
+    if (blob.includes("cancel")) {
+      hasCancel = true;
+    }
+  });
+  return hasCancel;
+}
+
 function isAbsentAttendanceCell($cell, $) {
   if (!$cell || !$cell.length) return false;
 
@@ -716,6 +878,8 @@ function isAbsentAttendanceCell($cell, $) {
 
   const classStrike = $cell.find('[class*="absent"], [class*="no-show"], [class*="noshow"], [class*="strike"]').length > 0;
   if (classStrike) return true;
+
+  if (hasAutoAbsentIndicator($cell, $)) return true;
 
   let isAbsent = false;
   $cell.find("img").each((_, img) => {
@@ -1164,14 +1328,14 @@ app.post("/api/import-today", async (req, res) => {
       INSERT INTO roster (
         date, start_time, swimmer_name,
         instructor_name, zone, program, age_text,
-        attendance, attendance_at,
+        attendance, attendance_at, attendance_auto_absent,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
         created_at, updated_at
       ) VALUES (
         ?, ?, ?,
         ?, ?, ?, ?,
-        NULL, NULL,
+        NULL, NULL, 0,
         0,
         ?, ?, ?, ?, ?,
         ?, ?
@@ -1181,6 +1345,7 @@ app.post("/api/import-today", async (req, res) => {
         zone=excluded.zone,
         program=excluded.program,
         age_text=excluded.age_text,
+        attendance_auto_absent=excluded.attendance_auto_absent,
         flag_new=excluded.flag_new,
         flag_makeup=excluded.flag_makeup,
         flag_policy=excluded.flag_policy,
@@ -1243,6 +1408,7 @@ app.get("/api/blocks/:start_time", (req, res) => {
       program,
       age_text,
       attendance,
+      attendance_auto_absent,
       is_addon,
       zone_overridden,
       flag_new, flag_makeup, flag_policy, flag_owes, flag_trial
@@ -1423,7 +1589,7 @@ app.post("/api/add-swimmer", (req, res) => {
       INSERT INTO roster (
         date, start_time, swimmer_name,
         instructor_name, zone, program, age_text,
-        attendance, attendance_at,
+        attendance, attendance_at, attendance_auto_absent,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
         location_id,
@@ -1432,7 +1598,7 @@ app.post("/api/add-swimmer", (req, res) => {
       ) VALUES (
         ?, ?, ?,
         ?, ?, ?, ?,
-        NULL, NULL,
+        NULL, NULL, 0,
         1,
         0,0,0,0,0,
         ?,
@@ -1572,7 +1738,7 @@ app.get("/api/export-attendance", (req, res) => {
     const rows = db.prepare(`
       SELECT
         date, start_time, swimmer_name, instructor_name, zone, program, age_text,
-        attendance, attendance_at,
+        attendance, attendance_at, attendance_auto_absent,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
         zone_overridden, zone_override_at, zone_override_by
@@ -1585,7 +1751,7 @@ app.get("/api/export-attendance", (req, res) => {
 
     const header = [
       "date","start_time","start_time_12h","swimmer_name","instructor_name","zone","program","age_text",
-      "attendance","attendance_at",
+      "attendance","attendance_at","attendance_auto_absent",
       "is_addon",
       "flag_new","flag_makeup","flag_policy","flag_owes","flag_trial",
       "zone_overridden","zone_override_at","zone_override_by"
@@ -1604,6 +1770,7 @@ app.get("/api/export-attendance", (req, res) => {
         r.age_text || "",
         toAtt(r.attendance),
         r.attendance_at || "",
+        r.attendance_auto_absent ? "1" : "0",
         r.is_addon ? "1" : "0",
         r.flag_new ? "1" : "0",
         r.flag_makeup ? "1" : "0",
@@ -1644,7 +1811,7 @@ function importRosterRows({ date, locationId, rows, source }) {
     INSERT INTO roster (
       date, start_time, swimmer_name,
       instructor_name, substitute_instructor, is_substitute, original_instructor, zone, program, age_text,
-      attendance, attendance_at,
+      attendance, attendance_at, attendance_auto_absent,
       is_addon,
       flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
       balance_amount,
@@ -1654,7 +1821,7 @@ function importRosterRows({ date, locationId, rows, source }) {
     ) VALUES (
       ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?,
-      ?, ?,
+      ?, ?, ?,
       ?,
       ?, ?, ?, ?, ?,
       ?,
@@ -1672,6 +1839,7 @@ function importRosterRows({ date, locationId, rows, source }) {
       age_text=excluded.age_text,
       attendance=excluded.attendance,
       attendance_at=excluded.attendance_at,
+      attendance_auto_absent=excluded.attendance_auto_absent,
       is_addon=excluded.is_addon,
       flag_new=excluded.flag_new,
       flag_makeup=excluded.flag_makeup,
@@ -1704,6 +1872,7 @@ function importRosterRows({ date, locationId, rows, source }) {
         r.age_text || null,
         (r.attendance === 0 || r.attendance === 1) ? r.attendance : null,
         r.attendance_at || null,
+        r.attendance_auto_absent ? 1 : 0,
         r.is_addon ? 1 : 0,
         r.flag_new ? 1 : 0,
         r.flag_makeup ? 1 : 0,
@@ -1774,7 +1943,7 @@ app.post("/api/export-server", (req, res) => {
     const rows = db.prepare(`
       SELECT
         date, start_time, swimmer_name, instructor_name, substitute_instructor, is_substitute, original_instructor, zone, program, age_text,
-        attendance, attendance_at,
+        attendance, attendance_at, attendance_auto_absent,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
         balance_amount,
@@ -2025,6 +2194,7 @@ function parseHTMLRoster(html) {
         const rowCells = $row.find('td');
         dateColumns.forEach((col) => {
           const cell = rowCells.eq(col.index);
+          const autoAbsent = hasAutoAbsentIndicator(cell, $);
           const attendance = isAbsentAttendanceCell(cell, $) ? 0 : null;
           if (col.date) datesFound.add(col.date);
 
@@ -2040,6 +2210,7 @@ function parseHTMLRoster(html) {
             program: programText,
             zone: zone,
             attendance: attendance,
+            attendance_auto_absent: autoAbsent ? 1 : 0,
             balance_amount: balanceAmount,
             ...flags
           });
@@ -2048,6 +2219,7 @@ function parseHTMLRoster(html) {
         // Fallback: single-date upload with absence detection on attendance cells
         let attendance = null;
         const attendanceCell = $row.find('td.date-time, td.cell-bordered');
+        const autoAbsent = hasAutoAbsentIndicator(attendanceCell, $);
         if (isAbsentAttendanceCell(attendanceCell, $)) {
           attendance = 0;
         }
@@ -2064,6 +2236,7 @@ function parseHTMLRoster(html) {
           program: programText,
           zone: zone,
           attendance: attendance,
+          attendance_auto_absent: autoAbsent ? 1 : 0,
           balance_amount: balanceAmount,
           ...flags
         });
@@ -2235,14 +2408,14 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       INSERT INTO roster (
         date, start_time, swimmer_name,
         instructor_name, substitute_instructor, is_substitute, original_instructor, zone, program, age_text,
-        attendance, attendance_at,
+        attendance, attendance_at, attendance_auto_absent,
         is_addon,
         flag_new, flag_makeup, flag_policy, flag_owes, flag_trial,
         balance_amount,
         location_id,
         created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
         instructor_name=excluded.instructor_name,
@@ -2254,6 +2427,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
         age_text=excluded.age_text,
         attendance=excluded.attendance,
         attendance_at=excluded.attendance_at,
+        attendance_auto_absent=excluded.attendance_auto_absent,
         is_addon=excluded.is_addon,
         flag_new=excluded.flag_new,
         flag_makeup=excluded.flag_makeup,
@@ -2277,6 +2451,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
           r.program || null,
           r.age_text || null,
           r.attendance !== undefined ? r.attendance : null,
+          r.attendance_auto_absent ? 1 : 0,
           r.flag_new || 0, r.flag_makeup || 0, r.flag_policy || 0, r.flag_owes || 0, r.flag_trial || 0,
           r.balance_amount !== undefined ? r.balance_amount : null,
           locId,
@@ -2378,15 +2553,21 @@ app.post("/api/manager-reports/upload", upload.single("report"), (req, res) => {
     const html = req.file.buffer.toString("utf8");
     const locationName = parseLocationFromHTML(html);
     let location = null;
-    if (locationName) {
+    const locId = Number(req.body?.location_id || 0);
+    if (reportType !== "drop_list" && locationName) {
       location = resolveLocationByName(locationName);
     }
     if (!location) {
-      const locId = Number(req.body?.location_id || 0);
-      if (locId) location = getLocationById(locId);
+      if (!locId) {
+        return res.status(400).json({ ok: false, error: "Location required for this report." });
+      }
+      location = getLocationById(locId);
     }
     if (!location) {
-      return res.status(400).json({ ok: false, error: "Location required for this report." });
+      return res.status(400).json({ ok: false, error: "Invalid location selection." });
+    }
+    if (reportType === "drop_list" && !locId) {
+      return res.status(400).json({ ok: false, error: "Drop list uploads must include a selected location." });
     }
 
     const reportDate = parseDateFromHTML(html);
@@ -2395,6 +2576,9 @@ app.post("/api/manager-reports/upload", upload.single("report"), (req, res) => {
     if (reportType === "aged_accounts") parsed = parseAgedAccountsReport(html);
     if (reportType === "drop_list") parsed = parseDropListReport(html);
     const warnings = parsed?.warnings || [];
+    if (locationName && locId && location && resolveLocationByName(locationName)?.id !== location.id) {
+      warnings.push(`HTML location "${locationName}" does not match selected location.`);
+    }
     const now = nowISO();
 
     if (reportType === "aged_accounts") {
@@ -2494,7 +2678,7 @@ app.get("/api/manager-reports/data", (req, res) => {
 
 app.post("/api/manager-reports/delete", (req, res) => {
   try {
-    const { report_id, initials } = req.body || {};
+    const { report_id, initials, pin } = req.body || {};
     const id = Number(report_id || 0);
     const initialsClean = normalizeInitials(initials);
     if (!id) {
@@ -2502,6 +2686,10 @@ app.post("/api/manager-reports/delete", (req, res) => {
     }
     if (!initialsClean) {
       return res.status(400).json({ ok: false, error: "initials required" });
+    }
+    const pinCheck = verifyPin(pin, "admin");
+    if (!pinCheck.ok) {
+      return res.status(401).json({ ok: false, error: "Invalid admin PIN" });
     }
     const report = db.prepare(`SELECT * FROM manager_report_data WHERE id = ?`).get(id);
     if (!report) {
@@ -2517,6 +2705,296 @@ app.post("/api/manager-reports/delete", (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     console.error("Manager report delete error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== ATTENDANCE SUMMARY ====================
+app.get("/api/attendance-summary", (req, res) => {
+  try {
+    const locId = Number(req.query?.location_id || 0);
+    const start = req.query?.start || activeOrToday();
+    const end = req.query?.end || activeOrToday();
+    if (!locId) return res.status(400).json({ ok: false, error: "location_id required" });
+
+    const rows = db.prepare(`
+      SELECT date, instructor_name, attendance
+      FROM roster
+      WHERE location_id = ? AND date BETWEEN ? AND ?
+    `).all(locId, start, end);
+
+    const byDate = new Map();
+    const byInstructor = new Map();
+    rows.forEach((row) => {
+      if (row.attendance !== 0 && row.attendance !== 1) return;
+      const dateKey = row.date;
+      const instructorKey = row.instructor_name || "Unassigned";
+
+      if (!byDate.has(dateKey)) byDate.set(dateKey, { date: dateKey, total: 0, present: 0, absent: 0 });
+      const dateEntry = byDate.get(dateKey);
+      dateEntry.total += 1;
+      if (row.attendance === 1) dateEntry.present += 1;
+      if (row.attendance === 0) dateEntry.absent += 1;
+
+      if (!byInstructor.has(instructorKey)) byInstructor.set(instructorKey, { instructor: instructorKey, total: 0, present: 0, absent: 0 });
+      const instEntry = byInstructor.get(instructorKey);
+      instEntry.total += 1;
+      if (row.attendance === 1) instEntry.present += 1;
+      if (row.attendance === 0) instEntry.absent += 1;
+    });
+
+    const dateStats = Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
+      .map((entry) => ({
+        ...entry,
+        rate: entry.total ? Math.round((entry.present / entry.total) * 1000) / 10 : 0
+      }));
+
+    const instructorStats = Array.from(byInstructor.values()).sort((a, b) => a.instructor.localeCompare(b.instructor))
+      .map((entry) => ({
+        ...entry,
+        rate: entry.total ? Math.round((entry.present / entry.total) * 1000) / 10 : 0
+      }));
+
+    const totals = dateStats.reduce((acc, entry) => {
+      acc.total += entry.total;
+      acc.present += entry.present;
+      acc.absent += entry.absent;
+      return acc;
+    }, { total: 0, present: 0, absent: 0 });
+    totals.rate = totals.total ? Math.round((totals.present / totals.total) * 1000) / 10 : 0;
+
+    res.json({ ok: true, summary: { totals, dateStats, instructorStats } });
+  } catch (error) {
+    console.error("Attendance summary error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== ATTENDANCE HISTORY ====================
+app.get("/api/attendance-history", (req, res) => {
+  try {
+    const locId = Number(req.query?.location_id || 0);
+    const start = req.query?.start || activeOrToday();
+    const end = req.query?.end || activeOrToday();
+    const limit = Math.min(Number(req.query?.limit || 500), 2000);
+    if (!locId) return res.status(400).json({ ok: false, error: "location_id required" });
+    const rows = db.prepare(`
+      SELECT date, start_time, swimmer_name, instructor_name, program, attendance, attendance_at, attendance_auto_absent, updated_at
+      FROM roster
+      WHERE location_id = ? AND date BETWEEN ? AND ?
+      ORDER BY date DESC, start_time DESC, swimmer_name ASC
+      LIMIT ?
+    `).all(locId, start, end, limit);
+    res.json({ ok: true, rows });
+  } catch (error) {
+    console.error("Attendance history error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== ABSENCE TRACKER ====================
+app.get("/api/absence-tracker", (req, res) => {
+  try {
+    const locId = Number(req.query?.location_id || 0);
+    const start = req.query?.start || activeOrToday();
+    const end = req.query?.end || activeOrToday();
+    if (!locId) return res.status(400).json({ ok: false, error: "location_id required" });
+
+    const rows = db.prepare(`
+      SELECT
+        r.date, r.start_time, r.swimmer_name, r.instructor_name, r.program,
+        r.attendance_auto_absent, r.attendance_at,
+        f.status, f.notes, f.contacted_at, f.rescheduled_at, f.completed_at
+      FROM roster r
+      LEFT JOIN absence_followups f
+        ON f.location_id = r.location_id
+        AND f.swimmer_name = r.swimmer_name
+        AND f.date = r.date
+        AND (f.start_time IS r.start_time OR (f.start_time IS NULL AND r.start_time IS NULL))
+      WHERE r.location_id = ? AND r.date BETWEEN ? AND ? AND r.attendance = 0
+      ORDER BY r.date DESC, r.start_time DESC, r.swimmer_name ASC
+    `).all(locId, start, end);
+
+    res.json({ ok: true, rows });
+  } catch (error) {
+    console.error("Absence tracker error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/absence-tracker/update", (req, res) => {
+  try {
+    const { location_id, swimmer_name, date, start_time, status, notes, pin } = req.body || {};
+    const locId = Number(location_id || 0);
+    if (!locId || !swimmer_name || !date) {
+      return res.status(400).json({ ok: false, error: "location_id, swimmer_name, and date required" });
+    }
+    const pinCheck = verifyPin(pin, "manager");
+    if (!pinCheck.ok) {
+      return res.status(401).json({ ok: false, error: "Invalid manager PIN" });
+    }
+
+    const now = nowISO();
+    const existing = db.prepare(`
+      SELECT * FROM absence_followups
+      WHERE location_id = ? AND swimmer_name = ? AND date = ? AND (start_time IS ? OR start_time = ?)
+    `).get(locId, swimmer_name, date, start_time || null, start_time || null);
+
+    const nextStatus = status || existing?.status || "new";
+    const contactedAt = nextStatus === "contacted" ? now : existing?.contacted_at || null;
+    const rescheduledAt = nextStatus === "rescheduled" ? now : existing?.rescheduled_at || null;
+    const completedAt = nextStatus === "complete" ? now : existing?.completed_at || null;
+
+    db.prepare(`
+      INSERT INTO absence_followups (
+        location_id, swimmer_name, date, start_time,
+        status, notes, contacted_at, rescheduled_at, completed_at,
+        created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?
+      )
+      ON CONFLICT(location_id, swimmer_name, date, start_time) DO UPDATE SET
+        status=excluded.status,
+        notes=excluded.notes,
+        contacted_at=excluded.contacted_at,
+        rescheduled_at=excluded.rescheduled_at,
+        completed_at=excluded.completed_at,
+        updated_at=excluded.updated_at
+    `).run(
+      locId,
+      swimmer_name,
+      date,
+      start_time || null,
+      nextStatus,
+      notes || existing?.notes || null,
+      contactedAt,
+      rescheduledAt,
+      completedAt,
+      existing?.created_at || now,
+      now
+    );
+
+    res.json({ ok: true, status: nextStatus });
+  } catch (error) {
+    console.error("Absence tracker update error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== BUNDLE TRACKER ====================
+app.get("/api/bundles", (req, res) => {
+  try {
+    const locId = Number(req.query?.location_id || 0);
+    if (!locId) return res.status(400).json({ ok: false, error: "location_id required" });
+    const rows = db.prepare(`
+      SELECT * FROM bundle_tracker
+      WHERE location_id = ?
+      ORDER BY expiration_date ASC
+    `).all(locId);
+    res.json({ ok: true, bundles: rows });
+  } catch (error) {
+    console.error("Bundles list error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/bundles", (req, res) => {
+  try {
+    const { location_id, customer_name, phone, notes, start_date, duration_weeks, monthly_price, pin } = req.body || {};
+    const locId = Number(location_id || 0);
+    if (!locId || !customer_name) return res.status(400).json({ ok: false, error: "location_id and customer_name required" });
+    const pinCheck = verifyPin(pin, "manager");
+    if (!pinCheck.ok) {
+      return res.status(401).json({ ok: false, error: "Invalid manager PIN" });
+    }
+    const calc = calculateBundle({ durationWeeks: duration_weeks, monthlyPrice: monthly_price, startDate: start_date });
+    if (!calc.ok) return res.status(400).json({ ok: false, error: calc.error });
+    const now = nowISO();
+    const result = db.prepare(`
+      INSERT INTO bundle_tracker (
+        location_id, customer_name, phone, notes,
+        start_date, duration_weeks, monthly_price,
+        discounted_monthly, total_billed, house_credit, expiration_date,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      locId,
+      customer_name,
+      phone || null,
+      notes || null,
+      start_date || null,
+      Number(duration_weeks),
+      Number(monthly_price),
+      calc.discountedMonthly,
+      calc.totalBilled,
+      calc.houseCredit,
+      calc.expirationDate,
+      now,
+      now
+    );
+    res.json({ ok: true, id: result.lastInsertRowid });
+  } catch (error) {
+    console.error("Bundle create error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.put("/api/bundles/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const { location_id, customer_name, phone, notes, start_date, duration_weeks, monthly_price, pin } = req.body || {};
+    if (!id) return res.status(400).json({ ok: false, error: "bundle id required" });
+    const pinCheck = verifyPin(pin, "manager");
+    if (!pinCheck.ok) {
+      return res.status(401).json({ ok: false, error: "Invalid manager PIN" });
+    }
+    const calc = calculateBundle({ durationWeeks: duration_weeks, monthlyPrice: monthly_price, startDate: start_date });
+    if (!calc.ok) return res.status(400).json({ ok: false, error: calc.error });
+    const now = nowISO();
+    db.prepare(`
+      UPDATE bundle_tracker
+      SET location_id = ?, customer_name = ?, phone = ?, notes = ?,
+          start_date = ?, duration_weeks = ?, monthly_price = ?,
+          discounted_monthly = ?, total_billed = ?, house_credit = ?, expiration_date = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(
+      Number(location_id),
+      customer_name,
+      phone || null,
+      notes || null,
+      start_date || null,
+      Number(duration_weeks),
+      Number(monthly_price),
+      calc.discountedMonthly,
+      calc.totalBilled,
+      calc.houseCredit,
+      calc.expirationDate,
+      now,
+      id
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Bundle update error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.delete("/api/bundles/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const pin = req.body?.pin;
+    if (!id) return res.status(400).json({ ok: false, error: "bundle id required" });
+    const pinCheck = verifyPin(pin, "manager");
+    if (!pinCheck.ok) {
+      return res.status(401).json({ ok: false, error: "Invalid manager PIN" });
+    }
+    db.prepare(`DELETE FROM bundle_tracker WHERE id = ?`).run(id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Bundle delete error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -3221,6 +3699,10 @@ app.post("/api/clear-roster-all", (req, res) => {
     const initialsClean = normalizeInitials(req.body?.initials);
     if (!initialsClean) {
       return res.status(400).json({ ok: false, error: "Initials required" });
+    }
+    const pinCheck = verifyPin(req.body?.pin, "admin");
+    if (!pinCheck.ok) {
+      return res.status(401).json({ ok: false, error: "Invalid admin PIN" });
     }
     const date = activeOrToday();
     const startDate = req.body?.start_date || null;
