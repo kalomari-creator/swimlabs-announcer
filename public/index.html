@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="api-base" content="" />
   <title>SwimLabs Announcer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root{
       --bg:#070b14;
@@ -70,6 +71,12 @@
     button.primary{ border-color: rgba(34,197,94,.45); }
     button.secondary{ border-color: rgba(245,158,11,.35); }
     button.danger{ border-color: rgba(239,68,68,.35); }
+    .miniBtn{
+      padding:6px 10px;
+      font-size:12px;
+      min-height:34px;
+      border-radius:10px;
+    }
 
     button.tab{ padding:9px 12px; border-radius:999px; background: transparent; border-color: transparent; }
     button.tab.active{
@@ -223,6 +230,10 @@
       border:1px solid var(--line);
       background: rgba(255,255,255,.02);
     }
+    .roster-table{
+      table-layout: fixed;
+      width: 100%;
+    }
     thead th{
       position: sticky;
       top: 0;
@@ -241,21 +252,14 @@
     th{ color:var(--muted); font-weight:900; font-size:12px; text-transform: uppercase; letter-spacing: .5px; }
     tbody tr:hover{ background: rgba(255,255,255,.035); }
 
-    /* Program type color coding */
-    tbody tr.program-group{ background: rgba(34,197,94,0.08); }
-    tbody tr.program-group:hover{ background: rgba(34,197,94,0.14); }
-
-    tbody tr.program-semi-private{ background: rgba(59,130,246,0.08); }
-    tbody tr.program-semi-private:hover{ background: rgba(59,130,246,0.14); }
-
-    tbody tr.program-private{ background: rgba(168,85,247,0.08); }
-    tbody tr.program-private:hover{ background: rgba(168,85,247,0.14); }
-
-    tbody tr.program-parent-tot{ background: rgba(249,115,22,0.08); }
-    tbody tr.program-parent-tot:hover{ background: rgba(249,115,22,0.14); }
-
-    tbody tr.program-trial{ background: rgba(234,179,8,0.08); }
-    tbody tr.program-trial:hover{ background: rgba(234,179,8,0.14); }
+    /* Keep roster rows neutral */
+    tbody tr.program-group,
+    tbody tr.program-semi-private,
+    tbody tr.program-private,
+    tbody tr.program-parent-tot,
+    tbody tr.program-trial{
+      background: transparent;
+    }
 
     .zone{
       display:inline-flex;
@@ -318,6 +322,44 @@
 
     tbody tr.row-sub { background: rgba(249,115,22,0.06); }
     tbody tr.row-sub:hover { background: rgba(249,115,22,0.12); }
+
+    .flagBadge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:22px;
+      height:22px;
+      border-radius:8px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.2);
+      font-size: 13px;
+    }
+    .flagRow{
+      display:flex;
+      gap:6px;
+      align-items:center;
+      flex-wrap:wrap;
+      margin-top:4px;
+    }
+    .rosterCell{
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .rosterToolbar{
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      background: rgba(7,11,20,.96);
+      padding-bottom: 10px;
+      margin-bottom: 4px;
+    }
+    .actionIconBtn{
+      padding: 6px 8px;
+      border-radius: 12px;
+      font-size: 18px;
+      min-height: 38px;
+    }
 
     .guard-section {
       padding: 14px;
@@ -396,7 +438,7 @@
     /* Attendance buttons */
     .attWrap{ display:flex; gap:6px; align-items:center; }
     .attBtn{
-      padding:7px 9px;
+      padding:6px 8px;
       border-radius:12px;
       font-size:12px;
       font-weight:900;
@@ -472,6 +514,7 @@
       line-height:1.35;
     }
     .modalFooter{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+    body.deck-mode .deck-hide { display: none !important; }
 
     /* TABLET & MOBILE OPTIMIZATION */
     @media (max-width: 900px) {
@@ -480,9 +523,12 @@
       .card { padding: 12px; }
       h1 { font-size: 20px; }
       button { min-height: 48px; padding: 12px 16px; font-size: 15px; }
-      th, td { padding: 10px 8px; font-size: 14px; }
-      .level { font-size: 15px; font-weight: 700; }
+      th, td { padding: 8px 6px; font-size: 13px; }
+      .level { font-size: 14px; font-weight: 700; }
       .blocks button { min-height: 48px; padding: 10px 14px; font-size: 15px; }
+      .roster-table th, .roster-table td { font-size: 12px; }
+      .attBtn { padding: 5px 6px; font-size: 11px; }
+      .actionIconBtn { min-height: 34px; }
     }
 
     @media (max-width: 600px) {
@@ -490,11 +536,12 @@
       .card { padding: 10px; border-radius: 12px; }
       h1 { font-size: 18px; }
       button { min-height: 44px; padding: 10px 14px; font-size: 14px; }
-      th, td { padding: 8px 6px; font-size: 13px; }
-      .level { font-size: 14px; }
+      th, td { padding: 6px 4px; font-size: 12px; }
+      .level { font-size: 13px; }
       .blocks button { min-height: 44px; padding: 8px 12px; font-size: 14px; }
       .pill { padding: 6px 8px; font-size: 12px; }
-      .attBtn { padding: 6px 10px; font-size: 13px; }
+      .attBtn { padding: 5px 6px; font-size: 11px; }
+      .roster-table th, .roster-table td { font-size: 11px; }
     }
   </style>
 </head>
@@ -502,7 +549,7 @@
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.8</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.8.5-beta</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -531,14 +578,19 @@
     </div>
   </div>
 
+  <div id="readOnlyBanner" class="card hidden bg-gradient-to-r from-cyan-500/10 to-blue-500/10" style="background: rgba(14,116,144,.2); border-color: rgba(14,116,144,.5);">
+    <div style="font-weight:900;">🔒 Read-only mode enabled</div>
+    <div class="tiny" style="color:var(--muted);">Uploads, edits, clears, and exports are disabled on this device.</div>
+  </div>
+
   <div id="panelRoster">
     <div class="card">
-      <div class="row">
-        <button class="primary" id="importBtn">Import Today (PDF)</button>
-        <button class="primary" id="uploadHtmlBtn">Upload HTML</button>
+      <div class="row rosterToolbar">
+        <button class="primary deck-hide" id="importBtn">Import Today (PDF)</button>
+        <button class="primary deck-hide" id="uploadHtmlBtn">Upload HTML</button>
         <input type="file" id="htmlFileInput" accept=".html" style="display: none;">
-        <button class="secondary" id="exportServerBtn" title="Save a JSON backup on the server">Export to Server</button>
-        <button class="secondary" id="importServerBtn" title="Restore a roster from server backups">Import from Server</button>
+        <button class="secondary deck-hide" id="exportServerBtn" title="Save a JSON backup on the server">Export to Server</button>
+        <button class="secondary deck-hide" id="importServerBtn" title="Restore a roster from server backups">Import from Server</button>
 
         <div class="spacer"></div>
         <span class="pill tiny">Auto announcement runs about 3 minutes before each time block.</span>
@@ -552,6 +604,11 @@
         <div class="pill">Selected: <strong id="selectedBlock">None</strong></div>
       </div>
       <div class="blocks" id="blocks"></div>
+    </div>
+
+    <div id="deckDateWarning" class="card hidden bg-gradient-to-r from-amber-500/10 to-orange-500/10" style="background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.4);">
+      <div style="font-weight:900;">⚠️ Past-date roster</div>
+      <div class="tiny" style="color:var(--muted);">Deck Mode is on and this roster date is not today.</div>
     </div>
 
     <div class="card">
@@ -572,25 +629,30 @@
           <button class="searchClear hidden" id="searchClear" title="Clear search">✕</button>
         </div>
 
-        <button class="secondary" id="addSwimmerBtn">+ Add swimmer</button>
+        <button class="secondary deck-hide" id="addSwimmerBtn">+ Add swimmer</button>
         <span class="pill">Sort</span>
         <select id="sortBy">
           <option value="instructor" selected>Instructor + A-Z</option>
           <option value="name">Swimmer A-Z</option>
         </select>
+
+        <div id="bulkAttendanceActions" class="row" style="gap:6px;">
+          <button class="secondary miniBtn" id="bulkMarkPresent">✅ Mark all present</button>
+          <button class="secondary miniBtn" id="bulkClearAttendance">⭘ Clear all attendance</button>
+        </div>
       </div>
 
-      <table>
+      <table class="roster-table">
         <thead>
           <tr>
-            <th style="width:140px;">Attendance</th>
+            <th style="width:110px;">Attendance</th>
             <th>Swimmer</th>
-            <th style="width:110px;">Age</th>
-            <th style="width:150px;">Type</th>
-            <th style="width:170px;">Level</th>
-            <th style="width:170px;">Instructor</th>
-            <th style="width:140px;">Zone</th>
-            <th style="width:170px;">Action</th>
+            <th style="width:70px;">Age</th>
+            <th style="width:110px;">Type</th>
+            <th style="width:120px;">Level</th>
+            <th style="width:130px;">Instructor</th>
+            <th style="width:90px;">Zone</th>
+            <th style="width:80px;">Action</th>
           </tr>
         </thead>
         <tbody id="roster"></tbody>
@@ -678,6 +740,12 @@
             <button class="primary" id="managerRangeSave">Save Brackets</button>
           </div>
           <div class="tiny" style="margin-top:8px; color:var(--muted);" id="managerRangeHint">Saved range syncs report defaults and guard tasks.</div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px; background: rgba(14,116,144,0.08); border-color: rgba(14,116,144,0.3);">
+          <h3 style="margin:0 0 12px; font-size:18px;">🔒 Read-only Mode</h3>
+          <div class="tiny" style="color:var(--muted); margin-bottom:10px;">Toggle read-only mode for this device.</div>
+          <button id="toggleReadOnlyBtnManager" class="secondary">Toggle Read-only Mode</button>
         </div>
 
         <!-- Swimmer Details View -->
@@ -823,6 +891,30 @@
             </div>
           </div>
         </div>
+
+        <div class="card bg-gradient-to-br from-indigo-500/10 to-pink-500/10" id="managerBreakdownsCard">
+          <h3 style="margin:0 0 12px; font-size:18px;">📊 Manager Breakdowns</h3>
+          <div class="row" style="margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <button class="managerTabBtn active" data-breakdown="aged_accounts">Aged Accounts</button>
+            <button class="managerTabBtn" data-breakdown="retention">Retention</button>
+            <button class="managerTabBtn" data-breakdown="drop_list">Drop List</button>
+            <div class="spacer"></div>
+            <span class="pill tiny" id="breakdownMeta">Latest upload</span>
+          </div>
+
+          <div id="breakdownWarning" class="hidden" style="margin-bottom:10px; padding:10px; border-radius:12px; border:1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.1);">
+            <div style="font-weight:900;">⚠️ Parse warnings</div>
+            <div class="tiny" id="breakdownWarningText" style="color:var(--muted);"></div>
+          </div>
+
+          <div id="breakdownFilters" class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;"></div>
+          <div id="breakdownContent" style="max-height:420px; overflow:auto;"></div>
+          <div class="row" style="margin-top:12px;">
+            <button class="secondary" id="breakdownExportCsv">Export CSV</button>
+            <button class="secondary" id="breakdownExportPdf">Export PDF</button>
+            <button class="danger admin-only" id="breakdownDeleteBtn">Delete latest upload</button>
+          </div>
+        </div>
       </div>
 
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
@@ -868,6 +960,7 @@
         </div>
         <div class="spacer"></div>
         <button class="secondary" id="guardTasksShuffle">Randomize guard numbers</button>
+        <button class="secondary" id="guardTasksSnapshot">Save snapshot</button>
         <button class="danger" id="guardTasksReset">Reset</button>
       </div>
 
@@ -954,10 +1047,48 @@
         <button id="addStaffBtn" class="secondary">+ Add New Staff</button>
       </div>
 
+      <div class="card" id="staffOverridesCard" style="margin-top:20px;">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900;">🧩 Location Overrides</h3>
+        <div class="grid2" style="margin-bottom:10px;">
+          <div class="field">
+            <label>Location</label>
+            <select id="overrideLocationSelect"></select>
+          </div>
+          <div class="field">
+            <label>Staff member</label>
+            <select id="overrideStaffSelect"></select>
+          </div>
+        </div>
+        <div class="row" style="gap:8px; flex-wrap:wrap;">
+          <button class="secondary miniBtn" id="overrideRemoveBtn">Remove from location</button>
+          <button class="secondary miniBtn" id="overrideRestoreBtn">Restore to location</button>
+        </div>
+        <div id="overrideList" class="tiny" style="margin-top:10px; color:var(--muted);"></div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h3 style="margin:0 0 12px; font-size:16px; font-weight:900;">🔒 Read-only Mode</h3>
+        <div class="tiny" style="color:var(--muted); margin-bottom:10px;">When enabled, tablets become view-only (no uploads, edits, clears, or exports).</div>
+        <button id="toggleReadOnlyBtn" class="secondary">Toggle Read-only Mode</button>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <div class="row" style="margin-bottom:10px;">
+          <h3 style="margin:0; font-size:16px; font-weight:900;">🧾 Activity Log</h3>
+          <div class="spacer"></div>
+          <button id="activityLogRefresh" class="secondary miniBtn">Refresh</button>
+        </div>
+        <div id="activityLogTable" style="max-height:320px; overflow:auto;"></div>
+      </div>
+
       <div class="tiny" style="margin-top:16px; color: rgba(159,176,208,.7);">
         System administration features require elevated privileges. Changes affect all locations.
       </div>
     </div>
+  </div>
+
+  <div id="versionWatermark" class="tiny" style="margin:18px 6px 6px; text-align:right; color:rgba(159,176,208,.6);">
+    v4.8.5-beta • <span id="buildStamp">—</span>
   </div>
 </div>
 
@@ -976,6 +1107,36 @@
     <div class="modalFooter">
       <button class="secondary" id="pinCancel">Cancel</button>
       <button class="primary" id="pinSubmit">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- Protected Action Modal -->
+<div class="modalBackdrop" id="confirmModal">
+  <div class="modal" style="max-width: 520px;">
+    <h3 id="confirmTitle">Confirm action</h3>
+    <div class="tiny" id="confirmMessage" style="color:var(--muted); margin-bottom:12px; white-space:pre-line;"></div>
+    <div class="grid2">
+      <div class="field" id="confirmDeleteField">
+        <label>Type DELETE to confirm</label>
+        <input type="text" id="confirmDeleteInput" placeholder="DELETE" />
+      </div>
+      <div class="field" id="confirmInitialsField">
+        <label>Your initials</label>
+        <input type="text" id="confirmInitialsInput" placeholder="AB" maxlength="4" />
+      </div>
+      <div class="field" id="confirmPinField">
+        <label>Manager PIN</label>
+        <input type="password" id="confirmPinInput" placeholder="••••" maxlength="4" />
+      </div>
+      <div class="field" id="confirmLocationField">
+        <label>Location</label>
+        <select id="confirmLocationSelect"></select>
+      </div>
+    </div>
+    <div class="modalFooter">
+      <button class="secondary" id="confirmCancel">Cancel</button>
+      <button class="primary" id="confirmSubmit">Confirm</button>
     </div>
   </div>
 </div>
@@ -1148,12 +1309,27 @@
       </div>
 
       <div class="field">
-        <label>Location *</label>
-        <select id="newStaffLocation">
+        <label>Scope *</label>
+        <select id="newStaffScope">
+          <option value="state">State staff (applies to all locations)</option>
+          <option value="override">Location override (add only)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>State *</label>
+        <select id="newStaffState">
           <option value="New York">New York</option>
           <option value="California">California</option>
           <option value="Texas">Texas</option>
           <option value="Nevada">Nevada</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Location override</label>
+        <select id="newStaffLocationOverride">
+          <option value="">(select location)</option>
         </select>
       </div>
 
@@ -1310,6 +1486,9 @@
   let nextAnnouncementTime = null; // Track next scheduled announcement
   let countdownInterval = null; // Interval for countdown updates
   let lastPanel = 'roster';
+  let managerRole = null;
+  let readOnlyMode = false;
+  let wakeLock = null;
   const managerReportTypes = [
     { type: 'retention', metaId: 'reportMetaRetention', downloadId: 'reportDownloadRetention', label: 'Retention list (HTML)' },
     { type: 'aged_accounts', metaId: 'reportMetaAgedAccounts', downloadId: 'reportDownloadAgedAccounts', label: 'Aged accounts' },
@@ -1441,10 +1620,15 @@
     if (isReports) loadManagerReports();
   }
 
+  document.querySelectorAll('[data-breakdown]').forEach((btn) => {
+    btn.addEventListener('click', () => setBreakdownType(btn.dataset.breakdown));
+  });
+
   async function loadManagerReports() {
     if (!currentLocation) return;
     try {
-      const resp = await api(`/api/manager-reports?location_id=${currentLocation.id}`);
+      const role = managerRole || 'manager';
+      const resp = await api(`/api/manager-reports?location_id=${currentLocation.id}&role=${role}`);
       if (!resp.ok) throw new Error(resp.error || 'Failed to load manager reports');
       managerReportTypes.forEach((report) => {
         const metaEl = el(report.metaId);
@@ -1452,13 +1636,10 @@
         const latest = resp.latest?.[report.type] || null;
         if (latest) {
           const uploaded = formatShortDate(latest.uploaded_at);
-          const size = formatBytes(latest.size_bytes);
-          const name = latest.original_name || latest.filename;
-          if (metaEl) metaEl.textContent = `Last upload ${uploaded} • ${size} • ${name}`;
-          if (linkEl) {
-            linkEl.href = `/api/manager-reports/download?location_id=${currentLocation.id}&filename=${encodeURIComponent(latest.filename)}`;
-            linkEl.classList.remove('hidden');
-          }
+          const warnings = latest.warnings_json ? JSON.parse(latest.warnings_json) : [];
+          const warningLabel = warnings?.length ? ' ⚠️ Warnings' : '';
+          if (metaEl) metaEl.textContent = `Last upload ${uploaded}${warningLabel}`;
+          if (linkEl) linkEl.classList.add('hidden');
         } else {
           if (metaEl) metaEl.textContent = 'No report uploaded yet.';
           if (linkEl) linkEl.classList.add('hidden');
@@ -1467,6 +1648,279 @@
     } catch (e) {
       console.error('Failed to load manager reports:', e);
     }
+    if (el('managerTabReports') && !el('managerTabReports').classList.contains('hidden')) {
+      loadBreakdown();
+    }
+  }
+
+  let currentBreakdownType = 'aged_accounts';
+  let breakdownFilters = {
+    dropRange: '7',
+    dropStart: '',
+    dropEnd: '',
+    retentionTrend: false
+  };
+
+  function setBreakdownType(type) {
+    currentBreakdownType = type;
+    document.querySelectorAll('[data-breakdown]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.breakdown === type);
+    });
+    loadBreakdown();
+  }
+
+  function renderBreakdownFilters() {
+    const container = el('breakdownFilters');
+    container.innerHTML = '';
+    if (currentBreakdownType === 'drop_list') {
+      container.innerHTML = `
+        <span class="pill tiny">Filter</span>
+        <select id="dropRangeSelect">
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="custom">Custom</option>
+        </select>
+        <input type="date" id="dropStartDate" />
+        <input type="date" id="dropEndDate" />
+        <button class="secondary miniBtn" id="dropApplyBtn">Apply</button>
+      `;
+      el('dropRangeSelect').value = breakdownFilters.dropRange;
+      el('dropStartDate').value = breakdownFilters.dropStart;
+      el('dropEndDate').value = breakdownFilters.dropEnd;
+      el('dropApplyBtn').addEventListener('click', () => {
+        breakdownFilters.dropRange = el('dropRangeSelect').value;
+        breakdownFilters.dropStart = el('dropStartDate').value;
+        breakdownFilters.dropEnd = el('dropEndDate').value;
+        loadBreakdown();
+      });
+    } else if (currentBreakdownType === 'retention') {
+      container.innerHTML = `
+        <button class="secondary miniBtn" id="retentionTrendToggle">
+          ${breakdownFilters.retentionTrend ? 'Hide' : 'Show'} last 4 uploads
+        </button>
+      `;
+      el('retentionTrendToggle').addEventListener('click', () => {
+        breakdownFilters.retentionTrend = !breakdownFilters.retentionTrend;
+        loadBreakdown();
+      });
+    }
+  }
+
+  function renderWarningBanner(warnings) {
+    const banner = el('breakdownWarning');
+    const text = el('breakdownWarningText');
+    if (warnings && warnings.length) {
+      banner.classList.remove('hidden');
+      text.textContent = warnings.join(' • ');
+    } else {
+      banner.classList.add('hidden');
+      text.textContent = '';
+    }
+  }
+
+  function applyDropFilters(entries) {
+    if (!entries.length) return entries;
+    const now = new Date();
+    let start = null;
+    let end = null;
+    if (breakdownFilters.dropRange !== 'custom') {
+      const days = parseInt(breakdownFilters.dropRange, 10);
+      start = new Date(now);
+      start.setDate(now.getDate() - (days - 1));
+      end = now;
+    } else {
+      if (breakdownFilters.dropStart) start = new Date(`${breakdownFilters.dropStart}T00:00:00`);
+      if (breakdownFilters.dropEnd) end = new Date(`${breakdownFilters.dropEnd}T23:59:59`);
+    }
+    return entries.filter((entry) => {
+      if (!entry.drop_date) return false;
+      const dt = new Date(`${entry.drop_date}T00:00:00`);
+      if (start && dt < start) return false;
+      if (end && dt > end) return false;
+      return true;
+    });
+  }
+
+  function buildCsvRow(values) {
+    return values.map((val) => {
+      const s = String(val ?? '');
+      if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    }).join(',');
+  }
+
+  function exportBreakdownCsv(data, meta) {
+    const lines = [];
+    lines.push(buildCsvRow(['Location', meta.location || '']));
+    lines.push(buildCsvRow(['Date/Range', meta.dateRange || '']));
+    lines.push(buildCsvRow(['Time Block', meta.timeBlock || 'N/A']));
+    lines.push(buildCsvRow(['Filters', meta.filters || '']));
+    lines.push(buildCsvRow(['Generated', new Date().toISOString()]));
+    lines.push('');
+    data.headers.forEach((row) => lines.push(buildCsvRow(row)));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentBreakdownType}_${meta.location || 'report'}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function loadBreakdown() {
+    if (!currentLocation) return;
+    renderBreakdownFilters();
+    const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=${currentBreakdownType}&include_archived=${managerRole === 'admin'}`);
+    const reports = resp.reports || [];
+    const latest = reports[0];
+    const content = el('breakdownContent');
+    content.innerHTML = '<div class="tiny" style="color:var(--muted); padding:10px;">No report data available.</div>';
+    if (!latest) return;
+    const deleteBtn = el('breakdownDeleteBtn');
+    if (deleteBtn) {
+      deleteBtn.classList.toggle('hidden', managerRole !== 'admin');
+      deleteBtn.onclick = async () => {
+        if (managerRole !== 'admin') return;
+        const confirmed = await openProtectedAction({
+          title: 'Delete report upload',
+          message: 'Type DELETE and enter initials to delete this upload.',
+          requireDelete: true,
+          requireInitials: true
+        });
+        if (!confirmed.ok) return;
+        await api('/api/manager-reports/delete', {
+          method: 'POST',
+          body: JSON.stringify({ report_id: latest.id, initials: confirmed.initials })
+        });
+        await loadManagerReports();
+        loadBreakdown();
+      };
+    }
+    const parsed = latest.data_json ? JSON.parse(latest.data_json) : {};
+    const warnings = latest.warnings_json ? JSON.parse(latest.warnings_json) : [];
+    renderWarningBanner(warnings);
+    el('breakdownMeta').textContent = `Latest upload: ${formatShortDate(latest.uploaded_at)}`;
+
+    if (currentBreakdownType === 'aged_accounts') {
+      const headers = parsed.headers || [];
+      const rows = parsed.rows || [];
+      let html = '<table><thead><tr>';
+      headers.forEach((h) => { html += `<th>${escapeHtml(h)}</th>`; });
+      html += '</tr></thead><tbody>';
+      rows.forEach((row) => {
+        html += '<tr>';
+        row.forEach((col) => { html += `<td>${escapeHtml(col)}</td>`; });
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      content.innerHTML = html;
+    }
+
+    if (currentBreakdownType === 'retention') {
+      const current = parsed.instructors || [];
+      const previous = reports[1]?.data_json ? JSON.parse(reports[1].data_json).instructors || [] : [];
+      const trendReports = breakdownFilters.retentionTrend ? reports.slice(0, 4) : [];
+      const trendMap = new Map();
+      if (trendReports.length) {
+        trendReports.forEach((report) => {
+          const entries = report.data_json ? JSON.parse(report.data_json).instructors || [] : [];
+          entries.forEach((entry) => {
+            const key = String(entry.instructor || '').toLowerCase();
+            if (!trendMap.has(key)) trendMap.set(key, []);
+            trendMap.get(key).push(entry.retention_percent);
+          });
+        });
+      }
+      const prevMap = new Map(previous.map((i) => [String(i.instructor || '').toLowerCase(), i]));
+      const rows = current.map((row) => {
+        const prev = prevMap.get(String(row.instructor || '').toLowerCase());
+        if (!prev) {
+          return { ...row, deltaPercent: 'NEW', deltaCount: 'NEW' };
+        }
+        const deltaPercent = row.retention_percent != null && prev.retention_percent != null
+          ? row.retention_percent - prev.retention_percent
+          : null;
+        const deltaCount = row.swimmer_count != null && prev.swimmer_count != null
+          ? row.swimmer_count - prev.swimmer_count
+          : null;
+        return { ...row, deltaPercent, deltaCount };
+      });
+      let html = '<table><thead><tr><th>Instructor</th><th>Retention %</th><th>Swimmers</th><th>Δ%</th><th>Δ Swimmers</th>';
+      if (breakdownFilters.retentionTrend) html += '<th>Trend (last 4)</th>';
+      html += '</tr></thead><tbody>';
+      rows.forEach((row) => {
+        const hazard = typeof row.deltaPercent === 'number' && row.deltaPercent < 0 ? '⚠️' : '';
+        html += '<tr>';
+        html += `<td>${escapeHtml(row.instructor)} ${hazard}</td>`;
+        html += `<td>${row.retention_percent ?? '—'}</td>`;
+        html += `<td>${row.swimmer_count ?? '—'}</td>`;
+        html += `<td>${row.deltaPercent === 'NEW' ? 'NEW' : (row.deltaPercent ?? '—')}</td>`;
+        html += `<td>${row.deltaCount === 'NEW' ? 'NEW' : (row.deltaCount ?? '—')}</td>`;
+        if (breakdownFilters.retentionTrend) {
+          const trend = trendMap.get(String(row.instructor || '').toLowerCase()) || [];
+          html += `<td>${trend.slice(0, 4).map((val) => val ?? '—').join(' → ') || '—'}</td>`;
+        }
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      content.innerHTML = html;
+    }
+
+    if (currentBreakdownType === 'drop_list') {
+      const allEntries = reports.flatMap((report) => {
+        const reportParsed = report.data_json ? JSON.parse(report.data_json) : {};
+        return reportParsed.entries || [];
+      });
+      const entries = applyDropFilters(allEntries);
+      let html = '<table><thead><tr><th>Drop Date</th><th>Details</th></tr></thead><tbody>';
+      entries.forEach((entry) => {
+        html += '<tr>';
+        html += `<td>${entry.drop_date || '—'}</td>`;
+        html += `<td>${escapeHtml((entry.raw || []).join(' • '))}</td>`;
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      content.innerHTML = html;
+    }
+
+    el('breakdownExportCsv').onclick = () => {
+      if (blockIfReadOnly('Export')) return;
+      const meta = {
+        location: currentLocation?.name || '',
+        dateRange: latest.report_date || latest.uploaded_at || '',
+        filters: currentBreakdownType === 'drop_list'
+          ? `Range: ${breakdownFilters.dropRange}${breakdownFilters.dropRange === 'custom' ? ` (${breakdownFilters.dropStart} → ${breakdownFilters.dropEnd})` : ''}`
+          : 'None'
+      };
+      let headers = [];
+      if (currentBreakdownType === 'aged_accounts') {
+        headers = [[...parsed.headers], ...parsed.rows];
+      } else if (currentBreakdownType === 'retention') {
+        headers = [['Instructor', 'Retention %', 'Swimmers', 'Δ%', 'Δ Swimmers'],
+          ...(parsed.instructors || []).map((row) => [row.instructor, row.retention_percent, row.swimmer_count, '', ''])
+        ];
+      } else {
+        const allEntries = reports.flatMap((report) => {
+          const reportParsed = report.data_json ? JSON.parse(report.data_json) : {};
+          return reportParsed.entries || [];
+        });
+        headers = [['Drop Date', 'Details'], ...(applyDropFilters(allEntries).map((entry) => [entry.drop_date || '', (entry.raw || []).join(' • ')]))];
+      }
+      exportBreakdownCsv({ headers }, meta);
+    };
+
+    el('breakdownExportPdf').onclick = () => {
+      if (blockIfReadOnly('Export')) return;
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+      printWindow.document.write(`<html><head><title>Export</title></head><body>${content.innerHTML}</body></html>`);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    };
   }
 
   function updateAnnouncementsVisibility() {
@@ -1474,7 +1928,7 @@
     const panelAnnouncements = el('panelAnnouncements');
     const panelRoster = el('panelRoster');
     const announcementsOption = viewSelect?.querySelector('option[value="announcements"]');
-    const hasAnnouncements = Boolean(currentLocation && currentLocation.has_announcements);
+    const hasAnnouncements = Boolean(currentLocation && currentLocation.name === 'SwimLabs Westchester');
 
     if (announcementsOption) {
       announcementsOption.hidden = !hasAnnouncements;
@@ -1496,10 +1950,7 @@
   }
 
   function isWestchesterLocation() {
-    if (!currentLocation) return false;
-    const code = String(currentLocation.code || '').toUpperCase();
-    const name = String(currentLocation.name || '').toLowerCase();
-    return code === 'SLW' || name.includes('westchester');
+    return !!(currentLocation && currentLocation.name === 'SwimLabs Westchester');
   }
 
   function updateGuardTasksVisibility() {
@@ -1512,6 +1963,12 @@
     if (!isWestchester && el('viewSelect')?.value === 'lifeguard') {
       el('viewSelect').value = 'roster';
       el('panelGuardTasks').classList.add('hidden');
+      el('panelRoster').classList.remove('hidden');
+    }
+    const guardTasksPanel = el('panelGuardTasks');
+    if (!isWestchester && !guardTasksPanel.classList.contains('hidden')) {
+      el('viewSelect').value = 'roster';
+      guardTasksPanel.classList.add('hidden');
       el('panelRoster').classList.remove('hidden');
     }
   }
@@ -1529,6 +1986,16 @@
       
       updateAnnouncementsVisibility();
       updateGuardTasksVisibility();
+      if (!isWestchesterLocation()) {
+        const viewValue = el('viewSelect')?.value;
+        if (viewValue === 'announcements' || viewValue === 'lifeguard') {
+          el('viewSelect').value = 'roster';
+          el('panelRoster').classList.remove('hidden');
+          el('panelAnnouncements').classList.add('hidden');
+          el('panelLifeguard').classList.add('hidden');
+          el('panelGuardTasks').classList.add('hidden');
+        }
+      }
       await loadManagerReports();
       await loadStatus();
       await loadBlocks();
@@ -1713,11 +2180,153 @@
     el(id).style.display = on ? 'flex' : 'none';
   }
 
+  function openPinModal(mode) {
+    const title = mode === 'admin' ? 'Admin Access' : 'Manager Access';
+    el('pinModal').querySelector('h3').textContent = title;
+    showModal('pinModal', true);
+    el('pinInput').value = '';
+    el('pinError').style.display = 'none';
+    el('pinLockout').style.display = 'none';
+    el('pinInput').focus();
+  }
+
+  function openProtectedAction({ title, message, requireDelete = false, requireInitials = true, requirePin = false, locationOptions = null } = {}) {
+    return new Promise((resolve) => {
+      const modalId = 'confirmModal';
+      el('confirmTitle').textContent = title || 'Confirm action';
+      el('confirmMessage').textContent = message || '';
+      el('confirmDeleteField').style.display = requireDelete ? 'block' : 'none';
+      el('confirmInitialsField').style.display = requireInitials ? 'block' : 'none';
+      el('confirmPinField').style.display = requirePin ? 'block' : 'none';
+      el('confirmLocationField').style.display = locationOptions ? 'block' : 'none';
+      el('confirmDeleteInput').value = '';
+      el('confirmInitialsInput').value = '';
+      el('confirmPinInput').value = '';
+      if (locationOptions) {
+        const select = el('confirmLocationSelect');
+        select.innerHTML = '';
+        locationOptions.forEach((opt) => {
+          const o = document.createElement('option');
+          o.value = opt.value;
+          o.textContent = opt.label;
+          select.appendChild(o);
+        });
+      }
+
+      const cleanup = () => {
+        el('confirmSubmit').onclick = null;
+        el('confirmCancel').onclick = null;
+      };
+
+      el('confirmCancel').onclick = () => {
+        cleanup();
+        showModal(modalId, false);
+        resolve({ ok: false });
+      };
+
+      el('confirmSubmit').onclick = () => {
+        const deleteValue = el('confirmDeleteInput').value.trim().toUpperCase();
+        const initials = el('confirmInitialsInput').value.trim().toUpperCase();
+        const pin = el('confirmPinInput').value.trim();
+        if (requireDelete && deleteValue !== 'DELETE') {
+          alert('Please type DELETE to confirm.');
+          return;
+        }
+        if (requireInitials && !initials) {
+          alert('Initials are required.');
+          return;
+        }
+        if (requirePin && pin.length < 4) {
+          alert('Manager PIN is required.');
+          return;
+        }
+        cleanup();
+        showModal(modalId, false);
+        const locationValue = locationOptions ? el('confirmLocationSelect').value : null;
+        resolve({ ok: true, initials, pin, location_value: locationValue });
+      };
+
+      showModal(modalId, true);
+    });
+  }
+
+  function blockIfReadOnly(actionLabel = 'This action') {
+    if (!readOnlyMode) return false;
+    alert(`${actionLabel} is disabled while read-only mode is enabled.`);
+    return true;
+  }
+
+  function applyReadOnlyUI() {
+    const banner = el('readOnlyBanner');
+    if (banner) banner.classList.toggle('hidden', !readOnlyMode);
+    const disableIds = [
+      'importBtn', 'uploadHtmlBtn', 'exportServerBtn', 'importServerBtn',
+      'addSwimmerBtn', 'exportVirtualDeskBtn', 'attendanceReportExportCSV',
+      'attendanceReportExportJSON', 'instructorReportExportCSV', 'instructorReportExportJSON',
+      'guardTasksReset', 'guardRotationAdd', 'guardTasksShuffle', 'guardTasksSnapshot',
+      'bulkMarkPresent', 'bulkClearAttendance'
+    ];
+    disableIds.forEach((id) => {
+      const node = el(id);
+      if (node) node.disabled = readOnlyMode;
+    });
+    document.querySelectorAll('.reportUploadBtn').forEach((btn) => {
+      btn.disabled = readOnlyMode;
+    });
+  }
+
+  function applyRoleUI() {
+    const canManage = managerRole === 'admin' || managerRole === 'manager';
+    const bulkActions = el('bulkAttendanceActions');
+    if (bulkActions) bulkActions.style.display = canManage ? 'flex' : 'none';
+    document.querySelectorAll('.admin-only').forEach((node) => {
+      node.classList.toggle('hidden', managerRole !== 'admin');
+    });
+  }
+
   function syncDeviceUI(){
     el('deviceModeLabel').textContent = deviceMode === 'frontdesk' ? 'Front Desk' : 'Deck';
     el('deviceModeSelect').value = deviceMode;
     el('zoneMode').textContent = deviceMode === 'frontdesk' ? 'Front Desk' : 'Deck';
     el('managerCodeField').style.display = (deviceMode === 'deck') ? 'block' : 'none';
+    updateDeckModeState();
+  }
+
+  async function updateDeckModeState() {
+    const isDeck = deviceMode === 'deck';
+    document.body.classList.toggle('deck-mode', isDeck);
+    if (isDeck) {
+      window.onbeforeunload = (e) => {
+        e.preventDefault();
+        e.returnValue = '';
+      };
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => {
+            wakeLock = null;
+          });
+        } catch (err) {
+          console.warn('Wake lock failed:', err);
+        }
+      }
+    } else {
+      window.onbeforeunload = null;
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+        wakeLock = null;
+      }
+    }
+    updateDeckDateWarning();
+  }
+
+  function updateDeckDateWarning() {
+    const warning = el('deckDateWarning');
+    if (!warning) return;
+    const rosterDate = el('rosterDate')?.value;
+    const today = getTodayISO();
+    const show = deviceMode === 'deck' && rosterDate && rosterDate !== today;
+    warning.classList.toggle('hidden', !show);
   }
 
   function setLastAnnouncementUI(last){
@@ -1759,6 +2368,16 @@
     }
   }
 
+  async function loadReadOnlyMode() {
+    try {
+      const resp = await api('/api/read-only');
+      readOnlyMode = !!resp.read_only;
+      applyReadOnlyUI();
+    } catch (e) {
+      console.error('Failed to load read-only mode:', e);
+    }
+  }
+
   async function loadStatus(){
     const st = await api('/api/status');
 
@@ -1777,6 +2396,7 @@
 
     setLastAnnouncementUI(st.lastAnnouncement);
     el('blockHint').textContent = '';
+    updateDeckDateWarning();
 
     if (st.managerDateRange) {
       applyManagerDateRange(st.managerDateRange);
@@ -2015,13 +2635,17 @@
     const w = document.createElement('div');
     w.className = 'attWrap';
 
-    const mk = (label, cls, val) => {
-      const b = document.createElement('div');
+    const mk = (label, cls, val, title) => {
+      const b = document.createElement('button');
+      b.type = 'button';
       b.className = `attBtn ${cls}`;
       b.textContent = label;
+      b.title = title;
+      b.setAttribute('aria-label', title);
       b.classList.toggle('active', kid.attendance === val);
       b.addEventListener('click', async () => {
         try{
+          if (readOnlyMode) return;
           // toggle behavior: clicking active sets to null
           const next = (kid.attendance === val) ? null : val;
           await api('/api/attendance', {
@@ -2042,24 +2666,22 @@
       return b;
     };
 
-    w.appendChild(mk('Here','here',1));
-    w.appendChild(mk('Absent','absent',0));
-    w.appendChild(mk('Clear','clear',null));
+    w.appendChild(mk('✅','here',1,'Mark here'));
+    w.appendChild(mk('❌','absent',0,'Mark absent'));
+    w.appendChild(mk('⭘','clear',null,'Clear attendance'));
     return w;
   }
 
   function renderFlags(kid){
     const row = document.createElement('div');
-    row.style.display = 'flex';
-    row.style.gap = '6px';
-    row.style.alignItems = 'center';
+    row.className = 'flagRow';
 
     // Only show ACTIVE flags to save space
     if (kid.flag_new) {
       const emoji = document.createElement('span');
+      emoji.className = 'flagBadge';
       emoji.textContent = '⭐';
-      emoji.title = 'First time (click to remove)';
-      emoji.style.fontSize = '18px';
+      emoji.title = 'First time (tap to remove)';
       emoji.style.cursor = 'pointer';
       emoji.addEventListener('click', () => toggleFlag(kid, 'flag_new'));
       row.appendChild(emoji);
@@ -2067,9 +2689,9 @@
 
     if (kid.flag_makeup) {
       const emoji = document.createElement('span');
+      emoji.className = 'flagBadge';
       emoji.textContent = '🔄';
-      emoji.title = 'Makeup (click to remove)';
-      emoji.style.fontSize = '18px';
+      emoji.title = 'Makeup (tap to remove)';
       emoji.style.cursor = 'pointer';
       emoji.addEventListener('click', () => toggleFlag(kid, 'flag_makeup'));
       row.appendChild(emoji);
@@ -2077,9 +2699,9 @@
 
     if (kid.flag_policy) {
       const emoji = document.createElement('span');
+      emoji.className = 'flagBadge';
       emoji.textContent = '📜';
-      emoji.title = 'Policy (click to remove)';
-      emoji.style.fontSize = '18px';
+      emoji.title = 'Policy (tap to remove)';
       emoji.style.cursor = 'pointer';
       emoji.addEventListener('click', () => toggleFlag(kid, 'flag_policy'));
       row.appendChild(emoji);
@@ -2087,9 +2709,9 @@
 
     if (kid.flag_owes) {
       const emoji = document.createElement('span');
+      emoji.className = 'flagBadge';
       emoji.textContent = '💳';
-      emoji.title = 'Balance (click to remove)';
-      emoji.style.fontSize = '18px';
+      emoji.title = 'Balance (tap to remove)';
       emoji.style.cursor = 'pointer';
       emoji.addEventListener('click', () => toggleFlag(kid, 'flag_owes'));
       row.appendChild(emoji);
@@ -2097,30 +2719,20 @@
 
     if (kid.flag_trial) {
       const emoji = document.createElement('span');
+      emoji.className = 'flagBadge';
       emoji.textContent = '🧪';
-      emoji.title = 'Trial (click to remove)';
-      emoji.style.fontSize = '18px';
+      emoji.title = 'Trial (tap to remove)';
       emoji.style.cursor = 'pointer';
       emoji.addEventListener('click', () => toggleFlag(kid, 'flag_trial'));
       row.appendChild(emoji);
     }
-
-    // Add edit button
-    const editBtn = document.createElement('button');
-    editBtn.textContent = '✏️';
-    editBtn.title = 'Edit swimmer';
-    editBtn.style.padding = '4px 8px';
-    editBtn.style.fontSize = '14px';
-    editBtn.style.minHeight = '28px';
-    editBtn.style.cursor = 'pointer';
-    editBtn.addEventListener('click', () => openEditModal(kid));
-    row.appendChild(editBtn);
 
     return row;
   }
 
   async function toggleFlag(kid, flagKey) {
     try {
+      if (readOnlyMode) return;
       const flags = {
         flag_new: !!kid.flag_new,
         flag_makeup: !!kid.flag_makeup,
@@ -2218,10 +2830,6 @@
     for(const kid of kids){
       const tr = document.createElement('tr');
 
-      // Apply program type color class
-      const colorClass = getProgramColorClass(kid.program);
-      if(colorClass) tr.className = colorClass;
-
       // Attendance
       const tdAtt = document.createElement('td');
       tdAtt.appendChild(renderAttendance(kid));
@@ -2235,8 +2843,9 @@
 
       // Swimmer (with badges + flags)
       const tdName = document.createElement('td');
+      tdName.className = 'rosterCell';
       const nameLine = document.createElement('div');
-      nameLine.className = 'level';
+      nameLine.className = 'level rosterCell';
       nameLine.textContent = kid.swimmer_name || '—';
 
       if(kid.is_addon){
@@ -2261,28 +2870,63 @@
         nameLine.appendChild(b);
       }
 
+      if (kid.is_addon) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'secondary miniBtn';
+        removeBtn.textContent = '🗑️';
+        removeBtn.title = 'Remove add-on swimmer';
+        removeBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const confirmed = await openProtectedAction({
+            title: 'Remove add-on swimmer',
+            message: `Type DELETE and enter initials to remove ${kid.swimmer_name}.`,
+            requireDelete: true,
+            requireInitials: true
+          });
+          if (!confirmed.ok) return;
+          try{
+            await api('/api/remove-addon', {
+              method:'POST',
+              body: JSON.stringify({
+                start_time: currentBlock,
+                swimmer_name: kid.swimmer_name,
+                device_mode: deviceMode,
+                initials: confirmed.initials
+              })
+            });
+            loadRoster();
+          }catch(e){
+            alert(e.message);
+          }
+        });
+        nameLine.appendChild(removeBtn);
+      }
+
       tdName.appendChild(nameLine);
       tdName.appendChild(renderFlags(kid));
       tr.appendChild(tdName);
 
       // Age
       const tdAge = document.createElement('td');
-      tdAge.className = 'nowrap';
+      tdAge.className = 'nowrap rosterCell';
       tdAge.textContent = kid.age_text || '—';
       tr.appendChild(tdAge);
 
       // Type / Level
       const tl = parseTypeLevel(kid.program);
       const tdType = document.createElement('td');
+      tdType.className = 'rosterCell';
       tdType.textContent = tl.type;
       tr.appendChild(tdType);
 
       const tdLevel = document.createElement('td');
+      tdLevel.className = 'rosterCell';
       tdLevel.textContent = tl.level;
       tr.appendChild(tdLevel);
 
       // Instructor (show substitute name + original when applicable)
       const tdInst = document.createElement('td');
+      tdInst.className = 'rosterCell';
       if (hasSub) {
         const instDiv = document.createElement('div');
         instDiv.style.display = 'flex';
@@ -2322,15 +2966,17 @@
 
       // Zone
       const tdZone = document.createElement('td');
+      tdZone.className = 'rosterCell';
       tdZone.appendChild(renderZoneChip(kid));
       tr.appendChild(tdZone);
 
       // Action
       const tdAction = document.createElement('td');
-
+      tdAction.className = 'rosterCell';
       const callBtn = document.createElement('button');
-      callBtn.className = 'secondary';
-      callBtn.textContent = 'Call parent';
+      callBtn.className = 'secondary actionIconBtn';
+      callBtn.textContent = '📣';
+      callBtn.title = 'Announce swimmer';
       callBtn.addEventListener('click', async () => {
         try{
           await api('/api/call-parent', {
@@ -2342,26 +2988,6 @@
         }
       });
       tdAction.appendChild(callBtn);
-
-      if(kid.is_addon){
-        const rm = document.createElement('button');
-        rm.className = 'danger';
-        rm.style.marginLeft = '8px';
-        rm.textContent = 'Remove';
-        rm.addEventListener('click', async () => {
-          if(!confirm(`Remove add-on swimmer: ${kid.swimmer_name}?`)) return;
-          try{
-            await api('/api/remove-addon', {
-              method:'POST',
-              body: JSON.stringify({ start_time: currentBlock, swimmer_name: kid.swimmer_name, device_mode: deviceMode })
-            });
-            loadRoster();
-          }catch(e){
-            alert(e.message);
-          }
-        });
-        tdAction.appendChild(rm);
-      }
 
       tr.appendChild(tdAction);
 
@@ -2397,18 +3023,15 @@
       el('panelAnnouncements').classList.remove('hidden');
     } else if (view === 'virtualDesk') {
       // Check PIN authentication
-      const pinAuth = sessionStorage.getItem('admin_pin_auth');
-      const pinExpiry = sessionStorage.getItem('admin_pin_expiry');
+      const pinAuth = sessionStorage.getItem('manager_pin_auth');
+      const pinExpiry = sessionStorage.getItem('manager_pin_expiry');
 
       if (pinAuth && pinExpiry && Date.now() < parseInt(pinExpiry)) {
+        managerRole = sessionStorage.getItem('manager_role') || 'manager';
         showVirtualDeskPanel();
       } else {
         pendingPinPanel = 'virtualDesk';
-        showModal('pinModal', true);
-        el('pinInput').value = '';
-        el('pinError').style.display = 'none';
-        el('pinLockout').style.display = 'none';
-        el('pinInput').focus();
+        openPinModal('manager');
       }
     } else if (view === 'admin') {
       // Check PIN authentication
@@ -2419,11 +3042,7 @@
         showAdminPanel();
       } else {
         pendingPinPanel = 'admin';
-        showModal('pinModal', true);
-        el('pinInput').value = '';
-        el('pinError').style.display = 'none';
-        el('pinLockout').style.display = 'none';
-        el('pinInput').focus();
+        openPinModal('admin');
       }
     }
   });
@@ -2436,6 +3055,7 @@
     el('panelAdmin').classList.add('hidden');
     el('panelLifeguard').classList.add('hidden');
     el('panelGuardTasks').classList.add('hidden');
+    applyRoleUI();
 
     // Load virtual desk stats and swimmer details
     loadAdminStats();
@@ -2454,6 +3074,7 @@
     // Load locations and staff
     loadAdminLocations();
     loadStaff();
+    loadActivityLog();
   }
 
   function showLifeguardPanel() {
@@ -2476,12 +3097,12 @@
   const guardTaskTemplates = {
     weekday: {
       opening: [
-        { group: 'Guard 1 (First Guard In)', label: 'Chemicals check' },
-        { group: 'Guard 1 (First Guard In)', label: 'Make sure each pool has a bin' },
-        { group: 'Guard 1 (First Guard In)', label: 'Vacuum pools' },
-        { group: 'Guard 2 (Second Guard In)', label: 'Cycle laundry' },
-        { group: 'Guard 2 (Second Guard In)', label: 'Empty dehumidifiers' },
-        { group: 'Guard 2 (Second Guard In)', label: 'Check playpen' },
+        { group: 'Guard 1', label: 'Chemicals check' },
+        { group: 'Guard 1', label: 'Make sure each pool has a bin' },
+        { group: 'Guard 1', label: 'Vacuum pools' },
+        { group: 'Guard 2', label: 'Cycle laundry' },
+        { group: 'Guard 2', label: 'Empty dehumidifiers' },
+        { group: 'Guard 2', label: 'Check playpen' },
         { group: 'Front Desk', label: 'Set up lobby' },
         { group: 'All Guards', label: 'Pick up a walkie' }
       ],
@@ -2499,57 +3120,48 @@
     },
     weekend: {
       opening: [
-        { group: 'Guard 2 (Up for First Rotation)', label: 'Set up lobby' },
-        { group: 'Guard 2 (Up for First Rotation)', label: 'Cycle laundry' },
-        { group: 'Guard 2 (Up for First Rotation)', label: 'Empty dehumidifiers' },
+        { group: 'Guard 1', label: 'Chemicals check' },
+        { group: 'Guard 1', label: 'Make sure each pool has a bin' },
+        { group: 'Guard 1', label: 'Vacuum pools' },
+        { group: 'Guard 2', label: 'Set up lobby' },
+        { group: 'Guard 2', label: 'Cycle laundry' },
+        { group: 'Guard 2', label: 'Empty dehumidifiers' },
         { group: 'Guard 3 (Up for First Rotation)', label: 'Check playpen' },
-        { group: 'Guard 3 (Up for First Rotation)', label: 'Restock snack wall, fridge, and coffee station' },
-        { group: 'Guard 1 (Up for Second Rotation)', label: 'Chemicals check' },
-        { group: 'Guard 1 (Up for Second Rotation)', label: 'Make sure each pool has a bin' },
-        { group: 'Guard 1 (Up for Second Rotation)', label: 'Vacuum pools' },
+        { group: 'Guard 3 (Up for First Rotation)', label: 'Restock snack wall/fridge/coffee station' },
         { group: 'All Guards', label: 'Pick up a walkie' }
       ],
       closing: [
-        { group: 'Guard 2 (Up for First Rotation)', label: 'Empty dehumidifiers' },
-        { group: 'Guard 2 (Up for First Rotation)', label: 'Empty and change garbage bags' },
-        { group: 'Guard 2 (Up for First Rotation)', label: 'Clean bathrooms and leave doors open' },
-        { group: 'Guard 2 (Up for First Rotation)', label: 'Cycle laundry' },
+        { group: 'Guard 1', label: 'Chemicals check' },
+        { group: 'Guard 1', label: 'Clean pool deck and close deck doors' },
+        { group: 'Guard 2', label: 'Empty dehumidifiers' },
+        { group: 'Guard 2', label: 'Empty/change garbage bags' },
+        { group: 'Guard 2', label: 'Clean bathrooms and leave doors open' },
+        { group: 'Guard 2', label: 'Cycle laundry' },
         { group: 'Guard 3 (Down for Last Rotation)', label: 'Vacuum facility including playpen' },
         { group: 'Guard 3 (Down for Last Rotation)', label: 'Mop floors' },
-        { group: 'Guard 1 (Up for Second Rotation)', label: 'Chemicals check' },
-        { group: 'Guard 1 (Up for Second Rotation)', label: 'Clean pool deck and close deck doors' },
         { group: 'Front Desk', label: 'Tidy playpen' },
         { group: 'Front Desk', label: 'Close lobby' }
       ]
     },
     midday: [
-      { group: 'All Guards', label: 'Check bathrooms during each rotation' },
+      { group: 'All Guards', label: 'Check bathrooms each rotation' },
       { group: 'All Guards', label: 'Sweep and mop' },
       { group: 'All Guards', label: 'Clean toilet' },
       { group: 'All Guards', label: 'Stock toilet paper' },
-      { group: 'All Guards', label: 'Clean mirrors, hand railings, doorknobs, and walls' },
+      { group: 'All Guards', label: 'Clean mirrors/hand railings/doorknobs/walls' },
       { group: 'All Guards', label: 'Sign bathroom log' },
       { group: 'All Guards', label: 'Empty dehumidifiers' },
       { group: 'All Guards', label: 'Midday chemical check' },
       { group: 'All Guards', label: 'Laundry (client towels only)' },
-      { group: 'All Guards', label: 'Do not start washer with fewer than 5 towels' },
-      { group: 'All Guards', label: 'Do not change washer settings' },
+      { group: 'All Guards', label: "Don’t start washer with fewer than 5 towels" },
+      { group: 'All Guards', label: "Don’t change washer settings" },
       { group: 'All Guards', label: 'Use heavy duty setting for the dryer' },
-      { group: 'All Guards', label: 'Hand vacuum, sweep, or dry mop' },
-      { group: 'All Guards', label: 'Lobby' },
-      { group: 'All Guards', label: 'Bathrooms' },
-      { group: 'All Guards', label: 'Staff room' },
-      { group: 'All Guards', label: 'Locker rooms' },
+      { group: 'All Guards', label: 'Hand vacuum/sweep/dry mop: Lobby/Bathrooms/Staff room/Locker rooms' },
       { group: 'All Guards', label: 'Deck windows when time allows' }
     ]
   };
 
   let guardState = null;
-
-  function guardStorageKey(date) {
-    const locId = currentLocation?.id || 1;
-    return `guardTasks_${locId}_${date}`;
-  }
 
   function buildGuardTasks(template) {
     return template.map((item, idx) => ({
@@ -2576,15 +3188,15 @@
     }));
   }
 
-  function loadGuardState(date) {
+  async function loadGuardState(date) {
     if (!date) return null;
-    const key = guardStorageKey(date);
-    const existing = localStorage.getItem(key);
-    if (existing) {
-      try {
-        const parsed = JSON.parse(existing);
-        const weekend = isWeekendDate(date);
-        const dayType = weekend ? 'weekend' : 'weekday';
+    const weekend = isWeekendDate(date);
+    const dayType = weekend ? 'weekend' : 'weekday';
+    try {
+      const locId = currentLocation?.id || 1;
+      const resp = await api(`/api/guard-tasks?location_id=${locId}&date=${date}`);
+      if (resp.task?.data_json) {
+        const parsed = JSON.parse(resp.task.data_json);
         return {
           date,
           dayType,
@@ -2596,10 +3208,10 @@
           notes: parsed.notes || '',
           autoShuffleDone: parsed.autoShuffleDone || false
         };
-      } catch (_) {}
+      }
+    } catch (e) {
+      console.error('Failed to load guard tasks:', e);
     }
-    const weekend = isWeekendDate(date);
-    const dayType = weekend ? 'weekend' : 'weekday';
     return {
       date,
       dayType,
@@ -2613,9 +3225,21 @@
     };
   }
 
-  function saveGuardState() {
-    if (!guardState?.date) return;
-    localStorage.setItem(guardStorageKey(guardState.date), JSON.stringify(guardState));
+  async function saveGuardState() {
+    if (!guardState?.date || readOnlyMode) return;
+    const locId = currentLocation?.id || 1;
+    try {
+      await api('/api/guard-tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          location_id: locId,
+          date: guardState.date,
+          data: guardState
+        })
+      });
+    } catch (e) {
+      console.error('Failed to save guard tasks:', e);
+    }
   }
 
   function shuffleNames(list) {
@@ -2669,6 +3293,7 @@
     const container = el(containerId);
     container.innerHTML = '';
     let lastGroup = null;
+    const canEdit = managerRole === 'admin' || managerRole === 'manager';
     list.forEach((task) => {
       if (task.group && task.group !== lastGroup) {
         const group = document.createElement('div');
@@ -2683,6 +3308,13 @@
 
       const label = document.createElement('span');
       label.textContent = task.label;
+      if (isDone) {
+        label.style.color = 'rgba(159,176,208,.85)';
+        label.style.fontWeight = '700';
+        const check = document.createElement('span');
+        check.textContent = ' ✅';
+        label.appendChild(check);
+      }
       row.appendChild(label);
 
       const initials = document.createElement('input');
@@ -2692,6 +3324,7 @@
       initials.required = true;
       initials.setAttribute('aria-label', 'Initials required to mark complete');
       initials.value = task.initials || '';
+      initials.disabled = readOnlyMode;
       initials.addEventListener('input', () => {
         task.initials = initials.value.toUpperCase();
         saveGuardState();
@@ -2699,7 +3332,7 @@
       });
       row.appendChild(initials);
 
-      if (task.custom) {
+      if (task.custom && canEdit && !readOnlyMode) {
         const removeBtn = document.createElement('button');
         removeBtn.className = 'miniBtn';
         removeBtn.textContent = '✕';
@@ -2717,10 +3350,20 @@
 
   function addCustomGuardTask(sectionKey) {
     if (!guardState || !guardState[sectionKey]) return;
+    const canEdit = managerRole === 'admin' || managerRole === 'manager';
+    if (!canEdit) {
+      alert('Templates are locked for guards. Ask a manager to edit.');
+      return;
+    }
+    if (readOnlyMode) {
+      alert('Read-only mode is enabled.');
+      return;
+    }
     const groupInput = prompt('Task group (optional):', '');
     if (groupInput === null) return;
     const labelInput = prompt('Task label:');
     if (!labelInput) return;
+    const applyTodayOnly = confirm('Apply change only for today?\n\nOK = today only\nCancel = update template going forward');
     guardState[sectionKey].push({
       id: `task_custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       label: labelInput.trim(),
@@ -2728,6 +3371,13 @@
       initials: '',
       custom: true
     });
+    if (!applyTodayOnly) {
+      if (sectionKey === 'midday') {
+        guardTaskTemplates.midday.push({ group: groupInput.trim() || 'All Guards', label: labelInput.trim() });
+      } else {
+        guardTaskTemplates[guardState.dayType][sectionKey].push({ group: groupInput.trim() || 'All Guards', label: labelInput.trim() });
+      }
+    }
     saveGuardState();
     renderGuardTasks();
   }
@@ -2781,6 +3431,7 @@
       const tdTime = document.createElement('td');
       const timeInput = document.createElement('input');
       timeInput.value = entry.time || '';
+      timeInput.disabled = readOnlyMode;
       timeInput.addEventListener('input', () => {
         entry.time = timeInput.value;
         saveGuardState();
@@ -2791,6 +3442,7 @@
       const tdGuard = document.createElement('td');
       const guardInput = document.createElement('input');
       guardInput.value = entry.guard || '';
+      guardInput.disabled = readOnlyMode;
       guardInput.addEventListener('input', () => {
         entry.guard = guardInput.value;
         saveGuardState();
@@ -2801,6 +3453,7 @@
       const tdZone = document.createElement('td');
       const zoneInput = document.createElement('input');
       zoneInput.value = entry.zone || '';
+      zoneInput.disabled = readOnlyMode;
       zoneInput.addEventListener('input', () => {
         entry.zone = zoneInput.value;
         saveGuardState();
@@ -2826,6 +3479,7 @@
 
   function renderGuardTasks() {
     if (!guardState) return;
+    const canEdit = managerRole === 'admin' || managerRole === 'manager';
     const openingTitle = el('guardOpeningTitle');
     const closingTitle = el('guardClosingTitle');
     if (openingTitle) {
@@ -2847,10 +3501,22 @@
     el('guardName2').value = guardState.guardNames?.[2] || '';
     el('guardName3').value = guardState.guardNames?.[3] || '';
     el('guardRotationAdd').style.display = guardState.dayType === 'weekend' ? 'none' : '';
+    document.querySelectorAll('.guardAddTask').forEach((btn) => {
+      btn.style.display = canEdit && !readOnlyMode ? '' : 'none';
+    });
+    el('guardTasksReset').disabled = !canEdit || readOnlyMode;
+    el('guardTasksShuffle').disabled = readOnlyMode;
+    el('guardTasksSnapshot').disabled = !canEdit || readOnlyMode;
+    el('guardNotes').disabled = readOnlyMode;
     setGuardMeta();
   }
 
-  function showGuardTasksPanel(fromPanel) {
+  async function showGuardTasksPanel(fromPanel) {
+    if (!isWestchesterLocation()) {
+      el('viewSelect').value = 'roster';
+      el('panelRoster').classList.remove('hidden');
+      return;
+    }
     lastPanel = fromPanel;
     el('panelRoster').classList.add('hidden');
     el('panelAnnouncements').classList.add('hidden');
@@ -2862,7 +3528,7 @@
     const defaultDate = managerDateRange?.start || activeDateISO || getTodayISO();
     const dateInput = el('guardTasksDate');
     if (dateInput && !dateInput.value) dateInput.value = defaultDate;
-    guardState = loadGuardState(dateInput.value);
+    guardState = await loadGuardState(dateInput.value);
     renderGuardTasks();
   }
 
@@ -2891,8 +3557,56 @@
 
         list.appendChild(item);
       });
+
+      const overrideSelect = el('overrideLocationSelect');
+      const newStaffOverride = el('newStaffLocationOverride');
+      if (overrideSelect) {
+        overrideSelect.innerHTML = '';
+        (resp.locations || []).forEach(loc => {
+          const opt = document.createElement('option');
+          opt.value = loc.code || loc.name;
+          opt.textContent = loc.name;
+          overrideSelect.appendChild(opt);
+        });
+      }
+      if (newStaffOverride) {
+        newStaffOverride.innerHTML = '<option value="">(select location)</option>';
+        (resp.locations || []).forEach(loc => {
+          const opt = document.createElement('option');
+          opt.value = loc.code || loc.name;
+          opt.textContent = loc.name;
+          newStaffOverride.appendChild(opt);
+        });
+      }
     } catch (e) {
       console.error('Failed to load admin locations:', e);
+    }
+  }
+
+  async function loadActivityLog() {
+    try {
+      const resp = await api('/api/admin/activity-log');
+      const container = el('activityLogTable');
+      if (!resp.entries || !resp.entries.length) {
+        container.innerHTML = '<div class="tiny" style="color:var(--muted); padding:8px;">No activity yet.</div>';
+        return;
+      }
+      let html = '<table><thead><tr><th>Time</th><th>Action</th><th>Initials</th><th>Location</th></tr></thead><tbody>';
+      resp.entries.forEach((entry) => {
+        const locName = entry.location_id
+          ? (allLocations.find((loc) => loc.id === entry.location_id)?.name || entry.location_id)
+          : '';
+        html += '<tr>';
+        html += `<td>${formatShortDate(entry.created_at || entry.at || '')}</td>`;
+        html += `<td>${escapeHtml(entry.action || '')}</td>`;
+        html += `<td>${escapeHtml(entry.initials || '')}</td>`;
+        html += `<td>${escapeHtml(locName)}</td>`;
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    } catch (e) {
+      console.error('Failed to load activity log:', e);
     }
   }
 
@@ -2919,7 +3633,7 @@
 
         // Build info HTML with phone and birthday
         let infoHTML = `<strong>${staff.firstName} ${staff.lastName}</strong>`;
-        infoHTML += ` <span class="tiny" style="color:var(--muted);">${staff.location}</span>`;
+        infoHTML += ` <span class="tiny" style="color:var(--muted);">${staff.state || 'Unknown'}</span>`;
         if (staff.phone) {
           infoHTML += `<br><span class="tiny" style="color:var(--muted);">📞 ${staff.phone}</span>`;
         }
@@ -2935,24 +3649,124 @@
         delBtn.className = 'danger';
         delBtn.style.cssText = 'padding:4px 12px; font-size:12px;';
         delBtn.textContent = 'Remove';
-        delBtn.addEventListener('click', () => removeStaff(staff.id || `${staff.firstName}_${staff.lastName}`, `${staff.firstName} ${staff.lastName}`));
+        delBtn.addEventListener('click', () => removeStaff({
+          scope: 'state',
+          firstName: staff.firstName,
+          lastName: staff.lastName,
+          state: staff.state
+        }));
         actions.appendChild(delBtn);
         item.appendChild(actions);
 
         list.appendChild(item);
       });
+
+      const overrideStaffSelect = el('overrideStaffSelect');
+      if (overrideStaffSelect) {
+        overrideStaffSelect.innerHTML = '';
+        (resp.staff || []).forEach(staff => {
+          const opt = document.createElement('option');
+          opt.value = `${staff.firstName} ${staff.lastName}`;
+          opt.textContent = `${staff.firstName} ${staff.lastName} (${staff.state || 'State'})`;
+          overrideStaffSelect.appendChild(opt);
+        });
+      }
+
+      const overrideList = el('overrideList');
+      if (overrideList) {
+        const overrides = resp.overrides || {};
+        const entries = Object.entries(overrides);
+        if (!entries.length) {
+          overrideList.textContent = 'No location overrides yet.';
+        } else {
+          overrideList.innerHTML = entries.map(([key, value]) => {
+            const added = (value.add || []).map((i) => `${i.firstName} ${i.lastName}`).join(', ') || 'None';
+            const removed = (value.remove || []).join(', ') || 'None';
+            return `<div><strong>${key}</strong> • Added: ${added} • Removed: ${removed}</div>`;
+          }).join('');
+        }
+      }
     } catch (e) {
       console.error('Failed to load staff:', e);
     }
   }
 
+  function parseFullName(value) {
+    const parts = String(value || '').trim().split(' ');
+    if (parts.length < 2) return { firstName: '', lastName: '' };
+    return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+  }
+
+  el('overrideRemoveBtn').addEventListener('click', async () => {
+    const locKey = el('overrideLocationSelect').value;
+    const staffValue = el('overrideStaffSelect').value;
+    const { firstName, lastName } = parseFullName(staffValue);
+    if (!locKey || !firstName || !lastName) {
+      alert('Select a location and staff member.');
+      return;
+    }
+    const confirmed = await openProtectedAction({
+      title: 'Remove staff from location',
+      message: `Type DELETE and enter initials to remove ${firstName} ${lastName} from ${locKey}.`,
+      requireDelete: true,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
+    try {
+      await api('/api/admin/staff/override-remove', {
+        method: 'POST',
+        body: JSON.stringify({
+          location_key: locKey,
+          firstName,
+          lastName,
+          initials: confirmed.initials
+        })
+      });
+      loadStaff();
+    } catch (e) {
+      alert(`Failed to update override: ${e.message}`);
+    }
+  });
+
+  el('overrideRestoreBtn').addEventListener('click', async () => {
+    const locKey = el('overrideLocationSelect').value;
+    const staffValue = el('overrideStaffSelect').value;
+    const { firstName, lastName } = parseFullName(staffValue);
+    if (!locKey || !firstName || !lastName) {
+      alert('Select a location and staff member.');
+      return;
+    }
+    const confirmed = await openProtectedAction({
+      title: 'Restore staff to location',
+      message: `Enter initials to restore ${firstName} ${lastName} for ${locKey}.`,
+      requireDelete: false,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
+    try {
+      await api('/api/admin/staff/override-restore', {
+        method: 'POST',
+        body: JSON.stringify({ location_key: locKey, firstName, lastName })
+      });
+      loadStaff();
+    } catch (e) {
+      alert(`Failed to restore override: ${e.message}`);
+    }
+  });
+
   async function removeLocation(id, name) {
-    if (!confirm(`Remove location: ${name}?\n\nThis will affect all rosters and settings for this location.`)) return;
+    const confirmed = await openProtectedAction({
+      title: 'Remove location',
+      message: `Type DELETE and enter initials to remove ${name}.`,
+      requireDelete: true,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
 
     try {
       await api('/api/admin/remove-location', {
         method: 'POST',
-        body: JSON.stringify({ id })
+        body: JSON.stringify({ id, initials: confirmed.initials })
       });
       alert(`Location "${name}" removed successfully.`);
       loadAdminLocations();
@@ -2962,15 +3776,21 @@
     }
   }
 
-  async function removeStaff(id, name) {
-    if (!confirm(`Remove staff member: ${name}?`)) return;
+  async function removeStaff(payload) {
+    const confirmed = await openProtectedAction({
+      title: 'Remove staff member',
+      message: 'Type DELETE and enter initials to remove this staff member.',
+      requireDelete: true,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
 
     try {
       await api('/api/admin/remove-staff', {
         method: 'POST',
-        body: JSON.stringify({ id })
+        body: JSON.stringify({ ...payload, initials: confirmed.initials })
       });
-      alert(`Staff member "${name}" removed successfully.`);
+      alert('Staff member removed successfully.');
       loadStaff();
     } catch (e) {
       alert(`Failed to remove staff: ${e.message}`);
@@ -3187,6 +4007,7 @@
       alert('Select a location before uploading a report.');
       return;
     }
+    if (blockIfReadOnly('Report uploads')) return;
     const button = document.querySelector(`.reportUploadBtn[data-report-type="${reportType}"]`);
     const originalLabel = button ? button.textContent : null;
     try {
@@ -3194,10 +4015,56 @@
         button.disabled = true;
         button.textContent = 'Uploading...';
       }
+      const previewForm = new FormData();
+      previewForm.append('report', file);
+      previewForm.append('report_type', reportType);
+      const previewResp = await fetch(apiUrl('/api/manager-reports/preview'), {
+        method: 'POST',
+        body: previewForm
+      });
+      const previewData = await previewResp.json().catch(() => ({}));
+      if (!previewResp.ok || previewData.ok === false) {
+        throw new Error(previewData.error || 'Preview failed');
+      }
+      const summary = previewData.summary || {};
+      const detectedLocation = summary.location_name || '';
+      const warningText = (summary.warnings || []).join(' • ') || 'No warnings detected.';
+      const messageLines = [
+        `Report type: ${reportType.replace('_',' ')}`,
+        `Detected location: ${detectedLocation || 'Not found'}`,
+        `Report date: ${summary.report_date || 'Unknown'}`,
+        `Rows detected: ${summary.row_count ?? '—'}`,
+        `Warnings: ${warningText}`
+      ];
+
+      let locationOptions = null;
+      if (reportType === 'drop_list' && !detectedLocation) {
+        locationOptions = (allLocations || []).map(loc => ({ value: String(loc.id), label: loc.name }));
+      }
+
+      const confirmResult = await openProtectedAction({
+        title: 'Confirm report upload',
+        message: messageLines.join('\n'),
+        requireDelete: false,
+        requireInitials: true,
+        requirePin: true,
+        locationOptions
+      });
+      if (!confirmResult.ok) return;
+
+      const matchedLocation = detectedLocation
+        ? allLocations.find(loc => loc.name.toLowerCase() === detectedLocation.toLowerCase())
+        : null;
+      const selectedLocationId = locationOptions
+        ? confirmResult.location_value
+        : (matchedLocation ? matchedLocation.id : currentLocation.id);
+
       const formData = new FormData();
       formData.append('report', file);
       formData.append('report_type', reportType);
-      formData.append('location_id', currentLocation.id);
+      formData.append('location_id', selectedLocationId);
+      formData.append('initials', confirmResult.initials);
+      formData.append('pin', confirmResult.pin);
       const response = await fetch(apiUrl('/api/manager-reports/upload'), {
         method: 'POST',
         body: formData
@@ -3247,14 +4114,21 @@
       btn.addEventListener('click', async () => {
         const filename = btn.getAttribute('data-file');
         if (!filename) return;
-        if (!confirm(`Import server backup: ${filename}?\n\nThis will replace the current roster for the active date.`)) return;
+        const confirmed = await openProtectedAction({
+          title: 'Import server backup',
+          message: `Type DELETE and enter initials to import ${filename}.`,
+          requireDelete: true,
+          requireInitials: true
+        });
+        if (!confirmed.ok) return;
         try {
           btn.disabled = true;
           await api('/api/import-server', {
             method: 'POST',
             body: JSON.stringify({
               location_id: currentLocation?.id || 1,
-              filename
+              filename,
+              initials: confirmed.initials
             })
           });
           showModal('serverImportModal', false);
@@ -3410,11 +4284,24 @@
   el('addStaffBtn').addEventListener('click', () => {
     el('newStaffFirstName').value = '';
     el('newStaffLastName').value = '';
-    el('newStaffLocation').value = 'New York';
+    el('newStaffScope').value = 'state';
+    el('newStaffState').value = 'New York';
+    el('newStaffLocationOverride').value = '';
     el('newStaffPhone').value = '';
     el('newStaffBirthday').value = '';
+    syncStaffScopeUI();
     showModal('addStaffModal', true);
   });
+
+  function syncStaffScopeUI() {
+    const scope = el('newStaffScope').value;
+    const stateField = el('newStaffState').closest('.field');
+    const locationField = el('newStaffLocationOverride').closest('.field');
+    if (stateField) stateField.style.display = scope === 'state' ? 'block' : 'none';
+    if (locationField) locationField.style.display = scope === 'override' ? 'block' : 'none';
+  }
+
+  el('newStaffScope').addEventListener('change', syncStaffScopeUI);
 
   el('addStaffCancel').addEventListener('click', () => showModal('addStaffModal', false));
   el('addStaffModal').addEventListener('click', (e) => {
@@ -3424,7 +4311,9 @@
   el('addStaffSave').addEventListener('click', async () => {
     const firstName = el('newStaffFirstName').value.trim();
     const lastName = el('newStaffLastName').value.trim();
-    const location = el('newStaffLocation').value;
+    const scope = el('newStaffScope').value;
+    const state = el('newStaffState').value;
+    const location_key = el('newStaffLocationOverride').value;
     const phone = el('newStaffPhone').value.trim();
     const birthday = el('newStaffBirthday').value.trim();
 
@@ -3432,11 +4321,15 @@
       alert('First name and last name are required');
       return;
     }
+    if (scope === 'override' && !location_key) {
+      alert('Location override selection is required');
+      return;
+    }
 
     try {
       await api('/api/admin/add-staff', {
         method: 'POST',
-        body: JSON.stringify({ firstName, lastName, location, phone, birthday })
+        body: JSON.stringify({ firstName, lastName, scope, state, location_key, phone, birthday })
       });
       alert(`Staff member "${firstName} ${lastName}" added successfully.`);
       showModal('addStaffModal', false);
@@ -3461,15 +4354,25 @@
     }
 
     try {
+      const pinType = pendingPinPanel === 'admin' ? 'admin' : 'manager';
       const resp = await api('/api/verify-pin', {
         method: 'POST',
-        body: JSON.stringify({ pin })
+        body: JSON.stringify({ pin, pin_type: pinType })
       });
 
       if (resp.ok && resp.authenticated) {
         // Success!
-        sessionStorage.setItem('admin_pin_auth', 'true');
-        sessionStorage.setItem('admin_pin_expiry', resp.expires_at.toString());
+        if (pinType === 'admin') {
+          sessionStorage.setItem('admin_pin_auth', 'true');
+          sessionStorage.setItem('admin_pin_expiry', resp.expires_at.toString());
+          managerRole = 'admin';
+          sessionStorage.setItem('manager_role', 'admin');
+        } else {
+          sessionStorage.setItem('manager_pin_auth', 'true');
+          sessionStorage.setItem('manager_pin_expiry', resp.expires_at.toString());
+          sessionStorage.setItem('manager_role', resp.role || 'manager');
+          managerRole = resp.role || 'manager';
+        }
 
         showModal('pinModal', false);
 
@@ -3538,14 +4441,15 @@
     }
   });
 
-  el('guardTasksDate').addEventListener('change', () => {
-    guardState = loadGuardState(el('guardTasksDate').value);
+  el('guardTasksDate').addEventListener('change', async () => {
+    guardState = await loadGuardState(el('guardTasksDate').value);
     renderGuardTasks();
   });
 
   ['guardName1', 'guardName2', 'guardName3'].forEach((id, idx) => {
     el(id).addEventListener('input', () => {
       if (!guardState) return;
+      if (readOnlyMode) return;
       guardState.guardNames = guardState.guardNames || { 1: '', 2: '', 3: '' };
       guardState.guardNames[idx + 1] = el(id).value.trim();
       saveGuardState();
@@ -3556,6 +4460,7 @@
 
   el('guardTasksShuffle').addEventListener('click', () => {
     if (!guardState) return;
+    if (readOnlyMode) return;
     const names = getGuardInputNames().filter(Boolean);
     const minCount = guardState.dayType === 'weekend' ? 3 : 2;
     if (names.length < minCount) {
@@ -3566,24 +4471,55 @@
   });
 
   el('guardRotationAdd').addEventListener('click', () => {
+    if (readOnlyMode) return;
     guardState.rotation.push({ time: '', guard: '', zone: '' });
     saveGuardState();
     renderGuardRotation();
   });
 
+  el('guardTasksSnapshot').addEventListener('click', async () => {
+    if (!guardState) return;
+    if (readOnlyMode) return;
+    const confirmed = await openProtectedAction({
+      title: 'Save guard task snapshot',
+      message: 'Enter initials to save a manual snapshot for this day.',
+      requireDelete: false,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
+    await api('/api/guard-tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        location_id: currentLocation?.id || 1,
+        date: guardState.date,
+        data: guardState,
+        initials: confirmed.initials
+      })
+    });
+  });
+
   el('guardNotes').addEventListener('input', () => {
     if (!guardState) return;
+    if (readOnlyMode) return;
     guardState.notes = el('guardNotes').value;
     saveGuardState();
   });
 
-  el('guardTasksReset').addEventListener('click', () => {
+  el('guardTasksReset').addEventListener('click', async () => {
     const date = el('guardTasksDate').value;
     if (!date) return;
-    if (!confirm('Reset all guard tasks and notes for this date?')) return;
-    localStorage.removeItem(guardStorageKey(date));
-    guardState = loadGuardState(date);
-    saveGuardState();
+    const confirmed = await openProtectedAction({
+      title: 'Clear all guard tasks',
+      message: 'Type DELETE and enter initials to clear all tasks for this day.',
+      requireDelete: true,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
+    await api('/api/guard-tasks/clear', {
+      method: 'POST',
+      body: JSON.stringify({ location_id: currentLocation?.id || 1, date, initials: confirmed.initials })
+    });
+    guardState = await loadGuardState(date);
     renderGuardTasks();
   });
 
@@ -3600,6 +4536,7 @@
       alert('Please select a location and date first.');
       return;
     }
+    if (blockIfReadOnly('Export')) return;
     const format = prompt('Export format: Enter "csv" or "json" (default: csv)', 'csv');
     if (format === null) return;
     const fmt = format.toLowerCase() === 'json' ? 'json' : 'csv';
@@ -3965,32 +4902,22 @@
   el('instructorReportModal').addEventListener('click', (e) => { if(e.target === el('instructorReportModal')) showModal('instructorReportModal', false); });
 
   el('adminNavClearRoster').addEventListener('click', async () => {
+    if (blockIfReadOnly('Clear roster')) return;
     const locationName = currentLocation?.name || 'Unknown';
-    const locationCode = currentLocation?.code || 'Unknown';
-
-    const confirmMsg = `⚠️ CLEAR ROSTER FOR ${locationName.toUpperCase()}\n\n` +
-      `This will permanently delete ALL uploaded roster data for ${locationName} (${locationCode}).\n\n` +
-      `• All swimmers will be removed\n` +
-      `• All attendance records will be deleted\n` +
-      `• All flags and notes will be lost\n` +
-      `• All future calendars will be deleted\n\n` +
-      `The roster will be auto-exported as a backup before deletion.\n\n` +
-      `Type "DELETE" to confirm:`;
-
-    const userInput = prompt(confirmMsg);
-
-    if (userInput !== 'DELETE') {
-      if (userInput !== null) {
-        alert('Cancelled. Roster was NOT cleared.');
-      }
-      return;
-    }
+    const confirmed = await openProtectedAction({
+      title: 'Clear roster',
+      message: `Type DELETE and enter initials to clear the roster for ${locationName}.`,
+      requireDelete: true,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
 
     try {
       const resp = await api('/api/clear-roster', {
         method: 'POST',
         body: JSON.stringify({
-          location_id: currentLocation?.id || 1
+          location_id: currentLocation?.id || 1,
+          initials: confirmed.initials
         })
       });
 
@@ -4005,6 +4932,7 @@
   });
 
   async function runAdminClearAll({ startDate, endDate, label }) {
+    if (blockIfReadOnly('Clear rosters')) return;
     if ((startDate && !endDate) || (!startDate && endDate)) {
       alert('Please set both a start and end date to delete a window.');
       return;
@@ -4013,31 +4941,21 @@
     const windowLabel = hasWindow
       ? `Date window: ${label || `${startDate} → ${endDate}`}\n\n`
       : 'Date window: ALL DATES\n\n';
-    const confirmMsg = `⚠️ MASTER DELETE ALL ROSTERS\n\n` +
-      `This will permanently delete roster data for EVERY location.\n\n` +
-      windowLabel +
-      `• All swimmers will be removed\n` +
-      `• All attendance records will be deleted\n` +
-      `• All flags and notes will be lost\n` +
-      `• All future calendars will be deleted\n\n` +
-      `A full roster backup will be auto-exported before deletion.\n\n` +
-      `Type "DELETE ALL" to confirm:`;
-
-    const userInput = prompt(confirmMsg);
-
-    if (userInput !== 'DELETE ALL') {
-      if (userInput !== null) {
-        alert('Cancelled. No rosters were deleted.');
-      }
-      return;
-    }
+    const confirmed = await openProtectedAction({
+      title: 'Clear all rosters',
+      message: `Type DELETE and enter initials to clear all rosters.\n\n${windowLabel}`,
+      requireDelete: true,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
 
     try {
       const resp = await api('/api/clear-roster-all', {
         method: 'POST',
         body: JSON.stringify({
           start_date: startDate || null,
-          end_date: endDate || null
+          end_date: endDate || null,
+          initials: confirmed.initials
         })
       });
 
@@ -4075,6 +4993,33 @@
     await runAdminClearAll({ startDate: null, endDate: null, label: 'ALL DATES' });
   });
 
+  async function handleReadOnlyToggle() {
+    const confirmed = await openProtectedAction({
+      title: 'Toggle read-only mode',
+      message: 'Enter initials to toggle read-only mode for this device.',
+      requireDelete: false,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
+    try {
+      const resp = await api('/api/read-only', {
+        method: 'POST',
+        body: JSON.stringify({ read_only: !readOnlyMode, initials: confirmed.initials })
+      });
+      readOnlyMode = !!resp.read_only;
+      applyReadOnlyUI();
+    } catch (e) {
+      alert(`Failed to toggle read-only mode: ${e.message}`);
+    }
+  }
+
+  el('toggleReadOnlyBtn').addEventListener('click', handleReadOnlyToggle);
+  el('toggleReadOnlyBtnManager').addEventListener('click', handleReadOnlyToggle);
+
+  el('activityLogRefresh').addEventListener('click', () => {
+    loadActivityLog();
+  });
+
   el('settingsBtn').addEventListener('click', () => {
     syncDeviceUI();
     showModal('settingsModal', true);
@@ -4091,6 +5036,7 @@
   });
 
   el('importBtn').addEventListener('click', async () => {
+    if (blockIfReadOnly('Roster import')) return;
     try{
       el('importBtn').disabled = true;
       await api('/api/import-today', { method:'POST', body: JSON.stringify({ device_mode: deviceMode }) });
@@ -4123,6 +5069,7 @@
 
   // HTML Upload handlers
   el('uploadHtmlBtn').addEventListener('click', () => {
+    if (blockIfReadOnly('HTML upload')) return;
     el('htmlFileInput').click();
   });
 
@@ -4131,8 +5078,29 @@
     if (!file) return;
 
     try {
+      if (blockIfReadOnly('HTML upload')) return;
       el('uploadHtmlBtn').disabled = true;
       el('uploadHtmlBtn').textContent = 'Uploading...';
+
+      const previewForm = new FormData();
+      previewForm.append('html', file);
+      previewForm.append('location_id', currentLocation?.id || 1);
+      const previewResp = await fetch(apiUrl('/api/upload-html/preview'), {
+        method: 'POST',
+        body: previewForm
+      });
+      const previewData = await previewResp.json().catch(() => ({}));
+      if (!previewResp.ok || previewData.ok === false) {
+        throw new Error(previewData.error || 'Preview failed');
+      }
+      const summary = previewData.summary || {};
+      const confirmUpload = await openProtectedAction({
+        title: 'Confirm roster upload',
+        message: `Location: ${summary.location || 'Unknown'}\nDate range: ${summary.date_start || '—'} → ${summary.date_end || '—'}\nSwimmers detected: ${summary.count ?? '—'}`,
+        requireDelete: false,
+        requireInitials: false
+      });
+      if (!confirmUpload.ok) return;
 
       // Use FormData for clean file upload without credential issues
       const formData = new FormData();
@@ -4169,6 +5137,7 @@
   });
 
   el('exportServerBtn').addEventListener('click', async () => {
+    if (blockIfReadOnly('Export')) return;
     try {
       el('exportServerBtn').disabled = true;
       const date = el('rosterDate').value || activeDateISO;
@@ -4188,6 +5157,7 @@
   });
 
   el('importServerBtn').addEventListener('click', async () => {
+    if (blockIfReadOnly('Import')) return;
     await loadServerExports();
     showModal('serverImportModal', true);
   });
@@ -4200,6 +5170,7 @@
       await loadStatus();
       await loadBlocks();
       await loadRoster();
+      updateDeckDateWarning();
       toast('Roster date updated');
     }catch(err){
       alert('Set date failed: ' + (err.message || err));
@@ -4207,6 +5178,56 @@
   });
 
   el('sortBy').addEventListener('change', () => loadRoster());
+
+  el('bulkMarkPresent').addEventListener('click', async () => {
+    if (!currentBlock) {
+      alert('Select a time block first.');
+      return;
+    }
+    if (blockIfReadOnly('Bulk attendance')) return;
+    const confirmed = await openProtectedAction({
+      title: 'Mark all present',
+      message: 'Type DELETE and enter initials to mark all swimmers present for this block.',
+      requireDelete: true,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
+    await api('/api/attendance/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        start_time: currentBlock,
+        attendance: 1,
+        location_id: currentLocation?.id || 1,
+        initials: confirmed.initials
+      })
+    });
+    loadRoster();
+  });
+
+  el('bulkClearAttendance').addEventListener('click', async () => {
+    if (!currentBlock) {
+      alert('Select a time block first.');
+      return;
+    }
+    if (blockIfReadOnly('Bulk attendance')) return;
+    const confirmed = await openProtectedAction({
+      title: 'Clear attendance',
+      message: 'Type DELETE and enter initials to clear all attendance for this block.',
+      requireDelete: true,
+      requireInitials: true
+    });
+    if (!confirmed.ok) return;
+    await api('/api/attendance/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        start_time: currentBlock,
+        attendance: null,
+        location_id: currentLocation?.id || 1,
+        initials: confirmed.initials
+      })
+    });
+    loadRoster();
+  });
 
   // Load instructors for dropdown
   async function loadInstructors() {
@@ -4241,6 +5262,7 @@
 
   // Add-on modal
   el('addSwimmerBtn').addEventListener('click', async () => {
+    if (blockIfReadOnly('Add swimmer')) return;
     if(!currentBlock) return;
     el('addName').value = '';
     el('addAge').value = '';
@@ -4258,6 +5280,7 @@
   el('addModal').addEventListener('click', (e) => { if(e.target === el('addModal')) showModal('addModal', false); });
 
   el('addSave').addEventListener('click', async () => {
+    if (blockIfReadOnly('Add swimmer')) return;
     try{
       const swimmer_name = el('addName').value.trim();
       if(!swimmer_name){
@@ -4291,6 +5314,7 @@
   el('zoneSave').addEventListener('click', async () => {
     if(!zoneTarget) return;
     try{
+      if (readOnlyMode) return;
       const payload = {
         start_time: currentBlock,
         swimmer_name: zoneTarget.swimmer_name,
@@ -4386,7 +5410,14 @@
   (async function init(){
     try{
       syncDeviceUI();
+      const mgrExpiry = sessionStorage.getItem('manager_pin_expiry');
+      if (mgrExpiry && Date.now() < parseInt(mgrExpiry)) {
+        managerRole = sessionStorage.getItem('manager_role') || 'manager';
+      }
+      applyRoleUI();
+      el('buildStamp').textContent = new Date().toLocaleString();
       await loadLocations();
+      await loadReadOnlyMode();
       await loadStatus();
       await loadBlocks();
     }catch(e){
