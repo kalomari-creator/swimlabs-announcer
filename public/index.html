@@ -6327,7 +6327,6 @@ QA checklist (v4.9-beta):
             })
           });
           setLastAnnouncementUI(resp.lastAnnouncement);
-          await speakLocal(resp.message || `Parent or guardian of ${kid.swimmer_name}, please come to the pool deck.`);
           lastActionSwimmer = kid.swimmer_name;
           openAnnouncementConfirm({
             swimmer_name: kid.swimmer_name,
@@ -6350,44 +6349,18 @@ QA checklist (v4.9-beta):
     return localStorage.getItem('local_tts') !== 'off';
   }
 
-  function playLocalPing() {
-    if (!('AudioContext' in window || 'webkitAudioContext' in window)) return Promise.resolve(false);
-    return new Promise((resolve) => {
-      try {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        const ctx = new Ctx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = 880;
-        gain.gain.value = 0.08;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        setTimeout(() => {
-          osc.stop();
-          ctx.close().then(() => resolve(true)).catch(() => resolve(true));
-        }, 140);
-      } catch (e) {
-        resolve(false);
-      }
-    });
-  }
-
   function speakLocal(text) {
     const clean = String(text || '').replace(/\s+/g, ' ').trim();
     if (!clean || !('speechSynthesis' in window) || !isLocalTtsEnabled()) {
       return Promise.resolve(false);
     }
     return new Promise((resolve) => {
-      playLocalPing().finally(() => {
-        const utterance = new SpeechSynthesisUtterance(clean);
-        utterance.lang = 'en-US';
-        utterance.onend = () => resolve(true);
-        utterance.onerror = () => resolve(false);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
-      });
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = 'en-US';
+      utterance.onend = () => resolve(true);
+      utterance.onerror = () => resolve(false);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
     });
   }
 
@@ -7413,7 +7386,7 @@ QA checklist (v4.9-beta):
   el('announcementRepeatBtn').addEventListener('click', async () => {
     if (!pendingAnnouncementConfirm) return;
     try {
-      const resp = await api('/api/speak', {
+      await api('/api/speak', {
         method: 'POST',
         body: JSON.stringify({
           text: pendingAnnouncementConfirm.message,
@@ -7421,8 +7394,6 @@ QA checklist (v4.9-beta):
           location_id: currentLocation?.id
         })
       });
-      setLastAnnouncementUI(resp.lastAnnouncement);
-      await speakLocal(resp.lastAnnouncement?.text || pendingAnnouncementConfirm.message);
     } catch (err) {
       alert(`Repeat failed: ${err.message || err}`);
     }
