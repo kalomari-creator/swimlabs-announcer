@@ -2421,11 +2421,12 @@ QA checklist (v4.9-beta):
     renderLocationSelect(allLocations, resolved?.id || '');
   }
 
-  async function apiWithTimeout(path, { timeoutMs = 2500, ...opts } = {}) {
+  async function apiWithTimeout(path, { timeoutMs = 2500, baseOverride = null, originRetry = false, ...opts } = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(apiUrl(path), {
+      const url = apiUrl(path, baseOverride);
+      const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
         ...opts,
         signal: controller.signal
@@ -2446,6 +2447,18 @@ QA checklist (v4.9-beta):
       }
       return data;
     } catch (err) {
+      if (!originRetry && apiBaseSource === 'derived' && !baseOverride) {
+        const fallbackBase = window.location.origin;
+        const fallbackUrl = apiUrl(path, fallbackBase);
+        if (fallbackUrl !== apiUrl(path)) {
+          return await apiWithTimeout(path, {
+            timeoutMs,
+            baseOverride: fallbackBase,
+            originRetry: true,
+            ...opts
+          });
+        }
+      }
       if (err.name === 'AbortError') {
         throw new Error('Request timed out.');
       }
@@ -5140,6 +5153,7 @@ QA checklist (v4.9-beta):
     return '';
   }
 
+  let apiBaseSource = 'origin';
   const apiBase = (() => {
     const metaBase = document.querySelector('meta[name="api-base"]')?.content?.trim();
     const configured = (window.API_BASE || metaBase || '').trim();
@@ -5165,11 +5179,11 @@ QA checklist (v4.9-beta):
     return cleaned.endsWith('/') ? cleaned.slice(0, -1) : cleaned;
   })();
 
-  function apiUrl(path) {
+  function apiUrl(path, baseOverride = null) {
     if (!path) return path;
     const isAbsolute = /^https?:\/\//i.test(path);
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const base = apiBase || window.location.origin;
+    const base = baseOverride ?? (apiBase || window.location.origin);
     const rawUrl = isAbsolute ? path : `${base}${normalizedPath}`;
     try {
       const url = new URL(rawUrl);
