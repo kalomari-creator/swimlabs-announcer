@@ -153,9 +153,10 @@ QA checklist (v4.9-beta):
     .blocks{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
     .blocks button{ min-width: 120px; }
     .blocks button.active{
-      outline:2px solid rgba(255,255,255,.18);
-      border-color: rgba(255,255,255,.28);
-      filter: brightness(1.10);
+      background: #1d4ed8;
+      color: #fff;
+      border-color: #1e40af;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.2);
     }
 
     textarea{
@@ -265,9 +266,9 @@ QA checklist (v4.9-beta):
       cursor:pointer;
     }
     .managerTabBtn.active{
-      background:rgba(16,185,129,0.12);
-      border-color:rgba(16,185,129,0.4);
-      color:#065f46;
+      background:#1e3a8a;
+      border-color:#1d4ed8;
+      color:#fff;
     }
 
     table{
@@ -628,9 +629,23 @@ QA checklist (v4.9-beta):
       line-height:1;
       color:#0f172a;
     }
-    .attBtn.here.active{ border-color: rgba(34,197,94,.5); background: rgba(34,197,94,.12); }
-    .attBtn.absent.active{ border-color: rgba(239,68,68,.5); background: rgba(239,68,68,.12); }
-    .attBtn.clear.active{ border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.08); }
+    .attBtn.here.active{
+      border-color: #047857;
+      background: #065f46;
+      color: #fff;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.18);
+    }
+    .attBtn.absent.active{
+      border-color: #b91c1c;
+      background: #991b1b;
+      color: #fff;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.18);
+    }
+    .attBtn.clear.active{
+      border-color: #334155;
+      background: #1f2937;
+      color: #fff;
+    }
 
     /* Flags */
     .flags{ display:flex; gap:8px; margin-top:6px; align-items:center; flex-wrap:wrap; }
@@ -756,6 +771,10 @@ QA checklist (v4.9-beta):
       gap:16px;
       align-items:start;
     }
+    .manager-shell.collapsed{
+      grid-template-columns: 0 1fr;
+      gap:0;
+    }
     .manager-sidebar{
       position: sticky;
       top: 12px;
@@ -770,7 +789,10 @@ QA checklist (v4.9-beta):
       min-height: 70vh;
     }
     .manager-sidebar.collapsed{
-      transform: translateX(-120%);
+      width: 0;
+      padding: 0;
+      border: none;
+      overflow: hidden;
       opacity: 0;
       pointer-events: none;
     }
@@ -793,8 +815,9 @@ QA checklist (v4.9-beta):
       cursor:pointer;
     }
     .sidebar-item.active{
-      background: var(--category-soft, rgba(15,23,42,.05));
-      border-color: var(--category-border, rgba(15,23,42,.2));
+      background: #1e3a8a;
+      border-color: #1d4ed8;
+      color: #fff;
     }
     .sidebar-item.disabled{
       opacity: .55;
@@ -805,16 +828,6 @@ QA checklist (v4.9-beta):
       font-size:12px;
       margin-left:auto;
       color:#64748b;
-    }
-    .sidebar-toggle{
-      position: fixed;
-      left: 16px;
-      bottom: 18px;
-      z-index: 1001;
-      display:none;
-    }
-    .sidebar-toggle.show{
-      display:inline-flex;
     }
     .manager-content{
       display:flex;
@@ -872,9 +885,18 @@ QA checklist (v4.9-beta):
       flex-wrap:wrap;
     }
     .manager-subnav button.active{
-      background: var(--category-soft, rgba(15,23,42,.05));
-      border-color: var(--category-border, rgba(15,23,42,.2));
-      color:#0f172a;
+      background: #1e3a8a;
+      border-color: #1d4ed8;
+      color:#fff;
+    }
+    .pill.active{
+      background: #1e3a8a;
+      color: #fff;
+      border-color: #1d4ed8;
+    }
+    .roster-row.selected{
+      background: #dbeafe;
+      box-shadow: inset 4px 0 0 #1d4ed8;
     }
     .drawer-backdrop{
       position: fixed;
@@ -973,6 +995,9 @@ QA checklist (v4.9-beta):
       <select id="locationSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: var(--surface); color: #0f172a; border: 1px solid rgba(148,163,184,0.5);">
         <option value="">Loading locations...</option>
       </select>
+      <select id="masterLocationFilter" class="hidden" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: var(--surface); color: #0f172a; border: 1px solid rgba(148,163,184,0.5);">
+        <option value="">All locations</option>
+      </select>
       <select id="viewSelect" style="padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; background: var(--surface); color: #0f172a; border: 1px solid rgba(148,163,184,0.5); min-width: 150px;">
         <option value="roster">Roster</option>
         <option value="lifeguard">Lifeguard 🏊</option>
@@ -1059,6 +1084,8 @@ QA checklist (v4.9-beta):
           <option value="instructor" selected>Instructor + A-Z</option>
           <option value="name">Swimmer A-Z</option>
         </select>
+        <span class="pill hidden" id="rosterLocationFilterPill">Location</span>
+        <select id="rosterLocationFilter" class="hidden"></select>
 
         <div id="bulkAttendanceActions" class="row" style="gap:6px;">
           <button class="secondary miniBtn" id="bulkMarkPresent">✅ Mark all present</button>
@@ -1076,6 +1103,7 @@ QA checklist (v4.9-beta):
             <th style="width:120px;">Level</th>
             <th style="width:130px;">Instructor</th>
             <th style="width:90px;">Zone</th>
+            <th class="locationCol hidden" style="width:160px;">Location</th>
             <th style="width:80px;">Action</th>
           </tr>
         </thead>
@@ -1138,8 +1166,6 @@ QA checklist (v4.9-beta):
           <span class="lock hidden" id="managerNavSystemLock">🔒</span>
         </button>
       </aside>
-      <button class="secondary sidebar-toggle" id="sidebarToggleBtn">☰ Menu</button>
-
       <div class="manager-content">
         <div class="global-error" id="managerErrorBanner"></div>
 
@@ -1216,7 +1242,7 @@ QA checklist (v4.9-beta):
           <div class="stat-grid" id="billingStatGrid"></div>
 
           <div class="card">
-            <h3 style="margin:0 0 10px; font-size:18px;">💜 Bundle Tracker</h3>
+            <h3 style="margin:0 0 10px; font-size:18px;">Bundle Tracker</h3>
             <div class="grid2">
               <div class="field">
                 <label>Location</label>
@@ -1274,6 +1300,15 @@ QA checklist (v4.9-beta):
               <span class="pill tiny">Sorted by soonest expiration</span>
             </div>
             <div id="bundleTable"></div>
+          </div>
+
+          <div class="card admin-only master-lock hidden" data-admin-show="true">
+            <div class="row" style="margin-bottom:8px;">
+              <h3 style="margin:0; font-size:18px;">Accounts with Balance Due (Coming soon)</h3>
+            </div>
+            <div class="tiny" style="color:var(--muted); line-height:1.4;">
+              This panel will surface accounts with balances due once reconciliation is enabled.
+            </div>
           </div>
         </section>
 
@@ -1560,6 +1595,52 @@ QA checklist (v4.9-beta):
             </div>
           </div>
 
+          <div class="card" id="adminReportUploadsCard">
+            <h3 style="margin:0 0 8px; font-size:18px;">🗂️ Report Uploads</h3>
+            <div class="tiny" style="color:var(--muted); margin-bottom:12px;">Upload and view reports by effective “As-Of” date. Admin deletes require PIN.</div>
+            <div class="grid2">
+              <div class="field">
+                <label>Location</label>
+                <select id="adminReportLocation"></select>
+              </div>
+              <div class="field">
+                <label>Report type</label>
+                <select id="adminReportType">
+                  <option value="retention">Retention</option>
+                  <option value="aged_accounts">Aged accounts</option>
+                  <option value="drop_list">Drop list</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>As-Of Date</label>
+                <input type="date" id="adminReportAsOf" />
+              </div>
+              <div class="field">
+                <label>Report file</label>
+                <input type="file" id="adminReportFile" class="master-lock" accept=".html,.pdf,.csv,.xls,.xlsx" />
+              </div>
+              <div class="field">
+                <label>History</label>
+                <select id="adminReportHistory"></select>
+              </div>
+              <div class="field">
+                <label>History range</label>
+                <select id="adminReportRange">
+                  <option value="0">All</option>
+                  <option value="30">Last 30 days</option>
+                  <option value="60">Last 60 days</option>
+                  <option value="90">Last 90 days</option>
+                </select>
+              </div>
+            </div>
+            <div class="row" style="margin-top:10px; gap:8px;">
+              <button class="secondary master-lock" id="adminReportUploadBtn">Upload</button>
+              <button class="secondary" id="adminReportViewBtn">View</button>
+              <button class="danger admin-only master-lock" id="adminReportDeleteBtn">Delete</button>
+            </div>
+            <div class="tiny" id="adminReportInfo" style="color:var(--muted); margin-top:8px;">No uploads loaded.</div>
+          </div>
+
           <div class="card">
             <h3 style="margin:0 0 10px; font-size:18px;">🧨 MASTER ROSTER RESET</h3>
             <div class="tiny" style="color:var(--muted); margin-bottom:10px;">Wipes all roster data for all locations and dates. Admin only.</div>
@@ -1795,6 +1876,22 @@ QA checklist (v4.9-beta):
     <div class="modalFooter">
       <button class="secondary" id="confirmCancel">Cancel</button>
       <button class="primary" id="confirmSubmit">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="modalBackdrop" id="announcementConfirmModal">
+  <div class="modal" style="max-width: 480px;">
+    <h3>Confirm announcement</h3>
+    <div class="tiny" id="announcementConfirmLine" style="margin-bottom:10px; font-weight:700;"></div>
+    <div class="tiny" style="margin-bottom:14px; color:var(--muted);">Was this announcement heard on deck?</div>
+    <div class="row" style="justify-content:flex-end; gap:8px;">
+      <button class="secondary" id="announcementHeardBtn">✅ Heard</button>
+      <button class="secondary" id="announcementRepeatBtn">🔁 Repeat</button>
+      <button class="secondary" id="announcementNotHeardBtn">❌ Not heard</button>
+    </div>
+    <div class="tiny hidden" id="announcementConfirmSuggestion" style="margin-top:10px; color:var(--warn);">
+      Try increasing volume or repeating once.
     </div>
   </div>
 </div>
@@ -2236,9 +2333,13 @@ QA checklist (v4.9-beta):
   let bundleEditingId = null;
   let rosterCache = [];
   let globalAttendanceSummary = null;
+  let lastActionSwimmer = null;
+  let pendingAnnouncementConfirm = null;
+  let masterLocationFilter = '';
   const LOCATION_STORAGE_KEY = 'sla_location_id';
   const LEGACY_LOCATION_STORAGE_KEY = 'location_id';
   const FALLBACK_LOCATIONS = [
+    { id: 'master', name: 'MASTER', code: 'MASTER', active: true },
     { id: 1, name: 'SwimLabs Westchester', code: 'SLW', active: true },
     { id: 2, name: 'SafeSplash Riverdale', code: 'SSR', active: true },
     { id: 3, name: 'SwimLabs Woodlands', code: 'SLX', active: true },
@@ -2418,6 +2519,43 @@ QA checklist (v4.9-beta):
       localStorage.removeItem(LEGACY_LOCATION_STORAGE_KEY);
     }
     renderLocationSelect(allLocations, resolved?.id || '');
+    updateMasterLocationFilters();
+    applyReadOnlyUI();
+  }
+
+  function updateMasterLocationFilters() {
+    const showMaster = currentLocation && String(currentLocation.id) === 'master';
+    const filterPill = el('rosterLocationFilterPill');
+    const filterSelect = el('rosterLocationFilter');
+    const topFilter = el('masterLocationFilter');
+    const locationCols = document.querySelectorAll('.locationCol');
+    if (filterPill) filterPill.classList.toggle('hidden', !showMaster);
+    if (filterSelect) filterSelect.classList.toggle('hidden', !showMaster);
+    if (topFilter) topFilter.classList.toggle('hidden', !showMaster);
+    locationCols.forEach((col) => col.classList.toggle('hidden', !showMaster));
+    if (!showMaster) return;
+    const locations = allLocations.filter((loc) => String(loc.id) !== 'master');
+    const buildOptions = (select) => {
+      if (!select) return;
+      select.innerHTML = '';
+      const allOpt = document.createElement('option');
+      allOpt.value = '';
+      allOpt.textContent = 'All locations';
+      select.appendChild(allOpt);
+      locations.forEach((loc) => {
+        const opt = document.createElement('option');
+        opt.value = loc.id;
+        opt.textContent = loc.name;
+        select.appendChild(opt);
+      });
+      select.value = masterLocationFilter;
+    };
+    buildOptions(filterSelect);
+    buildOptions(topFilter);
+  }
+
+  function getLocationFilterQuery() {
+    return masterLocationFilter ? `&location_filter=${encodeURIComponent(masterLocationFilter)}` : '';
   }
 
   async function apiWithTimeout(path, { timeoutMs = 2500, baseOverride = null, originRetry = false, ...opts } = {}) {
@@ -2574,18 +2712,16 @@ QA checklist (v4.9-beta):
 
   function toggleManagerSidebar(force) {
     const sidebar = el('managerSidebar');
-    if (!sidebar) return;
+    const shell = document.querySelector('.manager-shell');
+    if (!sidebar || !shell) return;
     const next = typeof force === 'boolean' ? force : !managerSidebarCollapsed;
     managerSidebarCollapsed = next;
     sidebar.classList.toggle('collapsed', managerSidebarCollapsed);
-    const toggleBtn = el('sidebarToggleBtn');
-    if (toggleBtn) toggleBtn.classList.toggle('show', managerSidebarCollapsed);
+    shell.classList.toggle('collapsed', managerSidebarCollapsed);
   }
 
   function handleManagerScroll() {
-    if (window.scrollY > 120) {
-      toggleManagerSidebar(true);
-    }
+    return;
   }
 
   function showGlobalError(message, retryFn) {
@@ -2782,7 +2918,7 @@ QA checklist (v4.9-beta):
     const date = el('observationDate')?.value || todayISO();
     setObservationRosterStatus('Loading roster classes…');
     try {
-      const resp = await apiWithTimeout(`/api/roster/classes?location_id=${currentLocation.id}&date=${date}`, { timeoutMs: 2500 });
+      const resp = await apiWithTimeout(`/api/roster/classes?location_id=${currentLocation.id}&date=${date}${getLocationFilterQuery()}`, { timeoutMs: 2500 });
       observationRosterClasses = resp.classes || [];
       if (select) {
         select.innerHTML = '<option value="">(select class)</option>';
@@ -2948,9 +3084,9 @@ QA checklist (v4.9-beta):
     const from = el('observationSummaryFrom')?.value;
     const to = el('observationSummaryTo')?.value;
     try {
-      const summaryResp = await apiWithTimeout(`/api/observations/summary?location_id=${currentLocation.id}&from=${from || ''}&to=${to || ''}`, { timeoutMs: 2500 });
+      const summaryResp = await apiWithTimeout(`/api/observations/summary?location_id=${currentLocation.id}&from=${from || ''}&to=${to || ''}${getLocationFilterQuery()}`, { timeoutMs: 2500 });
       renderObservationSummary(summaryResp.summary || {});
-      const listResp = await apiWithTimeout(`/api/observations?location_id=${currentLocation.id}&from=${from || ''}&to=${to || ''}`, { timeoutMs: 2500 });
+      const listResp = await apiWithTimeout(`/api/observations?location_id=${currentLocation.id}&from=${from || ''}&to=${to || ''}${getLocationFilterQuery()}`, { timeoutMs: 2500 });
       observationTimelineCache = listResp.observations || [];
       el('observationSummaryCount').textContent = observationTimelineCache.length;
       renderObservationTimeline(observationTimelineCache);
@@ -3017,7 +3153,7 @@ QA checklist (v4.9-beta):
     if (!currentLocation) return;
     try {
       const role = managerRole || 'manager';
-      const resp = await api(`/api/manager-reports?location_id=${currentLocation.id}&role=${role}`);
+      const resp = await api(`/api/manager-reports?location_id=${currentLocation.id}&role=${role}${getLocationFilterQuery()}`);
       if (!resp.ok) throw new Error(resp.error || 'Failed to load manager reports');
       managerReportsCache = resp;
       managerReportTypes.forEach((report) => {
@@ -3449,7 +3585,7 @@ QA checklist (v4.9-beta):
     });
 
     try {
-      const retentionResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=retention`);
+      const retentionResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=retention${getLocationFilterQuery()}`);
       const retentionReports = retentionResp.reports || [];
       const latestRetention = retentionReports[0];
       const prevRetention = retentionReports[1];
@@ -3478,7 +3614,7 @@ QA checklist (v4.9-beta):
     }
 
     try {
-      const agedResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=aged_accounts`);
+      const agedResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=aged_accounts${getLocationFilterQuery()}`);
       const agedReports = agedResp.reports || [];
       const latestAged = agedReports[0];
       if (latestAged) {
@@ -3511,7 +3647,7 @@ QA checklist (v4.9-beta):
     }
 
     try {
-      const bundleResp = await api(`/api/bundles?location_id=${currentLocation.id}`);
+      const bundleResp = await api(`/api/bundles?location_id=${currentLocation.id}${getLocationFilterQuery()}`);
       const bundles = bundleResp.bundles || [];
       const expiring = bundles.filter((bundle) => {
         if (!bundle.expiration_date) return false;
@@ -3556,7 +3692,7 @@ QA checklist (v4.9-beta):
     if (!currentLocation) return;
     const { start, end } = getClientDateRange();
     try {
-      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start}&end=${end}`);
+      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start}&end=${end}${getLocationFilterQuery()}`);
       const summary = resp.summary || { totals: {}, dateStats: [], instructorStats: [] };
       renderAttendanceSummary(summary);
       renderAttendanceTrend(summary);
@@ -3571,7 +3707,7 @@ QA checklist (v4.9-beta):
       const end = todayISO();
       const start = new Date();
       start.setDate(start.getDate() - 60);
-      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start.toISOString().split('T')[0]}&end=${end}`);
+      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start.toISOString().split('T')[0]}&end=${end}${getLocationFilterQuery()}`);
       globalAttendanceSummary = resp.summary || null;
       if (globalAttendanceSummary) renderAttendanceTrend(globalAttendanceSummary);
     } catch (e) {
@@ -3672,7 +3808,7 @@ QA checklist (v4.9-beta):
     if (!currentLocation) return;
     const { start, end } = getClientDateRange();
     try {
-      const resp = await api(`/api/absence-tracker?location_id=${currentLocation.id}&start=${start}&end=${end}`);
+      const resp = await api(`/api/absence-tracker?location_id=${currentLocation.id}&start=${start}&end=${end}${getLocationFilterQuery()}`);
       renderAbsenceTracker(resp.rows || []);
     } catch (e) {
       showInlineError('absenceTrackerTable', `Absence tracker failed: ${e.message}`, loadAbsenceTracker);
@@ -3744,6 +3880,7 @@ QA checklist (v4.9-beta):
     `;
     el('absenceTrackerTable').querySelectorAll('[data-action]').forEach((btn) => {
       btn.addEventListener('click', async () => {
+        if (blockIfReadOnly('Absence updates')) return;
         const action = btn.dataset.action;
         const swimmerName = decodeURIComponent(btn.dataset.row || '');
         const date = btn.dataset.date;
@@ -3784,7 +3921,7 @@ QA checklist (v4.9-beta):
     if (!currentLocation) return;
     const { start, end } = getClientDateRange();
     try {
-      const resp = await api(`/api/attendance-history?location_id=${currentLocation.id}&start=${start}&end=${end}&limit=500`);
+      const resp = await api(`/api/attendance-history?location_id=${currentLocation.id}&start=${start}&end=${end}&limit=500${getLocationFilterQuery()}`);
       renderAttendanceHistory(resp.rows || []);
     } catch (e) {
       showInlineError('attendanceHistoryTable', `Attendance history failed: ${e.message}`, loadAttendanceHistory);
@@ -3825,7 +3962,7 @@ QA checklist (v4.9-beta):
   async function loadClientDropList() {
     if (!currentLocation) return;
     try {
-      const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=drop_list&include_archived=true`);
+      const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=drop_list&include_archived=true${getLocationFilterQuery()}`);
       const entries = resp.reports.flatMap((report) => {
         const parsed = report.data_json ? JSON.parse(report.data_json) : {};
         return parsed.entries || [];
@@ -3991,7 +4128,7 @@ QA checklist (v4.9-beta):
     if (!currentLocation) return;
     try {
       const locId = Number(el('bundleLocation')?.value || currentLocation.id);
-      const resp = await api(`/api/bundles?location_id=${locId}`);
+      const resp = await api(`/api/bundles?location_id=${locId}${getLocationFilterQuery()}`);
       renderBundles(resp.bundles || []);
     } catch (e) {
       showInlineError('bundleTable', `Bundle tracker failed: ${e.message}`, loadBundles);
@@ -4235,7 +4372,7 @@ QA checklist (v4.9-beta):
     }
 
     try {
-      const bundleResp = await api(`/api/bundles?location_id=${currentLocation?.id || 1}`);
+      const bundleResp = await api(`/api/bundles?location_id=${currentLocation?.id || 1}${getLocationFilterQuery()}`);
       (bundleResp.bundles || []).forEach((bundle) => {
         results.push({
           type: 'Bundle',
@@ -4323,7 +4460,7 @@ QA checklist (v4.9-beta):
   async function renderRetentionPanel() {
     if (!currentLocation || !el('retentionTable')) return;
     try {
-      const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=retention`);
+      const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=retention${getLocationFilterQuery()}`);
       const reports = resp.reports || [];
       const latest = reports[0];
       const previous = reports[1];
@@ -4431,7 +4568,7 @@ QA checklist (v4.9-beta):
 
   async function deleteLatestReport(reportType) {
     if (!currentLocation) return;
-    const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=${reportType}`);
+    const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=${reportType}${getLocationFilterQuery()}`);
     const latest = resp.reports?.[0];
     if (!latest) {
       alert('No uploads available to delete.');
@@ -4500,7 +4637,7 @@ QA checklist (v4.9-beta):
   async function renderDropImpactPanel() {
     if (!currentLocation || !el('dropImpactTable')) return;
     try {
-      const dropResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=drop_list&include_archived=true`);
+      const dropResp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=drop_list&include_archived=true${getLocationFilterQuery()}`);
       const allEntries = dropResp.reports.flatMap((report) => {
         const parsed = report.data_json ? JSON.parse(report.data_json) : {};
         return parsed.entries || [];
@@ -4514,7 +4651,7 @@ QA checklist (v4.9-beta):
       const endDate = todayISO();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 180);
-      const historyResp = await api(`/api/attendance-history?location_id=${currentLocation.id}&start=${startDate.toISOString().split('T')[0]}&end=${endDate}&limit=2000`);
+      const historyResp = await api(`/api/attendance-history?location_id=${currentLocation.id}&start=${startDate.toISOString().split('T')[0]}&end=${endDate}&limit=2000${getLocationFilterQuery()}`);
       const history = historyResp.rows || [];
 
       const bySwimmer = new Map();
@@ -4618,7 +4755,7 @@ QA checklist (v4.9-beta):
       const end = todayISO();
       const start = new Date();
       start.setDate(start.getDate() - 30);
-      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start.toISOString().split('T')[0]}&end=${end}`);
+      const resp = await api(`/api/attendance-summary?location_id=${currentLocation.id}&start=${start.toISOString().split('T')[0]}&end=${end}${getLocationFilterQuery()}`);
       const allRows = (resp.summary?.instructorStats || []).map((row) => [
         row.instructor,
         row.present,
@@ -4671,7 +4808,7 @@ QA checklist (v4.9-beta):
   async function loadBreakdown() {
     if (!currentLocation) return;
     renderBreakdownFilters();
-    const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=${currentBreakdownType}&include_archived=${managerRole === 'admin'}`);
+    const resp = await api(`/api/manager-reports/data?location_id=${currentLocation.id}&report_type=${currentBreakdownType}&include_archived=${managerRole === 'admin'}${getLocationFilterQuery()}`);
     const reports = resp.reports || [];
     const latest = reports[0];
     const content = el('breakdownContent');
@@ -4945,6 +5082,29 @@ QA checklist (v4.9-beta):
 
   el('locationSelect').addEventListener('change', async (e) => {
     const locId = e.target.value;
+    const previousId = currentLocation?.id;
+    if (String(locId) === 'master') {
+      const confirmResult = await openProtectedAction({
+        title: 'Manager PIN required',
+        message: 'Enter the manager PIN to access MASTER (view-only aggregation).',
+        requireInitials: false,
+        requirePin: true
+      });
+      if (!confirmResult.ok) {
+        applyLocationSelection(previousId);
+        return;
+      }
+      try {
+        await api('/api/verify-pin', {
+          method: 'POST',
+          body: JSON.stringify({ pin: confirmResult.pin, pin_type: 'manager' })
+        });
+      } catch (err) {
+        alert('PIN rejected. Returning to previous location.');
+        applyLocationSelection(previousId);
+        return;
+      }
+    }
     applyLocationSelection(locId);
     if (!currentLocation) {
       await refreshAllViewsSafe();
@@ -4965,6 +5125,18 @@ QA checklist (v4.9-beta):
     } catch (e) {
       alert('Failed to switch location: ' + e.message);
     }
+  });
+
+  el('rosterLocationFilter').addEventListener('change', async (e) => {
+    masterLocationFilter = e.target.value;
+    updateMasterLocationFilters();
+    await refreshAllViewsSafe();
+  });
+
+  el('masterLocationFilter').addEventListener('change', async (e) => {
+    masterLocationFilter = e.target.value;
+    updateMasterLocationFilters();
+    await refreshAllViewsSafe();
   });
 
   function escapeHtml(s){
@@ -5358,7 +5530,42 @@ QA checklist (v4.9-beta):
     });
   }
 
+  function openAnnouncementConfirm({ swimmer_name, message, triggered_at }) {
+    pendingAnnouncementConfirm = {
+      swimmer_name,
+      message,
+      triggered_at
+    };
+    el('announcementConfirmLine').textContent = message;
+    el('announcementConfirmSuggestion').classList.add('hidden');
+    showModal('announcementConfirmModal', true);
+  }
+
+  async function logAnnouncementConfirm(result) {
+    if (!pendingAnnouncementConfirm) return;
+    const now = new Date().toISOString();
+    await api('/api/announcement-confirm', {
+      method: 'POST',
+      body: JSON.stringify({
+        location_id: currentLocation?.id,
+        date: activeDateISO || todayISO(),
+        time: now.split('T')[1]?.split('.')[0],
+        type: 'call_parent',
+        swimmer_name: pendingAnnouncementConfirm.swimmer_name,
+        message: pendingAnnouncementConfirm.message,
+        result,
+        source: 'roster_call_parent',
+        triggered_at: pendingAnnouncementConfirm.triggered_at,
+        confirmed_at: now
+      })
+    });
+  }
+
   function blockIfReadOnly(actionLabel = 'This action') {
+    if (currentLocation && String(currentLocation.id) === 'master') {
+      alert(`${actionLabel} is disabled while MASTER view is active.`);
+      return true;
+    }
     if (!readOnlyMode) return false;
     alert(`${actionLabel} is disabled while read-only mode is enabled.`);
     return true;
@@ -5367,6 +5574,7 @@ QA checklist (v4.9-beta):
   function applyReadOnlyUI() {
     const banner = el('readOnlyBanner');
     if (banner) banner.classList.toggle('hidden', !readOnlyMode);
+    const masterLocked = currentLocation && String(currentLocation.id) === 'master';
     const disableIds = [
       'importBtn', 'uploadHtmlBtn', 'exportServerBtn', 'importServerBtn',
       'addSwimmerBtn', 'exportVirtualDeskBtn', 'attendanceReportExportCSV',
@@ -5374,14 +5582,18 @@ QA checklist (v4.9-beta):
       'guardTasksReset', 'guardRotationAdd', 'guardTasksShuffle', 'guardTasksSnapshot',
       'bulkMarkPresent', 'bulkClearAttendance',
       'bundleSaveBtn', 'bundleResetBtn', 'bundleExportBtn',
-      'deleteLatestDropListBtn'
+      'deleteLatestDropListBtn',
+      'adminReportUploadBtn', 'adminReportDeleteBtn', 'adminReportFile'
     ];
     disableIds.forEach((id) => {
       const node = el(id);
-      if (node) node.disabled = readOnlyMode;
+      if (node) node.disabled = readOnlyMode || masterLocked;
     });
     document.querySelectorAll('.reportUploadBtn').forEach((btn) => {
-      btn.disabled = readOnlyMode;
+      btn.disabled = readOnlyMode || masterLocked;
+    });
+    document.querySelectorAll('.master-lock').forEach((btn) => {
+      btn.disabled = masterLocked;
     });
   }
 
@@ -5393,6 +5605,9 @@ QA checklist (v4.9-beta):
       const isAdmin = managerRole === 'admin';
       node.disabled = !isAdmin;
       node.classList.toggle('disabled', !isAdmin);
+      if (node.dataset && node.dataset.adminShow === 'true') {
+        node.classList.toggle('hidden', !isAdmin);
+      }
       if (!isAdmin) {
         node.setAttribute('title', 'Admin only. Request Admin Access.');
       } else {
@@ -5526,7 +5741,7 @@ QA checklist (v4.9-beta):
 
   async function loadBlocks(){
     const locId = currentLocation?.id || 1;
-    const b = await api(`/api/blocks?location_id=${locId}`);
+    const b = await api(`/api/blocks?location_id=${locId}${getLocationFilterQuery()}`);
     const wrap = el('blocks');
     wrap.innerHTML = '';
 
@@ -5644,8 +5859,9 @@ QA checklist (v4.9-beta):
             ? `Attention. ${timeLabel} classes. Instructors, please call up your first swimmer.`
             : `Attention. ${timeLabel} classes. Front desk, please pick up swimmers for this time block. Instructors, please call up your next swimmer.`;
 
-          const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode }) });
+          const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode, location_id: currentLocation?.id }) });
           setLastAnnouncementUI(resp.lastAnnouncement);
+          await speakLocal(resp.lastAnnouncement?.text || text);
 
           // After announcement, reschedule to update next timer
           setTimeout(() => scheduleAutoAnnouncements(), 1000);
@@ -5766,7 +5982,7 @@ QA checklist (v4.9-beta):
       b.classList.toggle('active', kid.attendance === val);
       b.addEventListener('click', async () => {
         try{
-          if (readOnlyMode) return;
+          if (blockIfReadOnly('Attendance updates')) return;
           // toggle behavior: clicking active sets to null
           const next = (kid.attendance === val) ? null : val;
           await api('/api/attendance', {
@@ -5779,6 +5995,7 @@ QA checklist (v4.9-beta):
             })
           });
           kid.attendance = next;
+          lastActionSwimmer = kid.swimmer_name;
           loadRoster();
         }catch(e){
           alert(e.message);
@@ -5896,6 +6113,7 @@ QA checklist (v4.9-beta):
     chip.textContent = z;
     chip.title = (deviceMode === 'deck') ? 'Deck mode: requires manager code' : 'Click to change zone';
     chip.addEventListener('click', () => {
+      if (blockIfReadOnly('Zone changes')) return;
       zoneTarget = kid;
       el('zoneWho').textContent = kid.swimmer_name;
       el('zoneSelect').value = String(kid.zone || 1);
@@ -5914,7 +6132,7 @@ QA checklist (v4.9-beta):
     }
 
     const locId = currentLocation?.id || 1;
-    const data = await api(`/api/blocks/${encodeURIComponent(currentBlock)}?location_id=${locId}`);
+    const data = await api(`/api/blocks/${encodeURIComponent(currentBlock)}?location_id=${locId}${getLocationFilterQuery()}`);
     rosterCache = data.kids || [];
     let kids = sortKids(rosterCache);
 
@@ -5951,6 +6169,9 @@ QA checklist (v4.9-beta):
 
     for(const kid of kids){
       const tr = document.createElement('tr');
+      if (lastActionSwimmer && kid.swimmer_name === lastActionSwimmer) {
+        tr.classList.add('roster-row', 'selected');
+      }
 
       if (kid.attendance_auto_absent) {
         tr.classList.add('row-auto-absent');
@@ -6080,6 +6301,14 @@ QA checklist (v4.9-beta):
       tdZone.appendChild(renderZoneChip(kid));
       tr.appendChild(tdZone);
 
+      if (currentLocation && String(currentLocation.id) === 'master') {
+        const tdLoc = document.createElement('td');
+        tdLoc.className = 'rosterCell locationCol';
+        const locName = kid.location_name || allLocations.find((loc) => String(loc.id) === String(kid.location_id))?.name;
+        tdLoc.textContent = locName || '—';
+        tr.appendChild(tdLoc);
+      }
+
       // Action
       const tdAction = document.createElement('td');
       tdAction.className = 'rosterCell';
@@ -6087,9 +6316,23 @@ QA checklist (v4.9-beta):
       const callBtn = tdAction.querySelector('button');
       callBtn.addEventListener('click', async () => {
         try{
-          await api('/api/call-parent', {
+          if (blockIfReadOnly('Announcements')) return;
+          const resp = await api('/api/call-parent', {
             method:'POST',
-            body: JSON.stringify({ start_time: currentBlock, swimmer_name: kid.swimmer_name, device_mode: deviceMode })
+            body: JSON.stringify({
+              start_time: currentBlock,
+              swimmer_name: kid.swimmer_name,
+              device_mode: deviceMode,
+              location_id: currentLocation?.id
+            })
+          });
+          setLastAnnouncementUI(resp.lastAnnouncement);
+          await speakLocal(resp.message || `Parent or guardian of ${kid.swimmer_name}, please come to the pool deck.`);
+          lastActionSwimmer = kid.swimmer_name;
+          openAnnouncementConfirm({
+            swimmer_name: kid.swimmer_name,
+            message: resp.message || `Parent or guardian of ${kid.swimmer_name}, please come to the pool deck.`,
+            triggered_at: new Date().toISOString()
           });
         }catch(e){
           alert(e.message);
@@ -6103,9 +6346,29 @@ QA checklist (v4.9-beta):
   }
 
   // ---- Announcements ----
+  function isLocalTtsEnabled() {
+    return localStorage.getItem('local_tts') !== 'off';
+  }
+
+  function speakLocal(text) {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!clean || !('speechSynthesis' in window) || !isLocalTtsEnabled()) {
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = 'en-US';
+      utterance.onend = () => resolve(true);
+      utterance.onerror = () => resolve(false);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+
   async function speakTyped(text){
-    const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode }) });
+    const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode, location_id: currentLocation?.id }) });
     setLastAnnouncementUI(resp.lastAnnouncement);
+    await speakLocal(resp.lastAnnouncement?.text || resp.last_spoken?.message || text);
   }
 
   // ---- Wire up UI ----
@@ -6691,6 +6954,21 @@ QA checklist (v4.9-beta):
           newStaffOverride.appendChild(opt);
         });
       }
+
+      const adminReportLocation = el('adminReportLocation');
+      if (adminReportLocation) {
+        adminReportLocation.innerHTML = '';
+        (resp.locations || []).filter(loc => String(loc.id) !== 'master').forEach(loc => {
+          const opt = document.createElement('option');
+          opt.value = loc.id;
+          opt.textContent = loc.name;
+          adminReportLocation.appendChild(opt);
+        });
+        if (!adminReportLocation.value && adminReportLocation.options.length) {
+          adminReportLocation.value = adminReportLocation.options[0].value;
+        }
+        loadAdminReportUploads();
+      }
     } catch (e) {
       console.error('Failed to load admin locations:', e);
     }
@@ -7096,6 +7374,48 @@ QA checklist (v4.9-beta):
     if (e.target === el('attendanceHistoryModal')) showModal('attendanceHistoryModal', false);
   });
 
+  el('announcementHeardBtn').addEventListener('click', async () => {
+    try {
+      await logAnnouncementConfirm('heard');
+      pendingAnnouncementConfirm = null;
+      showModal('announcementConfirmModal', false);
+    } catch (err) {
+      alert(`Confirmation failed: ${err.message || err}`);
+    }
+  });
+
+  el('announcementRepeatBtn').addEventListener('click', async () => {
+    if (!pendingAnnouncementConfirm) return;
+    try {
+      const resp = await api('/api/speak', {
+        method: 'POST',
+        body: JSON.stringify({
+          text: pendingAnnouncementConfirm.message,
+          device_mode: deviceMode,
+          location_id: currentLocation?.id
+        })
+      });
+      setLastAnnouncementUI(resp.lastAnnouncement);
+      await speakLocal(resp.lastAnnouncement?.text || pendingAnnouncementConfirm.message);
+    } catch (err) {
+      alert(`Repeat failed: ${err.message || err}`);
+    }
+  });
+
+  el('announcementNotHeardBtn').addEventListener('click', async () => {
+    try {
+      await logAnnouncementConfirm('not_heard');
+      el('announcementConfirmSuggestion').classList.remove('hidden');
+      setTimeout(() => {
+        pendingAnnouncementConfirm = null;
+        showModal('announcementConfirmModal', false);
+        el('announcementConfirmSuggestion').classList.add('hidden');
+      }, 1800);
+    } catch (err) {
+      alert(`Confirmation failed: ${err.message || err}`);
+    }
+  });
+
   function formatBytes(bytes) {
     if (!bytes && bytes !== 0) return '—';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -7201,6 +7521,177 @@ QA checklist (v4.9-beta):
         button.textContent = originalLabel || 'Upload';
       }
     }
+  }
+
+  function updateAdminReportHistory(uploads = []) {
+    const historySelect = el('adminReportHistory');
+    if (!historySelect) return;
+    historySelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = uploads.length ? 'Latest (by effective date)' : 'No uploads';
+    historySelect.appendChild(placeholder);
+    uploads.forEach((upload) => {
+      const opt = document.createElement('option');
+      opt.value = upload.effective_date;
+      const label = upload.effective_date
+        ? `${upload.effective_date} • ${formatShortDate(upload.uploaded_at)}`
+        : upload.uploaded_at;
+      opt.textContent = label;
+      historySelect.appendChild(opt);
+    });
+  }
+
+  async function loadAdminReportUploads() {
+    const locId = el('adminReportLocation')?.value;
+    const reportType = el('adminReportType')?.value;
+    if (!locId || !reportType) return;
+    try {
+      const resp = await api(`/api/report-uploads?location_id=${locId}&report_type=${reportType}`);
+      let uploads = resp.uploads || [];
+      const rangeDays = Number(el('adminReportRange')?.value || 0);
+      if (rangeDays > 0) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - rangeDays);
+        uploads = uploads.filter((u) => {
+          if (!u.effective_date) return false;
+          return new Date(u.effective_date) >= cutoff;
+        });
+      }
+      updateAdminReportHistory(uploads);
+      const totalCount = (resp.uploads || []).length;
+      const filteredCount = uploads.length;
+      el('adminReportInfo').textContent = filteredCount
+        ? `${filteredCount} upload(s) shown${filteredCount !== totalCount ? ` (of ${totalCount})` : ''}.`
+        : 'No uploads found.';
+    } catch (err) {
+      el('adminReportInfo').textContent = `Load failed: ${err.message}`;
+    }
+  }
+
+  async function viewAdminReportUpload() {
+    const locId = el('adminReportLocation')?.value;
+    const reportType = el('adminReportType')?.value;
+    const effectiveDate = el('adminReportHistory')?.value || '';
+    if (!locId || !reportType) return;
+    try {
+      const resp = await api(`/api/report-uploads/view?location_id=${locId}&report_type=${reportType}&effective_date=${effectiveDate}`);
+      const upload = resp.upload || {};
+      el('adminReportInfo').textContent = `Viewing ${upload.report_type} • ${upload.effective_date || 'latest'} • Uploaded ${formatShortDate(upload.uploaded_at)}.`;
+    } catch (err) {
+      el('adminReportInfo').textContent = `View failed: ${err.message}`;
+    }
+  }
+
+  async function uploadAdminReport() {
+    const fileInput = el('adminReportFile');
+    const file = fileInput?.files?.[0];
+    const locId = el('adminReportLocation')?.value;
+    const reportType = el('adminReportType')?.value;
+    if (!file || !locId || !reportType) {
+      alert('Select a location, report type, and file.');
+      return;
+    }
+    if (blockIfReadOnly('Report uploads')) return;
+
+    let effectiveDate = el('adminReportAsOf')?.value || '';
+    let summary = null;
+    try {
+      const previewForm = new FormData();
+      previewForm.append('report', file);
+      previewForm.append('report_type', reportType);
+      const previewResp = await fetch(apiUrl('/api/report-uploads/preview'), {
+        method: 'POST',
+        body: previewForm
+      });
+      const previewData = await previewResp.json().catch(() => ({}));
+      if (previewResp.ok && previewData.ok !== false) {
+        summary = previewData.summary || {};
+        if (!effectiveDate) {
+          effectiveDate = summary.range_end || summary.report_date || '';
+          if (el('adminReportAsOf') && effectiveDate) el('adminReportAsOf').value = effectiveDate;
+        }
+      }
+    } catch (err) {
+      console.warn('Preview failed:', err.message);
+    }
+
+    if (!effectiveDate) {
+      alert('Please set the As-Of date for this upload.');
+      return;
+    }
+
+    const messageLines = [
+      `Report type: ${reportType.replace('_',' ')}`,
+      `Effective date: ${effectiveDate}`,
+      summary?.location_name ? `Detected location: ${summary.location_name}` : null
+    ].filter(Boolean);
+
+    const confirmResult = await openProtectedAction({
+      title: 'Confirm report upload',
+      message: messageLines.join('\n'),
+      requireDelete: false,
+      requireInitials: true,
+      requirePin: true
+    });
+    if (!confirmResult.ok) return;
+
+    const formData = new FormData();
+    formData.append('report', file);
+    formData.append('report_type', reportType);
+    formData.append('location_id', locId);
+    formData.append('effective_date', effectiveDate);
+    formData.append('initials', confirmResult.initials);
+    formData.append('pin', confirmResult.pin);
+
+    const response = await fetch(apiUrl('/api/report-uploads/upload'), {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.ok === false) {
+      alert(data.error || 'Upload failed');
+      return;
+    }
+    await loadAdminReportUploads();
+    alert('Report uploaded successfully.');
+  }
+
+  async function deleteAdminReportUpload() {
+    if (blockIfReadOnly('Report deletes')) return;
+    const historySelect = el('adminReportHistory');
+    const effectiveDate = historySelect?.value;
+    if (!effectiveDate) {
+      alert('Select a report from history to delete.');
+      return;
+    }
+    const locId = el('adminReportLocation')?.value;
+    const reportType = el('adminReportType')?.value;
+    if (!locId || !reportType) return;
+    const uploadsResp = await api(`/api/report-uploads?location_id=${locId}&report_type=${reportType}`);
+    const target = (uploadsResp.uploads || []).find((u) => u.effective_date === effectiveDate);
+    if (!target) {
+      alert('Report not found for deletion.');
+      return;
+    }
+    const confirmResult = await openProtectedAction({
+      title: 'Delete report upload',
+      message: `Delete ${reportType} for ${effectiveDate}?`,
+      requireDelete: true,
+      requireInitials: true,
+      requirePin: true
+    });
+    if (!confirmResult.ok) return;
+    await api('/api/report-uploads/delete', {
+      method: 'POST',
+      body: JSON.stringify({
+        report_id: target.id,
+        initials: confirmResult.initials,
+        pin: confirmResult.pin
+      })
+    });
+    await loadAdminReportUploads();
+    alert('Report deleted.');
   }
 
   async function loadServerExports() {
@@ -7397,6 +7888,14 @@ QA checklist (v4.9-beta):
       alert(`Failed to add location: ${e.message}`);
     }
   });
+
+  el('adminReportLocation')?.addEventListener('change', loadAdminReportUploads);
+  el('adminReportType')?.addEventListener('change', loadAdminReportUploads);
+  el('adminReportHistory')?.addEventListener('change', viewAdminReportUpload);
+  el('adminReportRange')?.addEventListener('change', loadAdminReportUploads);
+  el('adminReportUploadBtn')?.addEventListener('click', uploadAdminReport);
+  el('adminReportViewBtn')?.addEventListener('click', viewAdminReportUpload);
+  el('adminReportDeleteBtn')?.addEventListener('click', deleteAdminReportUpload);
 
   // Add Staff Modal
   el('addStaffBtn').addEventListener('click', () => {
@@ -7683,8 +8182,6 @@ QA checklist (v4.9-beta):
 
   el('deleteLatestDropListBtn')?.addEventListener('click', () => deleteLatestReport('drop_list'));
 
-  el('sidebarToggleBtn')?.addEventListener('click', () => toggleManagerSidebar(false));
-  window.addEventListener('scroll', handleManagerScroll);
 
   el('openShortcutsBtn')?.addEventListener('click', () => showModal('shortcutsModal', true));
   el('shortcutsClose')?.addEventListener('click', () => showModal('shortcutsModal', false));
@@ -8688,8 +9185,9 @@ el('settingsSave')?.addEventListener('click', () => {
 
   el('repeatBtn').addEventListener('click', async () => {
     try{
-      const resp = await api('/api/repeat-last', { method:'POST', body: JSON.stringify({ device_mode: deviceMode }) });
+      const resp = await api('/api/repeat-last', { method:'POST', body: JSON.stringify({ device_mode: deviceMode, location_id: currentLocation?.id }) });
       setLastAnnouncementUI(resp.lastAnnouncement);
+      await speakLocal(resp.lastAnnouncement?.text || resp.last_spoken?.message);
     }catch(e){
       alert(e.message);
     }
@@ -8703,9 +9201,10 @@ el('settingsSave')?.addEventListener('click', () => {
       }
       const resp = await api('/api/force-time-announcement', {
         method:'POST',
-        body: JSON.stringify({ start_time: currentBlock, device_mode: deviceMode })
+        body: JSON.stringify({ start_time: currentBlock, device_mode: deviceMode, location_id: currentLocation?.id })
       });
       setLastAnnouncementUI(resp.lastAnnouncement);
+      await speakLocal(resp.message || resp.lastAnnouncement?.text);
     }catch(e){
       alert(e.message);
     }
