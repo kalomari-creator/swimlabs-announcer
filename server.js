@@ -283,6 +283,19 @@ function ensureSchema() {
     );
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS observations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      class_key TEXT,
+      instructor_name TEXT,
+      class_day_time_level TEXT,
+      data_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
+
   // Locations table
   db.exec(`
     CREATE TABLE IF NOT EXISTS locations (
@@ -344,6 +357,7 @@ function ensureSchema() {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_guard_tasks ON guard_tasks(location_id, task_date);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_guard_task_history ON guard_task_history(location_id, task_date, saved_at);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_activity_log ON activity_log(created_at);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_observations_location_date ON observations(location_id, date);`);
 }
 ensureSchema();
 
@@ -907,6 +921,14 @@ function formatTime12h(t) {
   const h12 = ((hh + 11) % 12) + 1;
   if (mm === 0) return `${h12} ${ampm}`;
   return `${h12}:${String(mm).padStart(2, "0")} ${ampm}`;
+}
+
+function formatRosterTimeLabel(t) {
+  const raw = String(t || "").trim();
+  if (!raw) return "—";
+  if (/am|pm/i.test(raw)) return raw;
+  if (!raw.includes(":")) return raw;
+  return formatTime12h(raw);
 }
 
 function lastFirstToFirstLast(s) {
@@ -3095,6 +3117,222 @@ app.post("/api/set-location", (req, res) => {
     audit(req, "set_location", { location_id, location_name: location.name });
     res.json({ ok: true, location });
   } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/roster/classes", (req, res) => {
+  try {
+    const { location_id, date } = req.query;
+    if (!date) {
+      return res.status(400).json({ ok: false, error: "date required" });
+    }
+    const locId = Number(location_id || 1);
+    const rows = db.prepare(`
+      SELECT start_time, instructor_name, program, swimmer_name
+      FROM roster
+      WHERE date = ? AND location_id = ?
+      ORDER BY start_time, instructor_name, swimmer_name
+    `).all(date, locId);
+
+    const classMap = new Map();
+    rows.forEach((row) => {
+      const instructorName = row.instructor_name || "Instructor TBD";
+      const program = row.program || "";
+      const timeLabel = formatRosterTimeLabel(row.start_time || "");
+      const classKey = `${date}|${row.start_time || ""}|${instructorName}|${program}`.toLowerCase();
+      if (!classMap.has(classKey)) {
+        classMap.set(classKey, {
+          classKey,
+          label: `${timeLabel}${program ? ` • ${program}` : ""} • ${instructorName}`,
+          instructorName,
+          timeLabel,
+          levelLabel: program || "",
+          swimmers: [],
+          locationId: locId,
+          date
+        });
+      }
+      const entry = classMap.get(classKey);
+      if (row.swimmer_name) {
+        entry.swimmers.push({ name: row.swimmer_name });
+      }
+    });
+
+    res.json({ ok: true, classes: Array.from(classMap.values()) });
+  } catch (error) {
+    console.error("Roster class load error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/observations", (req, res) => {
+  try {
+    const payload = req.body || {};
+    const locationId = Number(payload.location_id || 0);
+    const date = String(payload.date || "").trim();
+    if (!locationId || !date) {
+      return res.status(400).json({ ok: false, error: "location_id and date are required" });
+    }
+    const createdAt = nowISO();
+    const dataJson = JSON.stringify(payload);
+    const info = db.prepare(`
+      INSERT INTO observations (
+        location_id, date, class_key, instructor_name, class_day_time_level, data_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      locationId,
+      date,
+      payload.classKey || "",
+      payload.instructor_name || "",
+      payload.class_day_time_level || "",
+      dataJson,
+      createdAt
+    );
+    res.json({ ok: true, id: info.lastInsertRowid, created_at: createdAt });
+  } catch (error) {
+    console.error("Observation save error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/observations", (req, res) => {
+  try {
+    const { location_id, instructor, from, to } = req.query;
+    if (!location_id) {
+      return res.status(400).json({ ok: false, error: "location_id required" });
+    }
+    const locId = Number(location_id);
+    const filters = ["location_id = ?"];
+    const params = [locId];
+    if (from) {
+      filters.push("date >= ?");
+      params.push(from);
+    }
+    if (to) {
+      filters.push("date <= ?");
+      params.push(to);
+    }
+    if (instructor) {
+      filters.push("lower(instructor_name) = ?");
+      params.push(String(instructor).toLowerCase());
+    }
+    const rows = db.prepare(`
+      SELECT id, location_id, date, instructor_name, class_key, class_day_time_level, data_json, created_at
+      FROM observations
+      WHERE ${filters.join(" AND ")}
+      ORDER BY date DESC, created_at DESC
+    `).all(...params);
+    const observations = rows.map((row) => {
+      let parsed = {};
+      try {
+        parsed = JSON.parse(row.data_json || "{}");
+      } catch (err) {
+        parsed = {};
+      }
+      return {
+        id: row.id,
+        created_at: row.created_at,
+        location_id: row.location_id,
+        date: row.date,
+        instructor_name: row.instructor_name,
+        classKey: row.class_key,
+        class_day_time_level: row.class_day_time_level,
+        ...parsed
+      };
+    });
+    res.json({ ok: true, observations });
+  } catch (error) {
+    console.error("Observations fetch error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get("/api/observations/summary", (req, res) => {
+  try {
+    const { location_id, from, to } = req.query;
+    if (!location_id) {
+      return res.status(400).json({ ok: false, error: "location_id required" });
+    }
+    const locId = Number(location_id);
+    const filters = ["location_id = ?"];
+    const params = [locId];
+    if (from) {
+      filters.push("date >= ?");
+      params.push(from);
+    }
+    if (to) {
+      filters.push("date <= ?");
+      params.push(to);
+    }
+    const rows = db.prepare(`
+      SELECT instructor_name, data_json
+      FROM observations
+      WHERE ${filters.join(" AND ")}
+    `).all(...params);
+
+    const statsMap = new Map();
+    const ensureStats = (name) => {
+      if (!statsMap.has(name)) {
+        statsMap.set(name, {
+          instructor: name,
+          count: 0,
+          safe_start: { yes: 0, total: 0 },
+          swimmer_interaction: { yes: 0, total: 0 },
+          time_management: { yes: 0, total: 0 },
+          skill_tracking: { yes: 0, total: 0 },
+          demonstrations: { yes: 0, total: 0 },
+          class_safety: { yes: 0, total: 0 }
+        });
+      }
+      return statsMap.get(name);
+    };
+
+    const tallyField = (stats, field, value) => {
+      if (!value) return;
+      const normalized = String(value).toLowerCase();
+      if (normalized !== "yes" && normalized !== "no") return;
+      stats[field].total += 1;
+      if (normalized === "yes") stats[field].yes += 1;
+    };
+
+    rows.forEach((row) => {
+      let data = {};
+      try {
+        data = JSON.parse(row.data_json || "{}");
+      } catch (err) {
+        data = {};
+      }
+      const name = data.instructor_name || row.instructor_name || "Unknown";
+      const stats = ensureStats(name);
+      stats.count += 1;
+      tallyField(stats, "safe_start", data.safe_start?.value);
+      tallyField(stats, "swimmer_interaction", data.swimmer_interaction?.value);
+      tallyField(stats, "time_management", data.time_management?.value);
+      tallyField(stats, "skill_tracking", data.skill_tracking?.value);
+      tallyField(stats, "demonstrations", data.demonstrations?.value);
+      tallyField(stats, "class_safety", data.class_safety?.value);
+    });
+
+    const formatRate = (stat) => {
+      if (!stat.total) return "—";
+      return `${Math.round((stat.yes / stat.total) * 100)}%`;
+    };
+
+    const instructors = Array.from(statsMap.values()).map((entry) => ({
+      instructor: entry.instructor,
+      count: entry.count,
+      safe_start_rate: formatRate(entry.safe_start),
+      swimmer_interaction_rate: formatRate(entry.swimmer_interaction),
+      time_management_rate: formatRate(entry.time_management),
+      skill_tracking_rate: formatRate(entry.skill_tracking),
+      demonstrations_rate: formatRate(entry.demonstrations),
+      class_safety_rate: formatRate(entry.class_safety)
+    })).sort((a, b) => a.instructor.localeCompare(b.instructor));
+
+    res.json({ ok: true, summary: { instructors, count: rows.length } });
+  } catch (error) {
+    console.error("Observation summary error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });

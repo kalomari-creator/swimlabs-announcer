@@ -1,18 +1,10 @@
 <!doctype html>
 <!--
-QA checklist (v4.8.5-beta):
-1) Roster: Upload HTML roster → auto-absent should detect ⊘ glyph or cancel.png in far-right cell; auto-absent rows highlight + chip, override to Here keeps chip.
-2) Roster UI: Attendance icon buttons, single-line rows, instructor cell shows SUB for original instructor or SUB chip only.
-3) Admin/System: MASTER ROSTER RESET requires DELETE + initials, logs in Admin Activity Log.
-4) Manager: Sidebar navigation, alert strip, stat tiles, global trends toggle, global search + preview drawer, keyboard shortcuts modal.
-5) Reports: Attendance Report (summary), Absence Tracker (actionable), Attendance History (read-only) are distinct.
-6) Manager Reports cards: only Retention, Aged Accounts, Drop List.
-7) Reports upload: strict location enforcement + pre-commit summary modal; Drop List always requires location selection.
-8) Drop List: structured details (name, class/time, chips), date bracket filter, delete wrong-location upload.
-9) Retention parser: multi-instructor blocks parsed, retention % from table[1] row0 col1.
-10) Instructor Trainer: Retention, Drop Impact attribution, Attendance Impact views.
-11) Billing Bundle Tracker: 12/24/52 week rules, expiring alerts, export scope modal.
-12) Location visibility: Lifeguard/Guard Tasks/Announcements only for SwimLabs Westchester.
+QA checklist (v4.9-beta):
+1) Locations: load within 3s, dropdown never stuck on "Loading", switching location refreshes views, fallback list + warning banner + Retry when server fails.
+2) Theme: pastel canvas (not white), readable dark text, section header tint obvious, inputs/buttons not white-on-white.
+3) Observation Form: pick class from today roster auto-fills instructor + swimmers, manual edits allowed, save observation, reload from dashboard.
+4) Observation Dashboard: summary counts + yes-rates by instructor over date range; open a record detail without errors.
 -->
 <html>
 <head>
@@ -24,31 +16,31 @@ QA checklist (v4.8.5-beta):
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root{
-      --bg:#f8fafc;
-      --cardA:#ffffff;
-      --cardB:#f1f5f9;
-      --surface:#ffffff;
-      --surface-strong:#eef2f7;
-      --text:#111827;
-      --muted:#374151;
-      --line:rgba(15,23,42,.12);
-      --line2:rgba(15,23,42,.18);
-      --btn:#ffffff;
-      --btn2:#f1f5f9;
-      --good:#059669;
-      --warn:#d97706;
-      --bad:#dc2626;
-      --chip:rgba(15,23,42,.06);
-      --accent:#14b8a6;
-      --accent-soft:#ccfbf1;
-      --cat-client:#c9f7ee;
-      --cat-billing:#e7ddff;
-      --cat-instructors:#d6e7ff;
-      --cat-guards:#f6dcc5;
-      --cat-system:#e2e8f0;
-      --cat-danger:#fecdd3;
+      --bg:#eef2fb;
+      --cardA:#fbfdff;
+      --cardB:#f1f5fb;
+      --surface:#f6f8fd;
+      --surface-strong:#e9eef7;
+      --text:#121317;
+      --muted:#334155;
+      --line:rgba(15,23,42,.18);
+      --line2:rgba(15,23,42,.26);
+      --btn:#f7f9fd;
+      --btn2:#eaf0fb;
+      --good:#0f766e;
+      --warn:#b45309;
+      --bad:#b91c1c;
+      --chip:rgba(15,23,42,.08);
+      --accent:#0f9f8e;
+      --accent-soft:#c8f3ea;
+      --cat-client:#c7f2e8;
+      --cat-billing:#e2d8ff;
+      --cat-instructors:#d4e4ff;
+      --cat-guards:#f3d9c6;
+      --cat-system:#dde6f3;
+      --cat-danger:#f8c9d2;
       --cat-strong:#111827;
-      --cat-border:rgba(15,23,42,.16);
+      --cat-border:rgba(15,23,42,.2);
     }
     *{ box-sizing:border-box; }
     body *{ transition: none !important; }
@@ -86,6 +78,8 @@ QA checklist (v4.8.5-beta):
     }
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .spacer{ flex:1; }
+    .grid2{ display:grid; grid-template-columns: 1fr; gap:10px; }
+    @media(min-width: 640px){ .grid2{ grid-template-columns: 1fr 1fr; } }
 
     .tabs{
       display:flex;
@@ -107,7 +101,11 @@ QA checklist (v4.8.5-beta):
     }
     button:hover{ background: var(--btn2); }
     button:active{ transform: translateY(1px); }
-    button.primary{ border-color: rgba(16,185,129,.45); }
+    button.primary{
+      border-color: var(--category-border, rgba(16,185,129,.45));
+      background: var(--category-bg, var(--accent-soft));
+      color:#0f172a;
+    }
     button.secondary{ border-color: rgba(148,163,184,.6); }
     button.danger{ border-color: rgba(220,38,38,.35); background:#dc2626; color:#fff; }
     button.danger:hover{ background:#b91c1c; }
@@ -173,6 +171,11 @@ QA checklist (v4.8.5-beta):
       outline: none;
       font-size:14px;
       line-height: 1.4;
+    }
+    textarea::placeholder,
+    input::placeholder{
+      color:#6b7280;
+      opacity:1;
     }
 
     /* readable black inputs + dropdowns */
@@ -334,6 +337,36 @@ QA checklist (v4.8.5-beta):
 
     .level{ font-weight:900; color: var(--text); line-height: 1.2; }
     .nowrap{ white-space: nowrap; }
+
+    .observation-grid{
+      display:grid;
+      gap:12px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 980px){
+      .observation-grid{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .observation-card{
+      border:1px solid var(--line2);
+      border-radius:16px;
+      background: var(--surface);
+      padding:12px;
+    }
+    .observation-table th,
+    .observation-table td{
+      font-size:13px;
+    }
+    .observation-row-input{
+      width:100%;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid rgba(148,163,184,.45);
+      background: var(--cardA);
+      color: var(--text);
+      font-weight:600;
+    }
 
     .badge{
       display:inline-flex;
@@ -665,45 +698,45 @@ QA checklist (v4.8.5-beta):
 
     .category-client{
       --category-bg: var(--cat-client);
-      --category-soft: rgba(201,247,238,0.6);
-      --category-row: rgba(201,247,238,0.18);
-      --category-hover: rgba(201,247,238,0.32);
-      --category-border: rgba(13,148,136,.22);
+      --category-soft: rgba(199,242,232,0.75);
+      --category-row: rgba(199,242,232,0.32);
+      --category-hover: rgba(199,242,232,0.45);
+      --category-border: rgba(15,118,110,.28);
     }
     .category-billing{
       --category-bg: var(--cat-billing);
-      --category-soft: rgba(231,221,255,0.6);
-      --category-row: rgba(231,221,255,0.2);
-      --category-hover: rgba(231,221,255,0.3);
-      --category-border: rgba(99,102,241,.22);
+      --category-soft: rgba(226,216,255,0.75);
+      --category-row: rgba(226,216,255,0.32);
+      --category-hover: rgba(226,216,255,0.45);
+      --category-border: rgba(99,102,241,.28);
     }
     .category-instructors{
       --category-bg: var(--cat-instructors);
-      --category-soft: rgba(214,231,255,0.6);
-      --category-row: rgba(214,231,255,0.2);
-      --category-hover: rgba(214,231,255,0.3);
-      --category-border: rgba(59,130,246,.22);
+      --category-soft: rgba(212,228,255,0.75);
+      --category-row: rgba(212,228,255,0.32);
+      --category-hover: rgba(212,228,255,0.45);
+      --category-border: rgba(59,130,246,.28);
     }
     .category-guards{
       --category-bg: var(--cat-guards);
-      --category-soft: rgba(246,220,197,0.6);
-      --category-row: rgba(246,220,197,0.22);
-      --category-hover: rgba(246,220,197,0.35);
-      --category-border: rgba(234,88,12,.22);
+      --category-soft: rgba(243,217,198,0.78);
+      --category-row: rgba(243,217,198,0.34);
+      --category-hover: rgba(243,217,198,0.46);
+      --category-border: rgba(234,88,12,.3);
     }
     .category-system{
       --category-bg: var(--cat-system);
-      --category-soft: rgba(226,232,240,0.7);
-      --category-row: rgba(226,232,240,0.25);
-      --category-hover: rgba(226,232,240,0.35);
-      --category-border: rgba(71,85,105,.2);
+      --category-soft: rgba(221,230,243,0.8);
+      --category-row: rgba(221,230,243,0.38);
+      --category-hover: rgba(221,230,243,0.48);
+      --category-border: rgba(71,85,105,.28);
     }
     .category-danger{
       --category-bg: var(--cat-danger);
-      --category-soft: rgba(254,205,211,0.6);
-      --category-row: rgba(254,205,211,0.25);
-      --category-hover: rgba(254,205,211,0.35);
-      --category-border: rgba(225,29,72,.28);
+      --category-soft: rgba(248,201,210,0.75);
+      --category-row: rgba(248,201,210,0.35);
+      --category-hover: rgba(248,201,210,0.5);
+      --category-border: rgba(225,29,72,.32);
     }
 
     .icon-circle{
@@ -933,7 +966,7 @@ QA checklist (v4.8.5-beta):
 <div class="wrap">
   <div class="topbar">
     <div>
-      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.8.5-beta</span></h1>
+      <h1>SwimLabs Announcer <span style="font-size:14px; color:var(--muted); font-weight:400;">v4.9-beta</span></h1>
       <div class="muted" id="status">Loading…</div>
     </div>
 
@@ -1270,6 +1303,203 @@ QA checklist (v4.8.5-beta):
               <div id="attendanceImpactTable"></div>
             </div>
           </div>
+
+          <div class="card" id="observationCard">
+            <div class="row" style="margin-bottom:10px;">
+              <h3 style="margin:0; font-size:18px;">📝 Instructor Observation</h3>
+              <div class="spacer"></div>
+              <span class="pill tiny">Location: <strong id="observationLocationLabel">—</strong></span>
+              <span class="pill tiny">Status: <strong id="observationSaveStatus">Ready</strong></span>
+            </div>
+            <div class="manager-subnav" style="margin-bottom:12px;">
+              <button class="secondary active" id="observationTabForm">Observation Form</button>
+              <button class="secondary" id="observationTabDashboard">Observation Dashboard</button>
+            </div>
+
+            <div id="observationFormPanel">
+              <div class="grid2">
+                <div class="field">
+                  <label>Date</label>
+                  <input type="date" id="observationDate" />
+                </div>
+                <div class="field">
+                  <label>Pick a class (today's roster)</label>
+                  <select id="observationClassSelect"></select>
+                  <div class="hint" id="observationRosterStatus">Loading roster classes…</div>
+                </div>
+                <div class="field">
+                  <label>Instructor name</label>
+                  <input type="text" id="observationInstructorName" placeholder="Instructor name" />
+                </div>
+                <div class="field">
+                  <label>Class day/time/level</label>
+                  <input type="text" id="observationClassMeta" placeholder="e.g., Tue 4:00 PM • Level 3" />
+                </div>
+                <div class="field">
+                  <label>Safe Start</label>
+                  <select id="observationSafeStart">
+                    <option value="">Select…</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Swimmer Interaction</label>
+                  <select id="observationSwimmerInteraction">
+                    <option value="">Select…</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Time Management</label>
+                  <select id="observationTimeManagement">
+                    <option value="">Select…</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Skill Tracking</label>
+                  <select id="observationSkillTracking">
+                    <option value="">Select…</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Demonstrations</label>
+                  <select id="observationDemonstrations">
+                    <option value="">Select…</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Class Safety</label>
+                  <select id="observationClassSafety">
+                    <option value="">Select…</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="observation-grid" style="margin-top:12px;">
+                <div class="observation-card">
+                  <div class="row" style="margin-bottom:6px;">
+                    <strong>Warm Up</strong>
+                    <div class="spacer"></div>
+                    <button class="secondary miniBtn" data-observation-add="warmup">+ Add swimmer</button>
+                  </div>
+                  <table class="observation-table" id="observationWarmupTable">
+                    <thead>
+                      <tr><th>Swimmer</th><th>Notes</th><th></th></tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                  <label class="tiny" style="display:block; margin-top:6px;">Notes</label>
+                  <textarea id="observationWarmupNotes" placeholder="Warm up notes..."></textarea>
+                </div>
+                <div class="observation-card">
+                  <div class="row" style="margin-bottom:6px;">
+                    <strong>Skill 1</strong>
+                    <div class="spacer"></div>
+                    <button class="secondary miniBtn" data-observation-add="skill1">+ Add swimmer</button>
+                  </div>
+                  <table class="observation-table" id="observationSkill1Table">
+                    <thead>
+                      <tr><th>Swimmer</th><th>Notes</th><th></th></tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                  <label class="tiny" style="display:block; margin-top:6px;">Notes</label>
+                  <textarea id="observationSkill1Notes" placeholder="Skill 1 notes..."></textarea>
+                </div>
+                <div class="observation-card">
+                  <div class="row" style="margin-bottom:6px;">
+                    <strong>Skill 2</strong>
+                    <div class="spacer"></div>
+                    <button class="secondary miniBtn" data-observation-add="skill2">+ Add swimmer</button>
+                  </div>
+                  <table class="observation-table" id="observationSkill2Table">
+                    <thead>
+                      <tr><th>Swimmer</th><th>Notes</th><th></th></tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                  <label class="tiny" style="display:block; margin-top:6px;">Notes</label>
+                  <textarea id="observationSkill2Notes" placeholder="Skill 2 notes..."></textarea>
+                </div>
+                <div class="observation-card">
+                  <div class="row" style="margin-bottom:6px;">
+                    <strong>Signatures</strong>
+                  </div>
+                  <div class="grid2">
+                    <div class="field">
+                      <label>Instructor signature</label>
+                      <input type="text" id="observationInstructorSignature" placeholder="Typed name" />
+                    </div>
+                    <div class="field">
+                      <label>Instructor date</label>
+                      <input type="date" id="observationInstructorDate" />
+                    </div>
+                    <div class="field">
+                      <label>Trainer signature</label>
+                      <input type="text" id="observationTrainerSignature" placeholder="Typed name" />
+                    </div>
+                    <div class="field">
+                      <label>Trainer date</label>
+                      <input type="date" id="observationTrainerDate" />
+                    </div>
+                  </div>
+                  <div class="row" style="margin-top:8px;">
+                    <button class="primary" id="observationSaveBtn">Save observation</button>
+                    <button class="secondary" id="observationResetBtn">Reset form</button>
+                    <button class="secondary" id="observationRosterRefresh">Reload roster classes</button>
+                  </div>
+                  <div class="tiny" id="observationFormHint" style="color:var(--muted); margin-top:8px;">
+                    No roster loaded yet — you can still add swimmers manually.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="observationDashboardPanel" class="hidden">
+              <div class="row" style="margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                <div class="field" style="margin:0; min-width:140px;">
+                  <label>From</label>
+                  <input type="date" id="observationSummaryFrom" />
+                </div>
+                <div class="field" style="margin:0; min-width:140px;">
+                  <label>To</label>
+                  <input type="date" id="observationSummaryTo" />
+                </div>
+                <div style="display:flex; align-items:flex-end; gap:8px;">
+                  <button class="secondary" id="observationSummaryRefresh">Refresh summary</button>
+                </div>
+                <div class="spacer"></div>
+                <span class="pill tiny">Observations: <strong id="observationSummaryCount">0</strong></span>
+              </div>
+              <div id="observationSummaryTable"></div>
+              <div class="card" style="margin-top:12px;">
+                <div class="row">
+                  <strong>Timeline</strong>
+                  <div class="spacer"></div>
+                  <span class="tiny" id="observationTimelineHint" style="color:var(--muted);">Select an observation to view details.</span>
+                </div>
+                <div id="observationTimelineTable"></div>
+              </div>
+              <div class="card" id="observationDetailCard" style="margin-top:12px;">
+                <div class="row">
+                  <strong>Observation Detail</strong>
+                </div>
+                <div id="observationDetailContent" class="tiny" style="color:var(--muted); margin-top:6px;">
+                  No observation selected.
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section id="managerSectionGuards" class="manager-section category-guards">
@@ -1506,7 +1736,7 @@ QA checklist (v4.8.5-beta):
   </div>
 
   <div id="versionWatermark" class="tiny" style="margin:18px 6px 6px; text-align:right; color:rgba(159,176,208,.6);">
-    v4.8.5-beta • <span id="buildStamp">—</span>
+    v4.9-beta • <span id="buildStamp">—</span>
   </div>
 </div>
 
@@ -1997,6 +2227,9 @@ QA checklist (v4.8.5-beta):
   let retentionTrendChart = null;
   let dropTrendChart = null;
   let attendanceTrendChart = null;
+  let observationRosterClasses = [];
+  let observationTimelineCache = [];
+  let observationActiveId = null;
   let managerSection = 'client';
   let globalSearchResults = [];
   let previewTarget = null;
@@ -2004,7 +2237,8 @@ QA checklist (v4.8.5-beta):
   let bundleEditingId = null;
   let rosterCache = [];
   let globalAttendanceSummary = null;
-  const LOCATION_STORAGE_KEY = 'location_id';
+  const LOCATION_STORAGE_KEY = 'sla_location_id';
+  const LEGACY_LOCATION_STORAGE_KEY = 'location_id';
   const FALLBACK_LOCATIONS = [
     { id: 1, name: 'SwimLabs Westchester', code: 'SLW', active: true },
     { id: 2, name: 'SafeSplash Riverdale', code: 'SSR', active: true },
@@ -2106,6 +2340,19 @@ QA checklist (v4.8.5-beta):
     return (asUTC - date.getTime()) / 60000;
   }
 
+  function setLocationSelectLoading(message = 'Loading locations...') {
+    const select = el('locationSelect');
+    if (!select) return;
+    select.innerHTML = `<option value="">${message}</option>`;
+    select.disabled = true;
+  }
+
+  function parseLocationsPayload(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.locations)) return payload.locations;
+    return null;
+  }
+
   function renderLocationSelect(locations, selectedId) {
     const select = el('locationSelect');
     if (!select) return;
@@ -2132,10 +2379,11 @@ QA checklist (v4.8.5-beta):
     return (locations || [])
       .filter((loc) => loc && (loc.id !== undefined || loc.name))
       .map((loc) => ({
-        id: loc.id,
+        id: loc.id ?? loc.location_id ?? loc.code ?? loc.short_code ?? loc.shortCode ?? loc.name,
         name: loc.name || loc.display_name || 'Unknown',
         code: loc.code || loc.short_code || loc.shortCode || '',
-        active: loc.active !== undefined ? Boolean(loc.active) : true
+        active: loc.active !== undefined ? Boolean(loc.active) : true,
+        time_zone: loc.time_zone || loc.timeZone || null
       }))
       .filter((loc) => loc.active);
   }
@@ -2151,14 +2399,14 @@ QA checklist (v4.8.5-beta):
     banner.style.borderColor = tone === 'danger' ? 'rgba(225,29,72,.35)' : 'rgba(245,158,11,.35)';
     retryBtn.style.display = showRetry ? 'inline-flex' : 'none';
     if (showRetry) {
-      retryBtn.onclick = () => loadLocations();
+      retryBtn.onclick = () => loadLocationsWithTimeout();
     } else {
       retryBtn.onclick = null;
     }
   }
 
   function resolveLocationId() {
-    const savedLocId = localStorage.getItem(LOCATION_STORAGE_KEY);
+    const savedLocId = localStorage.getItem(LOCATION_STORAGE_KEY) || localStorage.getItem(LEGACY_LOCATION_STORAGE_KEY);
     const matchedLocation = allLocations.find((l) => String(l.id) === String(savedLocId));
     return matchedLocation?.id || allLocations[0]?.id || '';
   }
@@ -2168,45 +2416,109 @@ QA checklist (v4.8.5-beta):
     currentLocation = resolved || null;
     if (resolved) {
       localStorage.setItem(LOCATION_STORAGE_KEY, resolved.id);
+      localStorage.removeItem(LEGACY_LOCATION_STORAGE_KEY);
     }
     renderLocationSelect(allLocations, resolved?.id || '');
   }
 
-  // Load locations on startup
-  async function loadLocations({ updateSelection = true, refreshViews = true } = {}) {
-    const select = el('locationSelect');
-    if (select) {
-      select.innerHTML = '<option value="">Loading locations...</option>';
-      select.disabled = true;
-    }
+  async function apiWithTimeout(path, { timeoutMs = 2500, ...opts } = {}) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const resp = await api('/api/locations');
-      if (!Array.isArray(resp.locations)) {
-        throw new Error('Invalid location response.');
+      const res = await fetch(apiUrl(path), {
+        headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+        ...opts,
+        signal: controller.signal
+      });
+      const text = await res.text();
+      let data = {};
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (err) {
+          throw new Error('Invalid JSON response.');
+        }
       }
-      const normalized = normalizeLocations(resp.locations);
-      allLocations = normalized;
-      locationsUsingFallback = false;
-      if (!normalized.length) {
-        showLocationBanner({ message: 'No locations available', showRetry: true, tone: 'warning' });
-      } else {
-        showLocationBanner({ message: '', showRetry: false });
+      if (!res.ok || data.ok === false) {
+        const details = data && data.details ? ` | ${typeof data.details === 'string' ? data.details : JSON.stringify(data.details)}` : '';
+        const msg = (data.error || `Request failed: ${res.status}`) + details;
+        throw new Error(msg);
       }
-    } catch (e) {
-      console.error('Failed to load locations:', e);
-      allLocations = [...FALLBACK_LOCATIONS];
-      locationsUsingFallback = true;
-      showLocationBanner({ message: 'Server location list unavailable — using fallback list.', showRetry: true, tone: 'warning' });
+      return data;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('Request timed out.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
+  }
+
+  async function loadLocationsWithTimeout({ updateSelection = true, refreshViews = true } = {}) {
+    setLocationSelectLoading();
+    const endpoints = [
+      '/api/locations',
+      '/api/location/list',
+      '/locations'
+    ];
+    let resolvedLocations = null;
+    let lastError = null;
+    const deadline = Date.now() + 2500;
+    for (const endpoint of endpoints) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      try {
+        const payload = await apiWithTimeout(endpoint, { timeoutMs: remaining, method: 'GET', headers: { Accept: 'application/json' } });
+        const rawLocations = parseLocationsPayload(payload);
+        if (!rawLocations) {
+          throw new Error('Invalid location response.');
+        }
+        const normalized = normalizeLocations(rawLocations);
+        if (!normalized.length) {
+          throw new Error('No locations returned.');
+        }
+        resolvedLocations = normalized;
+        break;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    if (!resolvedLocations || !resolvedLocations.length) {
+      if (lastError) {
+        console.warn('Location load failed, using fallback:', lastError.message);
+      }
+      resolvedLocations = [...FALLBACK_LOCATIONS];
+      locationsUsingFallback = true;
+      showLocationBanner({
+        message: 'Server location list unavailable — using fallback list.',
+        showRetry: true,
+        tone: 'warning'
+      });
+    } else {
+      locationsUsingFallback = false;
+      showLocationBanner({ message: '', showRetry: false });
+    }
+
+    allLocations = resolvedLocations;
+    if (!allLocations.length) {
+      showLocationBanner({ message: 'No locations available', showRetry: true, tone: 'warning' });
+    }
+
     if (updateSelection) {
       const defaultId = resolveLocationId();
       applyLocationSelection(defaultId);
       if (refreshViews) {
-        await refreshLocationViews();
+        await refreshAllViewsSafe();
       }
     } else {
       renderLocationSelect(allLocations, currentLocation?.id || '');
     }
+  }
+
+  async function loadLocations(options = {}) {
+    return loadLocationsWithTimeout(options);
   }
 
   function setManagerTab(tab) {
@@ -2292,6 +2604,397 @@ QA checklist (v4.8.5-beta):
       const btn = container.querySelector('[data-inline-retry]');
       if (btn) btn.addEventListener('click', retryFn);
     }
+  }
+
+  const observationSections = ['warmup', 'skill1', 'skill2'];
+  const observationTableMap = {
+    warmup: 'observationWarmupTable',
+    skill1: 'observationSkill1Table',
+    skill2: 'observationSkill2Table'
+  };
+
+  function setObservationTab(tab) {
+    const formBtn = el('observationTabForm');
+    const dashBtn = el('observationTabDashboard');
+    const formPanel = el('observationFormPanel');
+    const dashPanel = el('observationDashboardPanel');
+    const isDashboard = tab === 'dashboard';
+    if (formBtn) formBtn.classList.toggle('active', !isDashboard);
+    if (dashBtn) dashBtn.classList.toggle('active', isDashboard);
+    if (formPanel) formPanel.classList.toggle('hidden', isDashboard);
+    if (dashPanel) dashPanel.classList.toggle('hidden', !isDashboard);
+    if (isDashboard) {
+      loadObservationDashboard();
+    }
+  }
+
+  function setObservationRosterStatus(message, tone = 'muted') {
+    const status = el('observationRosterStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.style.color = tone === 'warn' ? 'var(--warn)' : 'var(--muted)';
+  }
+
+  function updateObservationLocationLabel() {
+    const label = el('observationLocationLabel');
+    if (label) label.textContent = currentLocation?.name || '—';
+  }
+
+  function clearObservationTable(section) {
+    const table = el(observationTableMap[section]);
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    if (tbody) tbody.innerHTML = '';
+  }
+
+  function addObservationRow(section, row = {}) {
+    const table = el(observationTableMap[section]);
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input class="observation-row-input" data-observation-name placeholder="Swimmer name" value="${escapeHtml(row.name || '')}" /></td>
+      <td><input class="observation-row-input" data-observation-notes placeholder="Notes" value="${escapeHtml(row.notes || '')}" /></td>
+      <td><button class="secondary miniBtn" data-observation-remove>Remove</button></td>
+    `;
+    const removeBtn = tr.querySelector('[data-observation-remove]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        tr.remove();
+      });
+    }
+    tbody.appendChild(tr);
+  }
+
+  function collectObservationRows(section) {
+    const table = el(observationTableMap[section]);
+    if (!table) return [];
+    const rows = [];
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      const name = tr.querySelector('[data-observation-name]')?.value?.trim() || '';
+      const notes = tr.querySelector('[data-observation-notes]')?.value?.trim() || '';
+      if (name || notes) {
+        rows.push({ name, notes });
+      }
+    });
+    return rows;
+  }
+
+  function setObservationSwimmers(swimmers = []) {
+    observationSections.forEach((section) => {
+      clearObservationTable(section);
+      swimmers.forEach((swimmer) => {
+        addObservationRow(section, { name: swimmer.name || swimmer });
+      });
+    });
+    const hint = el('observationFormHint');
+    if (hint) {
+      hint.textContent = swimmers.length
+        ? 'Roster loaded — adjust swimmers or notes as needed.'
+        : 'No roster loaded yet — you can still add swimmers manually.';
+    }
+  }
+
+  function observationSwimmerSnapshot() {
+    const names = new Set();
+    observationSections.forEach((section) => {
+      collectObservationRows(section).forEach((row) => {
+        if (row.name) names.add(row.name);
+      });
+    });
+    return Array.from(names).map((name) => ({ name }));
+  }
+
+  function buildObservationPayload() {
+    return {
+      location_id: currentLocation?.id || null,
+      date: el('observationDate')?.value || '',
+      classKey: el('observationClassSelect')?.value || '',
+      class_day_time_level: el('observationClassMeta')?.value?.trim() || '',
+      instructor_name: el('observationInstructorName')?.value?.trim() || '',
+      swimmers_snapshot: observationSwimmerSnapshot(),
+      safe_start: { value: el('observationSafeStart')?.value || '' },
+      warmup: { rows: collectObservationRows('warmup'), notes: el('observationWarmupNotes')?.value?.trim() || '' },
+      skill1: { rows: collectObservationRows('skill1'), notes: el('observationSkill1Notes')?.value?.trim() || '' },
+      skill2: { rows: collectObservationRows('skill2'), notes: el('observationSkill2Notes')?.value?.trim() || '' },
+      swimmer_interaction: { value: el('observationSwimmerInteraction')?.value || '' },
+      time_management: { value: el('observationTimeManagement')?.value || '' },
+      skill_tracking: { value: el('observationSkillTracking')?.value || '' },
+      demonstrations: { value: el('observationDemonstrations')?.value || '' },
+      class_safety: { value: el('observationClassSafety')?.value || '' },
+      signatures: {
+        instructor: el('observationInstructorSignature')?.value?.trim() || '',
+        instructor_date: el('observationInstructorDate')?.value || '',
+        trainer: el('observationTrainerSignature')?.value?.trim() || '',
+        trainer_date: el('observationTrainerDate')?.value || ''
+      }
+    };
+  }
+
+  function resetObservationForm({ keepDate = true } = {}) {
+    const dateValue = keepDate ? el('observationDate')?.value : '';
+    if (el('observationClassSelect')) el('observationClassSelect').value = '';
+    if (el('observationInstructorName')) el('observationInstructorName').value = '';
+    if (el('observationClassMeta')) el('observationClassMeta').value = '';
+    if (el('observationSafeStart')) el('observationSafeStart').value = '';
+    if (el('observationSwimmerInteraction')) el('observationSwimmerInteraction').value = '';
+    if (el('observationTimeManagement')) el('observationTimeManagement').value = '';
+    if (el('observationSkillTracking')) el('observationSkillTracking').value = '';
+    if (el('observationDemonstrations')) el('observationDemonstrations').value = '';
+    if (el('observationClassSafety')) el('observationClassSafety').value = '';
+    if (el('observationWarmupNotes')) el('observationWarmupNotes').value = '';
+    if (el('observationSkill1Notes')) el('observationSkill1Notes').value = '';
+    if (el('observationSkill2Notes')) el('observationSkill2Notes').value = '';
+    if (el('observationInstructorSignature')) el('observationInstructorSignature').value = '';
+    if (el('observationInstructorDate')) el('observationInstructorDate').value = '';
+    if (el('observationTrainerSignature')) el('observationTrainerSignature').value = '';
+    if (el('observationTrainerDate')) el('observationTrainerDate').value = '';
+    if (el('observationDate') && keepDate && dateValue) el('observationDate').value = dateValue;
+    observationSections.forEach(clearObservationTable);
+    setObservationSwimmers([]);
+    const status = el('observationSaveStatus');
+    if (status) status.textContent = 'Ready';
+  }
+
+  async function loadObservationRosterClasses() {
+    const select = el('observationClassSelect');
+    if (!currentLocation) {
+      if (select) {
+        select.innerHTML = '<option value="">(select location)</option>';
+        select.disabled = true;
+      }
+      setObservationRosterStatus('Select a location to load roster classes.', 'warn');
+      return;
+    }
+    const date = el('observationDate')?.value || todayISO();
+    setObservationRosterStatus('Loading roster classes…');
+    try {
+      const resp = await apiWithTimeout(`/api/roster/classes?location_id=${currentLocation.id}&date=${date}`, { timeoutMs: 2500 });
+      observationRosterClasses = resp.classes || [];
+      if (select) {
+        select.innerHTML = '<option value="">(select class)</option>';
+        observationRosterClasses.forEach((cls) => {
+          const opt = document.createElement('option');
+          opt.value = cls.classKey;
+          opt.textContent = cls.label || cls.timeLabel || cls.classKey;
+          select.appendChild(opt);
+        });
+        select.disabled = false;
+      }
+      if (!observationRosterClasses.length) {
+        setObservationRosterStatus('No roster loaded for this date — manual entry available.', 'warn');
+      } else {
+        setObservationRosterStatus(`Loaded ${observationRosterClasses.length} classes from roster.`);
+      }
+    } catch (err) {
+      console.warn('Roster class load failed:', err.message);
+      observationRosterClasses = [];
+      if (select) {
+        select.innerHTML = '<option value="">(no roster loaded)</option>';
+        select.disabled = false;
+      }
+      setObservationRosterStatus('Roster unavailable — manual entry available.', 'warn');
+    }
+  }
+
+  function applyObservationClass(classKey) {
+    const selected = observationRosterClasses.find((cls) => cls.classKey === classKey);
+    if (!selected) return;
+    if (el('observationInstructorName')) el('observationInstructorName').value = selected.instructorName || '';
+    if (el('observationClassMeta')) {
+      const parts = [selected.timeLabel, selected.levelLabel].filter(Boolean);
+      el('observationClassMeta').value = parts.join(' • ');
+    }
+    if (Array.isArray(selected.swimmers)) {
+      setObservationSwimmers(selected.swimmers);
+    }
+  }
+
+  async function saveObservation() {
+    if (!currentLocation) {
+      alert('Select a location first.');
+      return;
+    }
+    const payload = buildObservationPayload();
+    if (!payload.date) {
+      alert('Please select a date for the observation.');
+      return;
+    }
+    if (!payload.instructor_name) {
+      alert('Instructor name is required.');
+      return;
+    }
+    const status = el('observationSaveStatus');
+    if (status) status.textContent = 'Saving...';
+    try {
+      const resp = await apiWithTimeout('/api/observations', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        timeoutMs: 2500
+      });
+      if (status) status.textContent = `Saved (#${resp.id})`;
+      await loadObservationDashboard();
+    } catch (err) {
+      if (status) status.textContent = 'Save failed';
+      alert(`Observation save failed: ${err.message}`);
+    }
+  }
+
+  function renderObservationSummary(summary = {}) {
+    const tableTarget = el('observationSummaryTable');
+    if (!tableTarget) return;
+    const instructorStats = summary.instructors || [];
+    if (!instructorStats.length) {
+      tableTarget.innerHTML = '<div class="tiny" style="color:var(--muted);">No observations in this range.</div>';
+      return;
+    }
+    const rows = instructorStats.map((entry) => [
+      entry.instructor || '—',
+      entry.count || 0,
+      entry.safe_start_rate ?? '—',
+      entry.swimmer_interaction_rate ?? '—',
+      entry.time_management_rate ?? '—',
+      entry.skill_tracking_rate ?? '—',
+      entry.demonstrations_rate ?? '—',
+      entry.class_safety_rate ?? '—'
+    ]);
+    tableTarget.innerHTML = renderTable(
+      ['Instructor', 'Count', 'Safe Start', 'Swimmer Interaction', 'Time Mgmt', 'Skill Tracking', 'Demonstrations', 'Class Safety'],
+      rows
+    );
+  }
+
+  function renderObservationTimeline(observations = []) {
+    const tableTarget = el('observationTimelineTable');
+    if (!tableTarget) return;
+    if (!observations.length) {
+      tableTarget.innerHTML = '<div class="tiny" style="color:var(--muted);">No observations yet.</div>';
+      return;
+    }
+    const rows = observations.map((obs, idx) => `
+      <tr>
+        <td>${escapeHtml(obs.date || '—')}</td>
+        <td>${escapeHtml(obs.instructor_name || '—')}</td>
+        <td>${escapeHtml(obs.class_day_time_level || obs.classKey || '—')}</td>
+        <td><button class="secondary miniBtn" data-observation-open="${idx}">Open</button></td>
+      </tr>
+    `).join('');
+    tableTarget.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Instructor</th>
+            <th>Class</th>
+            <th>View</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+    tableTarget.querySelectorAll('[data-observation-open]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.observationOpen);
+        const obs = observationTimelineCache[idx];
+        if (obs) renderObservationDetail(obs);
+      });
+    });
+  }
+
+  function renderObservationDetail(obs) {
+    const detail = el('observationDetailContent');
+    if (!detail) return;
+    observationActiveId = obs.id;
+    detail.innerHTML = `
+      <div class="row" style="flex-wrap:wrap; gap:8px;">
+        <span class="pill tiny">Date: <strong>${escapeHtml(obs.date || '—')}</strong></span>
+        <span class="pill tiny">Instructor: <strong>${escapeHtml(obs.instructor_name || '—')}</strong></span>
+        <span class="pill tiny">Class: <strong>${escapeHtml(obs.class_day_time_level || obs.classKey || '—')}</strong></span>
+      </div>
+      <div style="margin-top:8px;">
+        <div><strong>Safe Start:</strong> ${escapeHtml(obs.safe_start?.value || '—')}</div>
+        <div><strong>Swimmer Interaction:</strong> ${escapeHtml(obs.swimmer_interaction?.value || '—')}</div>
+        <div><strong>Time Management:</strong> ${escapeHtml(obs.time_management?.value || '—')}</div>
+        <div><strong>Skill Tracking:</strong> ${escapeHtml(obs.skill_tracking?.value || '—')}</div>
+        <div><strong>Demonstrations:</strong> ${escapeHtml(obs.demonstrations?.value || '—')}</div>
+        <div><strong>Class Safety:</strong> ${escapeHtml(obs.class_safety?.value || '—')}</div>
+      </div>
+      <div style="margin-top:8px;">
+        <strong>Notes</strong>
+        <div class="tiny" style="color:var(--muted); margin-top:4px;">
+          Warm Up: ${escapeHtml(obs.warmup?.notes || '—')}<br/>
+          Skill 1: ${escapeHtml(obs.skill1?.notes || '—')}<br/>
+          Skill 2: ${escapeHtml(obs.skill2?.notes || '—')}
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadObservationDashboard() {
+    if (!currentLocation) return;
+    const from = el('observationSummaryFrom')?.value;
+    const to = el('observationSummaryTo')?.value;
+    try {
+      const summaryResp = await apiWithTimeout(`/api/observations/summary?location_id=${currentLocation.id}&from=${from || ''}&to=${to || ''}`, { timeoutMs: 2500 });
+      renderObservationSummary(summaryResp.summary || {});
+      const listResp = await apiWithTimeout(`/api/observations?location_id=${currentLocation.id}&from=${from || ''}&to=${to || ''}`, { timeoutMs: 2500 });
+      observationTimelineCache = listResp.observations || [];
+      el('observationSummaryCount').textContent = observationTimelineCache.length;
+      renderObservationTimeline(observationTimelineCache);
+    } catch (err) {
+      showInlineError('observationSummaryTable', `Observation summary failed: ${err.message}`, loadObservationDashboard);
+      const tableTarget = el('observationTimelineTable');
+      if (tableTarget) tableTarget.innerHTML = '<div class="tiny" style="color:var(--muted);">Unable to load timeline.</div>';
+      if (el('observationSummaryCount')) el('observationSummaryCount').textContent = '0';
+    }
+  }
+
+  async function refreshObservationViews() {
+    updateObservationLocationLabel();
+    if (el('observationDate')) {
+      const today = todayISO();
+      if (!el('observationDate').value) {
+        el('observationDate').value = today;
+      }
+      if (el('observationInstructorDate') && !el('observationInstructorDate').value) {
+        el('observationInstructorDate').value = today;
+      }
+      if (el('observationTrainerDate') && !el('observationTrainerDate').value) {
+        el('observationTrainerDate').value = today;
+      }
+    }
+    if (el('observationSummaryFrom') && el('observationSummaryTo')) {
+      const today = new Date();
+      const fromDate = new Date();
+      fromDate.setDate(today.getDate() - 30);
+      if (!el('observationSummaryFrom').value) {
+        el('observationSummaryFrom').value = fromDate.toISOString().split('T')[0];
+      }
+      if (!el('observationSummaryTo').value) {
+        el('observationSummaryTo').value = today.toISOString().split('T')[0];
+      }
+    }
+    await loadObservationRosterClasses();
+  }
+
+  function initObservationModule() {
+    updateObservationLocationLabel();
+    observationSections.forEach(clearObservationTable);
+    document.querySelectorAll('[data-observation-add]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const section = btn.dataset.observationAdd;
+        addObservationRow(section, {});
+      });
+    });
+    el('observationTabForm')?.addEventListener('click', () => setObservationTab('form'));
+    el('observationTabDashboard')?.addEventListener('click', () => setObservationTab('dashboard'));
+    el('observationClassSelect')?.addEventListener('change', (e) => applyObservationClass(e.target.value));
+    el('observationDate')?.addEventListener('change', () => loadObservationRosterClasses());
+    el('observationRosterRefresh')?.addEventListener('click', loadObservationRosterClasses);
+    el('observationSaveBtn')?.addEventListener('click', saveObservation);
+    el('observationResetBtn')?.addEventListener('click', () => resetObservationForm({ keepDate: true }));
+    el('observationSummaryRefresh')?.addEventListener('click', loadObservationDashboard);
   }
 
   document.querySelectorAll('[data-breakdown]').forEach((btn) => {
@@ -4218,21 +4921,35 @@ QA checklist (v4.8.5-beta):
     if (currentBlock) await loadRoster();
   }
 
+  async function refreshAllViewsSafe() {
+    try {
+      await refreshLocationViews();
+      await refreshObservationViews();
+    } catch (err) {
+      console.error('Failed to refresh location views:', err);
+      setStatus('Location refresh failed. Retry from the banner.', 'warn');
+    }
+  }
+
   el('locationSelect').addEventListener('change', async (e) => {
     const locId = e.target.value;
     applyLocationSelection(locId);
     if (!currentLocation) {
-      await refreshLocationViews();
+      await refreshAllViewsSafe();
       return;
     }
     try {
       if (!locationsUsingFallback) {
-        await api('/api/set-location', {
-          method: 'POST',
-          body: JSON.stringify({ location_id: locId })
-        });
+        try {
+          await api('/api/set-location', {
+            method: 'POST',
+            body: JSON.stringify({ location_id: locId })
+          });
+        } catch (err) {
+          console.warn('Location set endpoint failed:', err.message);
+        }
       }
-      await refreshLocationViews();
+      await refreshAllViewsSafe();
     } catch (e) {
       alert('Failed to switch location: ' + e.message);
     }
@@ -8054,10 +8771,10 @@ QA checklist (v4.8.5-beta):
     if (!bg || !text) return;
     const bgLum = luminance(bg);
     const textLum = luminance(text);
-    const bgLight = bgLum >= 0.8;
-    const textDark = textLum <= 0.25;
-    if (!bgLight || !textDark) {
-      console.warn('Theme sanity check: Body background should be light and text should be dark. Review :root colors in index.html.');
+    const bgTooWhite = bgLum >= 0.95;
+    const textTooLight = textLum >= 0.32;
+    if (bgTooWhite || textTooLight) {
+      console.warn('Theme sanity check: Background is too close to white or text is too light. Review :root colors in index.html.');
     }
   }
 
@@ -8069,11 +8786,10 @@ QA checklist (v4.8.5-beta):
         managerRole = sessionStorage.getItem('manager_role') || 'manager';
       }
       applyRoleUI();
+      initObservationModule();
       el('buildStamp').textContent = new Date().toLocaleString();
-      await loadLocations({ updateSelection: false });
-      const defaultId = resolveLocationId();
-      applyLocationSelection(defaultId);
-      await refreshLocationViews();
+      setLocationSelectLoading();
+      await loadLocationsWithTimeout({ updateSelection: true, refreshViews: true });
       await loadReadOnlyMode();
       runThemeSanityCheck();
     } catch (e) {
