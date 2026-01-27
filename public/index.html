@@ -10,9 +10,9 @@ QA checklist (v4.9-beta):
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="api-base" content="" />
+<meta name="api-base" content="http://swimlabs-server-ser.tail8048a1.ts.net:5055" />
   <title>SwimLabs Announcer</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/css/tailwind-built.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root{
@@ -8310,27 +8310,23 @@ QA checklist (v4.9-beta):
     }
   }
 
-  el('toggleReadOnlyBtn').addEventListener('click', handleReadOnlyToggle);
-  el('toggleReadOnlyBtnManager').addEventListener('click', handleReadOnlyToggle);
+el('toggleReadOnlyBtn')?.addEventListener('click', handleReadOnlyToggle);
+el('toggleReadOnlyBtnManager')?.addEventListener('click', handleReadOnlyToggle);
 
-  el('activityLogRefresh').addEventListener('click', () => {
-    loadActivityLog();
-  });
+el('activityLogRefresh')?.addEventListener('click', () => {
+  loadActivityLog();
+});
 
-  el('settingsBtn').addEventListener('click', () => {
-    syncDeviceUI();
-    showModal('settingsModal', true);
-  });
-  el('settingsClose').addEventListener('click', () => showModal('settingsModal', false));
-  el('settingsModal').addEventListener('click', (e) => { if(e.target === el('settingsModal')) showModal('settingsModal', false); });
+el('settingsBtn')?.addEventListener('click', () => {
+  syncDeviceUI();
+  showModal('settingsModal', true);
+});
+el('settingsClose')?.addEventListener('click', () => showModal('settingsModal', false));
+el('settingsModal')?.addEventListener('click', (e) => { if(e.target === el('settingsModal')) showModal('settingsModal', false); });
 
-  el('settingsSave').addEventListener('click', () => {
-    deviceMode = el('deviceModeSelect').value;
-    localStorage.setItem('deviceMode', deviceMode);
-    syncDeviceUI();
-    showModal('settingsModal', false);
-    loadRoster();
-  });
+el('settingsSave')?.addEventListener('click', () => {
+  showModal('settingsModal', false);
+});
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
