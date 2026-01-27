@@ -2090,6 +2090,41 @@ function parseHTMLRoster(html) {
   const $ = cheerio.load(html);
   const swimmers = [];
   const datesFound = new Set();
+
+  const extractInstructorMeta = (raw) => {
+    const lines = String(raw || "")
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    let instructorName = null;
+    let substituteInstructor = null;
+
+    const processName = (name) => {
+      const cleaned = name.replace(/^Instructors?:/i, "").trim();
+      if (!cleaned) return;
+      const isSub = /\*|\(sub\)/i.test(cleaned);
+      const normalized = cleaned.replace(/\(sub\)/gi, "").replace(/\*/g, "").trim();
+      if (!normalized) return;
+      if (isSub) {
+        substituteInstructor = lastFirstToFirstLast(normalized);
+      } else if (!instructorName) {
+        instructorName = lastFirstToFirstLast(normalized);
+      }
+    };
+
+    if (lines.length > 0) {
+      lines.forEach(processName);
+    } else if (raw) {
+      processName(String(raw).replace(/\s+/g, " ").trim());
+    }
+
+    if (!instructorName && substituteInstructor) {
+      instructorName = substituteInstructor;
+      substituteInstructor = null;
+    }
+
+    return { instructorName, substituteInstructor };
+  };
   
   const iconMap = {
     '1st-ever.png': 'flag_new',
@@ -2132,31 +2167,27 @@ function parseHTMLRoster(html) {
       }
     }
 
-    // Get all instructor list items
-    const instructorItems = $section.find('th:contains("Instructors:")').next().find('li');
+    // Get all instructor list items (Roster reports may use Instructor or Instructors)
+    const instructorHeader = $section
+      .find('th')
+      .filter((_, th) => /Instructors?:/i.test($(th).text().replace(/\s+/g, ' ').trim()))
+      .first();
+    const instructorCell = instructorHeader.length ? instructorHeader.next() : null;
+    const instructorItems = instructorCell ? instructorCell.find('li') : $();
 
     if (instructorItems.length > 0) {
+      const listLines = [];
       instructorItems.each((idx, item) => {
         const text = $(item).text().trim();
-        if (!text) return;
-
-        // Check if this instructor has an asterisk (indicates substitute)
-        if (text.includes('*')) {
-          // This is the substitute - remove asterisk and convert name
-          const cleanName = text.replace(/\*/g, '').trim();
-          substituteInstructor = lastFirstToFirstLast(cleanName);
-        } else if (!instructorName) {
-          // First instructor without asterisk is the original/regular instructor
-          instructorName = lastFirstToFirstLast(text);
-        }
+        if (text) listLines.push(text);
       });
-
-      // If no regular instructor was found but we have a substitute,
-      // use the substitute as the main instructor
-      if (!instructorName && substituteInstructor) {
-        instructorName = substituteInstructor;
-        substituteInstructor = null;
-      }
+      const meta = extractInstructorMeta(listLines.join("\n"));
+      instructorName = meta.instructorName;
+      substituteInstructor = meta.substituteInstructor;
+    } else if (instructorCell && instructorCell.length) {
+      const meta = extractInstructorMeta(instructorCell.text());
+      instructorName = meta.instructorName;
+      substituteInstructor = meta.substituteInstructor;
     }
     
     let programText = null;
@@ -2188,6 +2219,20 @@ function parseHTMLRoster(html) {
     const sectionText = $section.text();
     const dateRange = parseDateRangeFromSectionText(sectionText);
     const dateColumns = $table.length ? parseRosterDateColumns($, $table, dateRange, startTime) : [];
+    const instructorColumnIndex = $table.length
+      ? (() => {
+        let idx = -1;
+        $table.find('thead th').each((colIndex, th) => {
+          const label = $(th).text().replace(/\s+/g, ' ').trim();
+          if (label && /Instructor/i.test(label)) {
+            idx = colIndex;
+            return false;
+          }
+          return true;
+        });
+        return idx;
+      })()
+      : -1;
 
     $section.find('table.table-roll-sheet tbody tr').each((_, row) => {
       const $row = $(row);
@@ -2198,6 +2243,14 @@ function parseHTMLRoster(html) {
       const swimmerName = lastFirstToFirstLast(nameEl.text().trim());
       const ageText = normalizeAgeText($row.find('.student-info').text().trim());
       
+      const rowInstructorCell = instructorColumnIndex >= 0 ? $row.find('td').eq(instructorColumnIndex) : null;
+      const rowInstructorMeta = rowInstructorCell ? extractInstructorMeta(rowInstructorCell.text()) : null;
+      const resolvedInstructor = rowInstructorMeta?.instructorName || instructorName;
+      const resolvedSubstitute = rowInstructorMeta?.substituteInstructor || substituteInstructor;
+      const isSubstitute = resolvedSubstitute ? 1 : 0;
+      const originalInstructor = resolvedSubstitute ? resolvedInstructor : null;
+      const actualInstructor = resolvedSubstitute || resolvedInstructor;
+
       const flags = {
         flag_new: 0,
         flag_makeup: 0,
@@ -2229,11 +2282,6 @@ function parseHTMLRoster(html) {
         }
       }
 
-      // Determine if this is a substitute scenario
-      const isSubstitute = substituteInstructor ? 1 : 0;
-      const originalInstructor = substituteInstructor ? instructorName : null;
-      const actualInstructor = substituteInstructor || instructorName;
-
       if (dateColumns.length > 0) {
         const rowCells = $row.find('td');
         dateColumns.forEach((col) => {
@@ -2248,7 +2296,7 @@ function parseHTMLRoster(html) {
             swimmer_name: swimmerName,
             age_text: ageText,
             instructor_name: actualInstructor,
-            substitute_instructor: substituteInstructor,
+            substitute_instructor: resolvedSubstitute,
             is_substitute: isSubstitute,
             original_instructor: originalInstructor,
             program: programText,
@@ -2274,7 +2322,7 @@ function parseHTMLRoster(html) {
           swimmer_name: swimmerName,
           age_text: ageText,
           instructor_name: actualInstructor,
-          substitute_instructor: substituteInstructor,
+          substitute_instructor: resolvedSubstitute,
           is_substitute: isSubstitute,
           original_instructor: originalInstructor,
           program: programText,
