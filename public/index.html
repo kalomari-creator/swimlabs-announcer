@@ -5861,6 +5861,7 @@ QA checklist (v4.9-beta):
 
           const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode, location_id: currentLocation?.id }) });
           setLastAnnouncementUI(resp.lastAnnouncement);
+          await speakLocal(resp.lastAnnouncement?.text || text);
 
           // After announcement, reschedule to update next timer
           setTimeout(() => scheduleAutoAnnouncements(), 1000);
@@ -6344,9 +6345,29 @@ QA checklist (v4.9-beta):
   }
 
   // ---- Announcements ----
+  function isLocalTtsEnabled() {
+    return localStorage.getItem('local_tts') !== 'off';
+  }
+
+  function speakLocal(text) {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!clean || !('speechSynthesis' in window) || !isLocalTtsEnabled()) {
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = 'en-US';
+      utterance.onend = () => resolve(true);
+      utterance.onerror = () => resolve(false);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+
   async function speakTyped(text){
     const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode, location_id: currentLocation?.id }) });
     setLastAnnouncementUI(resp.lastAnnouncement);
+    await speakLocal(resp.lastAnnouncement?.text || resp.last_spoken?.message || text);
   }
 
   // ---- Wire up UI ----
@@ -9163,6 +9184,7 @@ el('settingsSave')?.addEventListener('click', () => {
     try{
       const resp = await api('/api/repeat-last', { method:'POST', body: JSON.stringify({ device_mode: deviceMode, location_id: currentLocation?.id }) });
       setLastAnnouncementUI(resp.lastAnnouncement);
+      await speakLocal(resp.lastAnnouncement?.text || resp.last_spoken?.message);
     }catch(e){
       alert(e.message);
     }
@@ -9179,6 +9201,7 @@ el('settingsSave')?.addEventListener('click', () => {
         body: JSON.stringify({ start_time: currentBlock, device_mode: deviceMode, location_id: currentLocation?.id })
       });
       setLastAnnouncementUI(resp.lastAnnouncement);
+      await speakLocal(resp.message || resp.lastAnnouncement?.text);
     }catch(e){
       alert(e.message);
     }

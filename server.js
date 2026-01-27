@@ -2736,17 +2736,19 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     const dateStart = dateList[0] || detectedDate;
     const dateEnd = dateList[dateList.length - 1] || dateStart;
 
-    const rowsToInsert = normalizedRows.filter((row) => row.date >= today);
+    const rowsToInsert = normalizedRows;
     if (rowsToInsert.length === 0) {
       return res.status(400).json({
         ok: false,
-        error: "No roster entries found for today or later.",
+        error: "No roster entries found in this upload.",
         date_start: dateStart,
         date_end: dateEnd
       });
     }
-    const activeDate = dateList.includes(today) ? today : dateStart;
-    setActiveDate(activeDate);
+    const activeDate = dateList.includes(today) ? today : null;
+    if (activeDate) {
+      setActiveDate(activeDate);
+    }
 
     // Auto-export existing roster before clearing (if any exists)
     // Exports are stored on SERVER in subdirectories: exports/{LOCATION_CODE}/
@@ -2754,8 +2756,8 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
     //          exports/SSM/ for SafeSplash Santa Monica
     const existingRoster = db.prepare(`
       SELECT * FROM roster
-      WHERE date >= ? AND location_id = ? AND is_addon = 0
-    `).all(today, locId);
+      WHERE date BETWEEN ? AND ? AND location_id = ? AND is_addon = 0
+    `).all(dateStart, dateEnd, locId);
 
     if (existingRoster.length > 0) {
       // Create export directory for this location on server
@@ -2784,8 +2786,8 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       console.log(`[AUTO-EXPORT] Saved ${existingRoster.length} swimmers to server: ${location.code}/${exportFilename}`);
     }
 
-    // Delete existing roster from today forward for this location
-    db.prepare(`DELETE FROM roster WHERE date >= ? AND location_id = ? AND is_addon = 0`).run(today, locId);
+    // Delete existing roster for the uploaded date range
+    db.prepare(`DELETE FROM roster WHERE date BETWEEN ? AND ? AND location_id = ? AND is_addon = 0`).run(dateStart, dateEnd, locId);
 
     const now = nowISO();
     const ins = db.prepare(`
