@@ -2182,6 +2182,16 @@ function parseHTMLRoster(html) {
         if (text) listLines.push(text);
       });
 
+      if (listLines.length) {
+        const listMeta = extractInstructorMeta(listLines.join("\n"));
+        if (!instructorName && listMeta.instructorName) {
+          instructorName = listMeta.instructorName;
+        }
+        if (!substituteInstructor && listMeta.substituteInstructor) {
+          substituteInstructor = listMeta.substituteInstructor;
+        }
+      }
+
       // If no regular instructor was found but we have a substitute,
       // use the substitute as the main instructor
       if (!instructorName && substituteInstructor) {
