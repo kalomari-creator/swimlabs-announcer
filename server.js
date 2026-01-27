@@ -67,6 +67,7 @@ const DATA_DIR = resolveDir(process.env.DATA_DIR, ["data", "runtime/data", "runt
 const dbPath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(DATA_DIR, "app.db");
 if (!fs.existsSync(path.dirname(dbPath))) fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 const db = new Database(dbPath);
+const SAFETY_ISSUES_PATH = path.join(DATA_DIR, "safety_issues.json");
 
 const SCHEDULE_DIR = resolveDir(process.env.SCHEDULE_DIR, ["runtime/schedules", "schedules"], "schedules");
 const EXPORT_DIR = resolveDir(process.env.EXPORT_DIR, ["runtime/exports", "exports"], "exports");
@@ -118,6 +119,23 @@ if (!fs.existsSync(MANAGER_REPORTS_DIR)) fs.mkdirSync(MANAGER_REPORTS_DIR, { rec
 
 function sanitizeDirSegment(value) {
   return String(value || "").trim().replace(/[\\/]/g, "-");
+}
+
+function loadSafetyIssues() {
+  try {
+    if (!fs.existsSync(SAFETY_ISSUES_PATH)) return [];
+    const raw = fs.readFileSync(SAFETY_ISSUES_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn("Failed to read safety issues:", error);
+    return [];
+  }
+}
+
+function saveSafetyIssues(issues) {
+  const payload = Array.isArray(issues) ? issues : [];
+  fs.writeFileSync(SAFETY_ISSUES_PATH, JSON.stringify(payload, null, 2));
 }
 
 function getScheduleDir(location) {
@@ -1278,13 +1296,13 @@ function speakWithPiper(text) {
 }
 
 function speakAnnouncement(text, opts = {}) {
-  const { ping = true } = opts;
   const cleaned = String(text || "").replace(/\s+/g, " ").trim();
   if (!cleaned) return Promise.resolve({ ok: false, error: "empty text" });
 
   speakQueue = speakQueue.then(async () => {
     lastAnnouncement = { text: cleaned, at: nowISO() };
-    if (ping) {
+    const shouldPing = true;
+    if (shouldPing) {
       await playPing();
       await new Promise((r) => setTimeout(r, 350));
     }
@@ -1465,7 +1483,57 @@ app.get("/api/blocks/:start_time", (req, res) => {
 // Safety issues endpoint
 app.get("/api/safety-issues", (req, res) => {
   try {
-    res.json({ ok: true, issues: [] });
+    const date = req.query.date || activeOrToday();
+    const location_id = Number(req.query.location_id || req.session?.location_id || 1);
+    const issues = loadSafetyIssues().filter((issue) => (
+      issue.date === date && Number(issue.location_id || 1) === location_id
+    ));
+    res.json({ ok: true, issues });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+app.post("/api/safety-issues", (req, res) => {
+  try {
+    const ip = getIP(req);
+    const { date, start_time, location_id, note } = req.body || {};
+    if (!start_time) return res.status(400).json({ ok: false, error: "missing start_time" });
+
+    const issueDate = date || activeOrToday();
+    const locId = Number(location_id || req.session?.location_id || 1);
+    const trimmedNote = String(note || "").trim();
+    const issues = loadSafetyIssues();
+    const existingIndex = issues.findIndex((issue) => (
+      issue.date === issueDate
+      && Number(issue.location_id || 1) === locId
+      && issue.start_time === start_time
+    ));
+
+    if (!trimmedNote) {
+      if (existingIndex >= 0) {
+        issues.splice(existingIndex, 1);
+      }
+    } else {
+      const entry = {
+        date: issueDate,
+        start_time,
+        location_id: locId,
+        note: trimmedNote,
+        updated_at: nowISO()
+      };
+      if (existingIndex >= 0) {
+        issues[existingIndex] = entry;
+      } else {
+        issues.push(entry);
+      }
+    }
+
+    saveSafetyIssues(issues);
+    audit(req, "safety_issue", { date: issueDate, start_time, details: { location_id: locId, note: trimmedNote, by: ip } });
+
+    res.json({ ok: true, issues: issues.filter((issue) => (
+      issue.date === issueDate && Number(issue.location_id || 1) === locId
+    )) });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -1764,7 +1832,7 @@ app.post("/api/call-parent", async (req, res) => {
     const { swimmer_name, device_mode } = req.body || {};
     if (!swimmer_name) return res.status(400).json({ ok: false, error: "missing swimmer_name" });
 
-    const msg = `Parent or guardian of ${swimmer_name}. Please come to the front desk.`;
+    const msg = `Parent or guardian of ${swimmer_name}. Please come to the deck.`;
     const out = await speakAnnouncement(msg, { ping: true });
     if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
 
@@ -2181,6 +2249,16 @@ function parseHTMLRoster(html) {
         const text = $(item).text().trim();
         if (text) listLines.push(text);
       });
+
+      if (listLines.length) {
+        const listMeta = extractInstructorMeta(listLines.join("\n"));
+        if (!instructorName && listMeta.instructorName) {
+          instructorName = listMeta.instructorName;
+        }
+        if (!substituteInstructor && listMeta.substituteInstructor) {
+          substituteInstructor = listMeta.substituteInstructor;
+        }
+      }
 
       // If no regular instructor was found but we have a substitute,
       // use the substitute as the main instructor
