@@ -118,8 +118,8 @@ if systemctl is-active --quiet swimlabs-announcer; then
     echo -e "${GREEN}Server Status: Running ✅${NC}"
     echo ""
     echo "Access at:"
-    echo "  Local:  http://localhost:5055"
-    echo "  Network: http://$IP:5055"
+    echo "  Local:  http://localhost:5056"
+    echo "  Network: http://$IP:5056"
     echo ""
     echo "Useful commands:"
     echo "  Status:  sudo systemctl status swimlabs-announcer"
@@ -132,7 +132,7 @@ else
     echo "To start manually:"
     echo "  node server.js"
     echo ""
-    echo "Server will run on http://$IP:5055"
+    echo "Server will run on http://$IP:5056"
 fi
 
 echo ""
