@@ -2206,7 +2206,31 @@ QA checklist (v4.9-beta):
 <script>
   let currentBlock = null;
   let zoneTarget = null;
-  let deviceMode = localStorage.getItem('deviceMode') || 'deck';
+  const safeStorageGet = (key) => {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (err) {
+      return null;
+    }
+  };
+
+  const safeStorageSet = (key, value) => {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (err) {
+      // ignore storage write errors (private mode or quota)
+    }
+  };
+
+  const safeStorageRemove = (key) => {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (err) {
+      // ignore storage errors
+    }
+  };
+
+  let deviceMode = safeStorageGet('deviceMode') || 'deck';
   let activeDateISO = null;
   let managerDateRange = null;
   let blocksList = [];
@@ -2406,7 +2430,7 @@ QA checklist (v4.9-beta):
   }
 
   function resolveLocationId() {
-    const savedLocId = localStorage.getItem(LOCATION_STORAGE_KEY) || localStorage.getItem(LEGACY_LOCATION_STORAGE_KEY);
+    const savedLocId = safeStorageGet(LOCATION_STORAGE_KEY) || safeStorageGet(LEGACY_LOCATION_STORAGE_KEY);
     const matchedLocation = allLocations.find((l) => String(l.id) === String(savedLocId));
     return matchedLocation?.id || allLocations[0]?.id || '';
   }
@@ -2415,17 +2439,18 @@ QA checklist (v4.9-beta):
     const resolved = allLocations.find((loc) => String(loc.id) === String(locationId));
     currentLocation = resolved || null;
     if (resolved) {
-      localStorage.setItem(LOCATION_STORAGE_KEY, resolved.id);
-      localStorage.removeItem(LEGACY_LOCATION_STORAGE_KEY);
+      safeStorageSet(LOCATION_STORAGE_KEY, resolved.id);
+      safeStorageRemove(LEGACY_LOCATION_STORAGE_KEY);
     }
     renderLocationSelect(allLocations, resolved?.id || '');
   }
 
-  async function apiWithTimeout(path, { timeoutMs = 2500, ...opts } = {}) {
+  async function apiWithTimeout(path, { timeoutMs = 2500, baseOverride = null, originRetry = false, ...opts } = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(apiUrl(path), {
+      const url = apiUrl(path, baseOverride);
+      const res = await fetch(url, {
         headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
         ...opts,
         signal: controller.signal
@@ -2446,6 +2471,18 @@ QA checklist (v4.9-beta):
       }
       return data;
     } catch (err) {
+      if (!originRetry && apiBaseSource === 'derived' && !baseOverride) {
+        const fallbackBase = window.location.origin;
+        const fallbackUrl = apiUrl(path, fallbackBase);
+        if (fallbackUrl !== apiUrl(path)) {
+          return await apiWithTimeout(path, {
+            timeoutMs,
+            baseOverride: fallbackBase,
+            originRetry: true,
+            ...opts
+          });
+        }
+      }
       if (err.name === 'AbortError') {
         throw new Error('Request timed out.');
       }
@@ -3341,7 +3378,7 @@ QA checklist (v4.9-beta):
 
   function getDismissedNotifications() {
     try {
-      return JSON.parse(localStorage.getItem(dismissedNotificationsKey) || '[]');
+      return JSON.parse(safeStorageGet(dismissedNotificationsKey) || '[]');
     } catch (e) {
       return [];
     }
@@ -3350,7 +3387,7 @@ QA checklist (v4.9-beta):
   function dismissNotification(id) {
     const dismissed = new Set(getDismissedNotifications());
     dismissed.add(id);
-    localStorage.setItem(dismissedNotificationsKey, JSON.stringify(Array.from(dismissed)));
+    safeStorageSet(dismissedNotificationsKey, JSON.stringify(Array.from(dismissed)));
     renderManagerNotifications(managerNotificationsCache);
   }
 
@@ -5140,9 +5177,20 @@ QA checklist (v4.9-beta):
     return '';
   }
 
+  let apiBaseSource = 'origin';
   const apiBase = (() => {
     const metaBase = document.querySelector('meta[name="api-base"]')?.content?.trim();
-    const base = (window.API_BASE || metaBase || '').trim();
+    const configured = (window.API_BASE || metaBase || '').trim();
+    let base = configured;
+    if (!base) {
+      const currentPath = window.location.pathname || '';
+      const dirPath = currentPath.replace(/\/[^/]*$/, '');
+      const stripped = dirPath.replace(/\/public$/, '');
+      base = stripped ? `${window.location.origin}${stripped}` : '';
+      apiBaseSource = base ? 'derived' : 'origin';
+    } else {
+      apiBaseSource = 'configured';
+    }
     if (!base) return '';
     let cleaned = base;
     try {
@@ -5158,11 +5206,11 @@ QA checklist (v4.9-beta):
     return cleaned.endsWith('/') ? cleaned.slice(0, -1) : cleaned;
   })();
 
-  function apiUrl(path) {
+  function apiUrl(path, baseOverride = null) {
     if (!path) return path;
     const isAbsolute = /^https?:\/\//i.test(path);
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const base = apiBase || window.location.origin;
+    const base = baseOverride ?? (apiBase || window.location.origin);
     const rawUrl = isAbsolute ? path : `${base}${normalizedPath}`;
     try {
       const url = new URL(rawUrl);
@@ -8305,7 +8353,7 @@ QA checklist (v4.9-beta):
 
   el('settingsSave').addEventListener('click', () => {
     deviceMode = el('deviceModeSelect').value;
-    localStorage.setItem('deviceMode', deviceMode);
+    safeStorageSet('deviceMode', deviceMode);
     syncDeviceUI();
     showModal('settingsModal', false);
     loadRoster();
