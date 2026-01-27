@@ -12,7 +12,29 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
 const PORT = 5055;
+// ---- CORS CONFIG (REQUIRED FOR TAILSCALE + IP ACCESS) ----
+const ALLOWED_ORIGINS = new Set([
+  "http://100.102.148.122:5055",
+  "http://swimlabs-server-ser.tail8048a1.ts.net:5055",
+]);
 
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+// ---- END CORS CONFIG ----
 // -------------------- CONFIG --------------------
 const ADMIN_PIN = process.env.ADMIN_PIN || "1590";
 const MANAGER_PIN = process.env.MANAGER_PIN || "8118";

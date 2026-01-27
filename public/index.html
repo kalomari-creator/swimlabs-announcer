@@ -10,7 +10,6 @@ QA checklist (v4.9-beta):
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-<meta name="api-base" content="http://swimlabs-server-ser.tail8048a1.ts.net:5055" />
   <title>SwimLabs Announcer</title>
 <link rel="stylesheet" href="/css/tailwind-built.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -5156,7 +5155,7 @@ QA checklist (v4.9-beta):
   let apiBaseSource = 'origin';
   const apiBase = (() => {
     const metaBase = document.querySelector('meta[name="api-base"]')?.content?.trim();
-    const configured = (window.API_BASE || metaBase || '').trim();
+    const configured = (metaBase || '').trim();
     let base = configured;
     if (!base) {
       const currentPath = window.location.pathname || '';
