@@ -2181,13 +2181,26 @@ function parseHTMLRoster(html) {
         const text = $(item).text().trim();
         if (text) listLines.push(text);
       });
-      const meta = extractInstructorMeta(listLines.join("\n"));
-      instructorName = meta.instructorName;
-      substituteInstructor = meta.substituteInstructor;
+
+      // If no regular instructor was found but we have a substitute,
+      // use the substitute as the main instructor
+      if (!instructorName && substituteInstructor) {
+        instructorName = substituteInstructor;
+        substituteInstructor = null;
+      }
     } else if (instructorCell && instructorCell.length) {
-      const meta = extractInstructorMeta(instructorCell.text());
-      instructorName = meta.instructorName;
-      substituteInstructor = meta.substituteInstructor;
+      const rawInstructor = instructorCell.text().replace(/\s+/g, ' ').trim();
+      if (rawInstructor) {
+        const isSub = /\*/.test(rawInstructor) || /\(sub\)/i.test(rawInstructor);
+        const cleaned = rawInstructor.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
+        if (cleaned) {
+          if (isSub) {
+            substituteInstructor = lastFirstToFirstLast(cleaned);
+          } else if (!instructorName) {
+            instructorName = lastFirstToFirstLast(cleaned);
+          }
+        }
+      }
     }
     
     let programText = null;
