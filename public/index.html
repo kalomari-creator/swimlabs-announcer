@@ -6327,7 +6327,6 @@ QA checklist (v4.9-beta):
             })
           });
           setLastAnnouncementUI(resp.lastAnnouncement);
-          await speakLocal(resp.message || `Parent or guardian of ${kid.swimmer_name}, please come to the pool deck.`);
           lastActionSwimmer = kid.swimmer_name;
           openAnnouncementConfirm({
             swimmer_name: kid.swimmer_name,
@@ -7387,7 +7386,7 @@ QA checklist (v4.9-beta):
   el('announcementRepeatBtn').addEventListener('click', async () => {
     if (!pendingAnnouncementConfirm) return;
     try {
-      const resp = await api('/api/speak', {
+      await api('/api/speak', {
         method: 'POST',
         body: JSON.stringify({
           text: pendingAnnouncementConfirm.message,
@@ -7395,8 +7394,6 @@ QA checklist (v4.9-beta):
           location_id: currentLocation?.id
         })
       });
-      setLastAnnouncementUI(resp.lastAnnouncement);
-      await speakLocal(resp.lastAnnouncement?.text || pendingAnnouncementConfirm.message);
     } catch (err) {
       alert(`Repeat failed: ${err.message || err}`);
     }
