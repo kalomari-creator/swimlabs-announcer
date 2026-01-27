@@ -11,11 +11,11 @@ const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
-const PORT = 5055;
+const PORT = 5056;
 // ---- CORS CONFIG (REQUIRED FOR TAILSCALE + IP ACCESS) ----
 const ALLOWED_ORIGINS = new Set([
-  "http://100.102.148.122:5055",
-  "http://swimlabs-server-ser.tail8048a1.ts.net:5055",
+  "http://100.102.148.122:5056",
+  "http://swimlabs-server-ser.tail8048a1.ts.net:5056",
 ]);
 
 app.use((req, res, next) => {
