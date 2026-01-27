@@ -5187,9 +5187,6 @@ QA checklist (v4.9-beta):
       const dirPath = currentPath.replace(/\/[^/]*$/, '');
       const stripped = dirPath.replace(/\/public$/, '');
       base = stripped ? `${window.location.origin}${stripped}` : '';
-      apiBaseSource = base ? 'derived' : 'origin';
-    } else {
-      apiBaseSource = 'configured';
     }
     if (!base) return '';
     let cleaned = base;
