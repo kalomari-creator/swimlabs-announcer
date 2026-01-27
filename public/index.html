@@ -5109,13 +5109,16 @@ QA checklist (v4.9-beta):
     const rawInstructor = cleanInstructorLabel(kid?.instructor_name || '');
     const rawSub = cleanInstructorLabel(kid?.substitute_instructor || '');
     const rawOriginal = cleanInstructorLabel(kid?.original_instructor || '');
+    const instructorValue = rawInstructor === '—' ? '' : rawInstructor;
+    const subValue = rawSub === '—' ? '' : rawSub;
+    const originalValue = rawOriginal === '—' ? '' : rawOriginal;
     const hasMarker = /\*|\(sub\)|\bsub\b/i.test(rawInstructor);
-    const cleanedInstructor = rawInstructor.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
-    const cleanedSub = rawSub.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
+    const cleanedInstructor = instructorValue.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
+    const cleanedSub = subValue.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
 
-    let hasSub = Boolean(kid?.is_substitute || rawSub || rawOriginal || hasMarker);
-    let subName = cleanedSub || cleanedInstructor || rawSub || rawInstructor;
-    let originalName = rawOriginal || '';
+    let hasSub = Boolean(kid?.is_substitute || subValue || originalValue || hasMarker);
+    let subName = cleanedSub || cleanedInstructor || subValue || instructorValue;
+    let originalName = originalValue || '';
 
     if (!originalName && cleanedSub && cleanedInstructor && cleanedSub !== cleanedInstructor) {
       originalName = cleanedInstructor;
