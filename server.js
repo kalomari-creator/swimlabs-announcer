@@ -2132,8 +2132,13 @@ function parseHTMLRoster(html) {
       }
     }
 
-    // Get all instructor list items
-    const instructorItems = $section.find('th:contains("Instructors:")').next().find('li');
+    // Get all instructor list items (Roster reports may use Instructor or Instructors)
+    const instructorHeader = $section
+      .find('th')
+      .filter((_, th) => /Instructors?:/i.test($(th).text().replace(/\s+/g, ' ').trim()))
+      .first();
+    const instructorCell = instructorHeader.length ? instructorHeader.next() : null;
+    const instructorItems = instructorCell ? instructorCell.find('li') : $();
 
     if (instructorItems.length > 0) {
       instructorItems.each((idx, item) => {
@@ -2156,6 +2161,19 @@ function parseHTMLRoster(html) {
       if (!instructorName && substituteInstructor) {
         instructorName = substituteInstructor;
         substituteInstructor = null;
+      }
+    } else if (instructorCell && instructorCell.length) {
+      const rawInstructor = instructorCell.text().replace(/\s+/g, ' ').trim();
+      if (rawInstructor) {
+        const isSub = /\*/.test(rawInstructor) || /\(sub\)/i.test(rawInstructor);
+        const cleaned = rawInstructor.replace(/\(sub\)/ig, '').replace(/\*/g, '').trim();
+        if (cleaned) {
+          if (isSub) {
+            substituteInstructor = lastFirstToFirstLast(cleaned);
+          } else if (!instructorName) {
+            instructorName = lastFirstToFirstLast(cleaned);
+          }
+        }
       }
     }
     
