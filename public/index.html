@@ -5142,7 +5142,14 @@ QA checklist (v4.9-beta):
 
   const apiBase = (() => {
     const metaBase = document.querySelector('meta[name="api-base"]')?.content?.trim();
-    const base = (window.API_BASE || metaBase || '').trim();
+    const configured = (window.API_BASE || metaBase || '').trim();
+    let base = configured;
+    if (!base) {
+      const currentPath = window.location.pathname || '';
+      const dirPath = currentPath.replace(/\/[^/]*$/, '');
+      const stripped = dirPath.replace(/\/public$/, '');
+      base = stripped ? `${window.location.origin}${stripped}` : '';
+    }
     if (!base) return '';
     let cleaned = base;
     try {
