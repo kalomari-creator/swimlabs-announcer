@@ -24,31 +24,31 @@ QA checklist (v4.8.5-beta):
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root{
-      --bg:#e7eef6;
-      --cardA:#f3f6fb;
-      --cardB:#eef3f9;
-      --surface:#f7faff;
-      --surface-strong:#eaf0f8;
-      --text:#0f172a;
-      --muted:#475569;
-      --line:rgba(15,23,42,.08);
-      --line2:rgba(15,23,42,.12);
-      --btn:#f2f6ff;
-      --btn2:#e5eefc;
-      --good:#10b981;
-      --warn:#f59e0b;
-      --bad:#e11d48;
+      --bg:#f8fafc;
+      --cardA:#ffffff;
+      --cardB:#f1f5f9;
+      --surface:#ffffff;
+      --surface-strong:#eef2f7;
+      --text:#111827;
+      --muted:#374151;
+      --line:rgba(15,23,42,.12);
+      --line2:rgba(15,23,42,.18);
+      --btn:#ffffff;
+      --btn2:#f1f5f9;
+      --good:#059669;
+      --warn:#d97706;
+      --bad:#dc2626;
       --chip:rgba(15,23,42,.06);
-      --accent:#10b981;
-      --accent-soft:#d9f7ef;
-      --cat-client:#bff3ea;
-      --cat-billing:#e6d9ff;
-      --cat-instructors:#cfe4ff;
-      --cat-guards:#f8d8bf;
+      --accent:#14b8a6;
+      --accent-soft:#ccfbf1;
+      --cat-client:#c9f7ee;
+      --cat-billing:#e7ddff;
+      --cat-instructors:#d6e7ff;
+      --cat-guards:#f6dcc5;
       --cat-system:#e2e8f0;
       --cat-danger:#fecdd3;
-      --cat-strong:#0f172a;
-      --cat-border:rgba(15,23,42,.08);
+      --cat-strong:#111827;
+      --cat-border:rgba(15,23,42,.16);
     }
     *{ box-sizing:border-box; }
     body *{ transition: none !important; }
@@ -58,6 +58,8 @@ QA checklist (v4.8.5-beta):
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
       background: var(--bg);
       color:var(--text);
+      font-size:16px;
+      line-height:1.5;
     }
     .wrap{ max-width: 1250px; margin: 0 auto; }
     .topbar{
@@ -80,7 +82,7 @@ QA checklist (v4.8.5-beta):
       border-radius:18px;
       padding:14px;
       margin-top:14px;
-      box-shadow: 0 10px 28px rgba(15,23,42,.08);
+      box-shadow: 0 8px 18px rgba(15,23,42,.06);
     }
     .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .spacer{ flex:1; }
@@ -107,8 +109,8 @@ QA checklist (v4.8.5-beta):
     button:active{ transform: translateY(1px); }
     button.primary{ border-color: rgba(16,185,129,.45); }
     button.secondary{ border-color: rgba(148,163,184,.6); }
-    button.danger{ border-color: rgba(225,29,72,.35); background:#e11d48; color:#fff; }
-    button.danger:hover{ background:#be123c; }
+    button.danger{ border-color: rgba(220,38,38,.35); background:#dc2626; color:#fff; }
+    button.danger:hover{ background:#b91c1c; }
     .miniBtn{
       padding:6px 10px;
       font-size:12px;
@@ -430,7 +432,7 @@ QA checklist (v4.8.5-beta):
       width:8px;
       align-self:stretch;
       border-radius:999px;
-      background: linear-gradient(180deg, rgba(16,185,129,.9), rgba(20,184,166,.7));
+      background: rgba(20,184,166,.85);
     }
     .table-num{
       text-align:right;
@@ -548,7 +550,7 @@ QA checklist (v4.8.5-beta):
       font-size: 12px;
       font-weight: 800;
       text-transform: uppercase;
-      color: rgba(148,163,184,.9);
+      color: var(--muted);
       margin: 10px 0 6px;
       letter-spacing: 0.4px;
     }
@@ -618,7 +620,7 @@ QA checklist (v4.8.5-beta):
     .flag:hover{ filter: brightness(1.15); }
     .flag:active{ transform: translateY(1px); }
     .flag.on{ opacity:1; border-color: rgba(255,255,255,.22); background: rgba(255,255,255,.08); }
-    .flagHelp{ font-size:12px; color: rgba(159,176,208,.9); margin-left:8px; }
+    .flagHelp{ font-size:12px; color: var(--muted); margin-left:8px; }
 
     /* Modal */
     .modalBackdrop{
@@ -655,7 +657,7 @@ QA checklist (v4.8.5-beta):
     .field .hint{
       margin-top:6px;
       font-size:12px;
-      color: rgba(159,176,208,.85);
+      color: var(--muted);
       line-height:1.35;
     }
     .modalFooter{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
@@ -663,31 +665,31 @@ QA checklist (v4.8.5-beta):
 
     .category-client{
       --category-bg: var(--cat-client);
-      --category-soft: rgba(191,243,234,0.55);
-      --category-row: rgba(191,243,234,0.18);
-      --category-hover: rgba(191,243,234,0.32);
-      --category-border: rgba(14,116,144,.2);
+      --category-soft: rgba(201,247,238,0.6);
+      --category-row: rgba(201,247,238,0.18);
+      --category-hover: rgba(201,247,238,0.32);
+      --category-border: rgba(13,148,136,.22);
     }
     .category-billing{
       --category-bg: var(--cat-billing);
-      --category-soft: rgba(230,217,255,0.6);
-      --category-row: rgba(230,217,255,0.2);
-      --category-hover: rgba(230,217,255,0.3);
-      --category-border: rgba(79,70,229,.18);
+      --category-soft: rgba(231,221,255,0.6);
+      --category-row: rgba(231,221,255,0.2);
+      --category-hover: rgba(231,221,255,0.3);
+      --category-border: rgba(99,102,241,.22);
     }
     .category-instructors{
       --category-bg: var(--cat-instructors);
-      --category-soft: rgba(207,228,255,0.6);
-      --category-row: rgba(207,228,255,0.2);
-      --category-hover: rgba(207,228,255,0.3);
-      --category-border: rgba(37,99,235,.18);
+      --category-soft: rgba(214,231,255,0.6);
+      --category-row: rgba(214,231,255,0.2);
+      --category-hover: rgba(214,231,255,0.3);
+      --category-border: rgba(59,130,246,.22);
     }
     .category-guards{
       --category-bg: var(--cat-guards);
-      --category-soft: rgba(248,216,191,0.6);
-      --category-row: rgba(248,216,191,0.22);
-      --category-hover: rgba(248,216,191,0.35);
-      --category-border: rgba(234,88,12,.2);
+      --category-soft: rgba(246,220,197,0.6);
+      --category-row: rgba(246,220,197,0.22);
+      --category-hover: rgba(246,220,197,0.35);
+      --category-border: rgba(234,88,12,.22);
     }
     .category-system{
       --category-bg: var(--cat-system);
@@ -701,7 +703,7 @@ QA checklist (v4.8.5-beta):
       --category-soft: rgba(254,205,211,0.6);
       --category-row: rgba(254,205,211,0.25);
       --category-hover: rgba(254,205,211,0.35);
-      --category-border: rgba(225,29,72,.25);
+      --category-border: rgba(225,29,72,.28);
     }
 
     .icon-circle{
@@ -711,8 +713,8 @@ QA checklist (v4.8.5-beta):
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      background: rgba(255,255,255,.7);
-      border:1px solid rgba(15,23,42,.12);
+      background: var(--category-soft, #e2e8f0);
+      border:1px solid var(--category-border, rgba(15,23,42,.18));
       font-size:15px;
     }
 
@@ -964,6 +966,13 @@ QA checklist (v4.8.5-beta):
   <div id="readOnlyBanner" class="card hidden" style="background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.3);">
     <div style="font-weight:900;">🔒 Read-only mode enabled</div>
     <div class="tiny" style="color:var(--muted);">Uploads, edits, clears, and exports are disabled on this device.</div>
+  </div>
+
+  <div id="locationAlertBanner" class="card hidden" style="background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.35);">
+    <div style="font-weight:900;" id="locationAlertMessage">Location notice</div>
+    <div class="row" style="margin-top:8px;">
+      <button class="secondary miniBtn" id="locationAlertRetry">Retry</button>
+    </div>
   </div>
 
   <div id="panelRoster">
@@ -1974,6 +1983,7 @@ QA checklist (v4.8.5-beta):
   let autoTimers = [];
   let currentLocation = null;
   let allLocations = [];
+  let locationsUsingFallback = false;
   let searchFilter = '';
   let pendingPinPanel = null; // Track which panel requested PIN auth ('virtualDesk' or 'admin')
   let nextAnnouncementTime = null; // Track next scheduled announcement
@@ -1994,6 +2004,15 @@ QA checklist (v4.8.5-beta):
   let bundleEditingId = null;
   let rosterCache = [];
   let globalAttendanceSummary = null;
+  const LOCATION_STORAGE_KEY = 'location_id';
+  const FALLBACK_LOCATIONS = [
+    { id: 1, name: 'SwimLabs Westchester', code: 'SLW', active: true },
+    { id: 2, name: 'SafeSplash Riverdale', code: 'SSR', active: true },
+    { id: 3, name: 'SwimLabs Woodlands', code: 'SLX', active: true },
+    { id: 4, name: 'SafeSplash Santa Monica', code: 'SSM', active: true },
+    { id: 5, name: 'SafeSplash Torrance', code: 'SST', active: true },
+    { id: 6, name: 'SafeSplash Summerlin', code: 'SSS', active: true }
+  ];
   const dismissedNotificationsKey = 'manager_notifications_dismissed';
   const managerSectionFilters = {
     client: { start: null, end: null, instructor: '', status: '', showTrends: true, dropRange: '7', dropStart: '', dropEnd: '' },
@@ -2087,57 +2106,106 @@ QA checklist (v4.8.5-beta):
     return (asUTC - date.getTime()) / 60000;
   }
 
+  function renderLocationSelect(locations, selectedId) {
+    const select = el('locationSelect');
+    if (!select) return;
+    select.innerHTML = '';
+    if (!locations.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No locations available';
+      select.appendChild(opt);
+      select.disabled = true;
+      return;
+    }
+    locations.forEach((loc) => {
+      const opt = document.createElement('option');
+      opt.value = loc.id;
+      opt.textContent = loc.name;
+      select.appendChild(opt);
+    });
+    select.disabled = false;
+    select.value = selectedId || locations[0]?.id || '';
+  }
+
+  function normalizeLocations(locations) {
+    return (locations || [])
+      .filter((loc) => loc && (loc.id !== undefined || loc.name))
+      .map((loc) => ({
+        id: loc.id,
+        name: loc.name || loc.display_name || 'Unknown',
+        code: loc.code || loc.short_code || loc.shortCode || '',
+        active: loc.active !== undefined ? Boolean(loc.active) : true
+      }))
+      .filter((loc) => loc.active);
+  }
+
+  function showLocationBanner({ message, showRetry = false, tone = 'warning' } = {}) {
+    const banner = el('locationAlertBanner');
+    const messageEl = el('locationAlertMessage');
+    const retryBtn = el('locationAlertRetry');
+    if (!banner || !messageEl || !retryBtn) return;
+    banner.classList.toggle('hidden', !message);
+    messageEl.textContent = message || '';
+    banner.style.background = tone === 'danger' ? 'rgba(225,29,72,.1)' : 'rgba(245,158,11,.12)';
+    banner.style.borderColor = tone === 'danger' ? 'rgba(225,29,72,.35)' : 'rgba(245,158,11,.35)';
+    retryBtn.style.display = showRetry ? 'inline-flex' : 'none';
+    if (showRetry) {
+      retryBtn.onclick = () => loadLocations();
+    } else {
+      retryBtn.onclick = null;
+    }
+  }
+
+  function resolveLocationId() {
+    const savedLocId = localStorage.getItem(LOCATION_STORAGE_KEY);
+    const matchedLocation = allLocations.find((l) => String(l.id) === String(savedLocId));
+    return matchedLocation?.id || allLocations[0]?.id || '';
+  }
+
+  function applyLocationSelection(locationId) {
+    const resolved = allLocations.find((loc) => String(loc.id) === String(locationId));
+    currentLocation = resolved || null;
+    if (resolved) {
+      localStorage.setItem(LOCATION_STORAGE_KEY, resolved.id);
+    }
+    renderLocationSelect(allLocations, resolved?.id || '');
+  }
+
   // Load locations on startup
-  async function loadLocations() {
+  async function loadLocations({ updateSelection = true, refreshViews = true } = {}) {
+    const select = el('locationSelect');
+    if (select) {
+      select.innerHTML = '<option value="">Loading locations...</option>';
+      select.disabled = true;
+    }
     try {
-      const select = el('locationSelect');
-      if (select) {
-        select.innerHTML = '<option value="">Loading locations...</option>';
-      }
-
       const resp = await api('/api/locations');
-      allLocations = Array.isArray(resp.locations) ? resp.locations : [];
-      if (!select) return;
-
-      select.innerHTML = '';
-      if (!allLocations.length) {
-        select.innerHTML = '<option value="">No locations available</option>';
-        currentLocation = null;
-        showGlobalError('No active locations are configured yet. Ask an admin to add one.');
-        return;
+      if (!Array.isArray(resp.locations)) {
+        throw new Error('Invalid location response.');
       }
-
-      allLocations.forEach(loc => {
-        const opt = document.createElement('option');
-        opt.value = loc.id;
-        opt.textContent = loc.name;
-        select.appendChild(opt);
-      });
-      
-      // Load saved location or default to first
-      const savedLocId = localStorage.getItem('location_id');
-      const matchedLocation = allLocations.find(l => String(l.id) === String(savedLocId));
-      const resolvedLocation = matchedLocation || allLocations[0];
-      select.value = resolvedLocation?.id || '';
-      currentLocation = resolvedLocation || null;
-      if (!matchedLocation && resolvedLocation) {
-        localStorage.setItem('location_id', resolvedLocation.id);
+      const normalized = normalizeLocations(resp.locations);
+      allLocations = normalized;
+      locationsUsingFallback = false;
+      if (!normalized.length) {
+        showLocationBanner({ message: 'No locations available', showRetry: true, tone: 'warning' });
+      } else {
+        showLocationBanner({ message: '', showRetry: false });
       }
-      
-      // Show/hide announcements tab based on location
-      updateAnnouncementsVisibility();
-      updateGuardTasksVisibility();
-      showGlobalError('');
-      await loadManagerReports();
-      
     } catch (e) {
       console.error('Failed to load locations:', e);
-      const select = el('locationSelect');
-      if (select) {
-        select.innerHTML = '<option value="">Locations unavailable</option>';
+      allLocations = [...FALLBACK_LOCATIONS];
+      locationsUsingFallback = true;
+      showLocationBanner({ message: 'Server location list unavailable — using fallback list.', showRetry: true, tone: 'warning' });
+    }
+    if (updateSelection) {
+      const defaultId = resolveLocationId();
+      applyLocationSelection(defaultId);
+      if (refreshViews) {
+        await refreshLocationViews();
       }
-      currentLocation = null;
-      showGlobalError(`Failed to load locations: ${e.message}`, loadLocations);
+    } else {
+      renderLocationSelect(allLocations, currentLocation?.id || '');
     }
   }
 
@@ -3149,13 +3217,22 @@ QA checklist (v4.8.5-beta):
     const bundleSelect = el('bundleLocation');
     if (bundleSelect) {
       bundleSelect.innerHTML = '';
-      allLocations.forEach((loc) => {
+      if (!allLocations.length) {
         const opt = document.createElement('option');
-        opt.value = loc.id;
-        opt.textContent = loc.name;
+        opt.value = '';
+        opt.textContent = 'No locations available';
         bundleSelect.appendChild(opt);
-      });
-      bundleSelect.value = currentLocation?.id || allLocations[0]?.id || '';
+        bundleSelect.disabled = true;
+      } else {
+        allLocations.forEach((loc) => {
+          const opt = document.createElement('option');
+          opt.value = loc.id;
+          opt.textContent = loc.name;
+          bundleSelect.appendChild(opt);
+        });
+        bundleSelect.disabled = false;
+        bundleSelect.value = currentLocation?.id || allLocations[0]?.id || '';
+      }
     }
     const instructorSelect = el('clientInstructorFilter');
     if (instructorSelect) {
@@ -4108,37 +4185,54 @@ QA checklist (v4.8.5-beta):
     if (guardBtn) guardBtn.style.display = isWestchester ? '' : 'none';
   }
 
+  async function refreshLocationViews() {
+    updateAnnouncementsVisibility();
+    updateGuardTasksVisibility();
+    if (!isWestchesterLocation()) {
+      const viewValue = el('viewSelect')?.value;
+      if (viewValue === 'announcements' || viewValue === 'lifeguard') {
+        el('viewSelect').value = 'roster';
+        el('panelRoster').classList.remove('hidden');
+        el('panelAnnouncements').classList.add('hidden');
+        el('panelLifeguard').classList.add('hidden');
+        el('panelGuardTasks').classList.add('hidden');
+      }
+    }
+    await renderSidebarLocationOptions();
+    if (!currentLocation) {
+      currentBlock = null;
+      const blocks = el('blocks');
+      if (blocks) blocks.innerHTML = '';
+      const roster = el('roster');
+      if (roster) roster.innerHTML = '';
+      setSelectedBlockUI();
+      setStatus('Select a location to continue', 'warn');
+      return;
+    }
+    await loadManagerReports();
+    if (el('panelVirtualDesk') && !el('panelVirtualDesk').classList.contains('hidden')) {
+      loadManagerDashboard();
+    }
+    await loadStatus();
+    await loadBlocks();
+    if (currentBlock) await loadRoster();
+  }
+
   el('locationSelect').addEventListener('change', async (e) => {
     const locId = e.target.value;
-    currentLocation = allLocations.find(l => l.id == locId);
-    localStorage.setItem('location_id', locId);
-    
+    applyLocationSelection(locId);
+    if (!currentLocation) {
+      await refreshLocationViews();
+      return;
+    }
     try {
-      await api('/api/set-location', {
-        method: 'POST',
-        body: JSON.stringify({ location_id: locId })
-      });
-      
-      updateAnnouncementsVisibility();
-      updateGuardTasksVisibility();
-      if (!isWestchesterLocation()) {
-        const viewValue = el('viewSelect')?.value;
-        if (viewValue === 'announcements' || viewValue === 'lifeguard') {
-          el('viewSelect').value = 'roster';
-          el('panelRoster').classList.remove('hidden');
-          el('panelAnnouncements').classList.add('hidden');
-          el('panelLifeguard').classList.add('hidden');
-          el('panelGuardTasks').classList.add('hidden');
-        }
+      if (!locationsUsingFallback) {
+        await api('/api/set-location', {
+          method: 'POST',
+          body: JSON.stringify({ location_id: locId })
+        });
       }
-      await loadManagerReports();
-      if (el('panelVirtualDesk') && !el('panelVirtualDesk').classList.contains('hidden')) {
-        loadManagerDashboard();
-      }
-      await loadStatus();
-      await loadBlocks();
-      if (currentBlock) await loadRoster();
-      
+      await refreshLocationViews();
     } catch (e) {
       alert('Failed to switch location: ' + e.message);
     }
@@ -4451,6 +4545,15 @@ QA checklist (v4.8.5-beta):
       el('confirmDeleteInput').value = '';
       el('confirmInitialsInput').value = '';
       el('confirmPinInput').value = '';
+      const submitBtn = el('confirmSubmit');
+      const updateSubmitState = () => {
+        if (!locationOptions) {
+          if (submitBtn) submitBtn.disabled = false;
+          return;
+        }
+        const locationValue = el('confirmLocationSelect').value;
+        if (submitBtn) submitBtn.disabled = !locationValue;
+      };
       if (locationOptions) {
         const select = el('confirmLocationSelect');
         select.innerHTML = '';
@@ -4463,6 +4566,10 @@ QA checklist (v4.8.5-beta):
           }
           select.appendChild(o);
         });
+        select.onchange = updateSubmitState;
+        updateSubmitState();
+      } else if (submitBtn) {
+        submitBtn.disabled = false;
       }
 
       const cleanup = () => {
@@ -7559,6 +7666,10 @@ QA checklist (v4.8.5-beta):
   // HTML Upload handlers
   el('uploadHtmlBtn').addEventListener('click', () => {
     if (blockIfReadOnly('HTML upload')) return;
+    if (!currentLocation) {
+      alert('Select a location before uploading a roster.');
+      return;
+    }
     el('htmlFileInput').click();
   });
 
@@ -7568,12 +7679,16 @@ QA checklist (v4.8.5-beta):
 
     try {
       if (blockIfReadOnly('HTML upload')) return;
+      if (!currentLocation) {
+        alert('Select a location before uploading a roster.');
+        return;
+      }
       el('uploadHtmlBtn').disabled = true;
       el('uploadHtmlBtn').textContent = 'Uploading...';
 
       const previewForm = new FormData();
       previewForm.append('html', file);
-      previewForm.append('location_id', currentLocation?.id || 1);
+      previewForm.append('location_id', currentLocation.id);
       const previewResp = await fetch(apiUrl('/api/upload-html/preview'), {
         method: 'POST',
         body: previewForm
@@ -7594,7 +7709,7 @@ QA checklist (v4.8.5-beta):
       // Use FormData for clean file upload without credential issues
       const formData = new FormData();
       formData.append('html', file);
-      formData.append('location_id', currentLocation?.id || 1);
+      formData.append('location_id', currentLocation.id);
 
       const response = await fetch(apiUrl('/api/upload-html'), {
         method: 'POST',
@@ -7899,9 +8014,55 @@ QA checklist (v4.8.5-beta):
     }
   });
 
-  // Boot
-  (async function init(){
-    try{
+  function parseRgb(color) {
+    if (!color) return null;
+    if (color.startsWith('#')) {
+      const hex = color.replace('#', '');
+      if (hex.length === 3) {
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        return { r, g, b };
+      }
+      if (hex.length === 6) {
+        return {
+          r: parseInt(hex.slice(0, 2), 16),
+          g: parseInt(hex.slice(2, 4), 16),
+          b: parseInt(hex.slice(4, 6), 16)
+        };
+      }
+      return null;
+    }
+    const match = color.match(/rgba?\(([^)]+)\)/);
+    if (!match) return null;
+    const parts = match[1].split(',').map((part) => Number(part.trim()));
+    return { r: parts[0], g: parts[1], b: parts[2] };
+  }
+
+  function luminance({ r, g, b }) {
+    const toLinear = (value) => {
+      const v = value / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  }
+
+  function runThemeSanityCheck() {
+    const style = getComputedStyle(document.body);
+    const bg = parseRgb(style.backgroundColor);
+    const text = parseRgb(style.color);
+    if (!bg || !text) return;
+    const bgLum = luminance(bg);
+    const textLum = luminance(text);
+    const bgLight = bgLum >= 0.8;
+    const textDark = textLum <= 0.25;
+    if (!bgLight || !textDark) {
+      console.warn('Theme sanity check: Body background should be light and text should be dark. Review :root colors in index.html.');
+    }
+  }
+
+  async function initApp() {
+    try {
       syncDeviceUI();
       const mgrExpiry = sessionStorage.getItem('manager_pin_expiry');
       if (mgrExpiry && Date.now() < parseInt(mgrExpiry)) {
@@ -7909,17 +8070,21 @@ QA checklist (v4.8.5-beta):
       }
       applyRoleUI();
       el('buildStamp').textContent = new Date().toLocaleString();
-      await loadLocations();
+      await loadLocations({ updateSelection: false });
+      const defaultId = resolveLocationId();
+      applyLocationSelection(defaultId);
+      await refreshLocationViews();
       await loadReadOnlyMode();
-      await loadStatus();
-      await loadBlocks();
-    }catch(e){
+      runThemeSanityCheck();
+    } catch (e) {
       setStatus(e.message || 'Failed to load', 'warn');
-    }finally{
+    } finally {
       // Start clock update (runs independently of announcements)
       startCountdown();
     }
-  })();
+  }
+
+  document.addEventListener('DOMContentLoaded', initApp);
 </script>
 </body>
 </html>
