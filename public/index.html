@@ -15,31 +15,31 @@ QA checklist (v4.9-beta):
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root{
-      --bg:#eef2fb;
-      --cardA:#fbfdff;
-      --cardB:#f1f5fb;
-      --surface:#f6f8fd;
-      --surface-strong:#e9eef7;
-      --text:#121317;
-      --muted:#334155;
-      --line:rgba(15,23,42,.18);
-      --line2:rgba(15,23,42,.26);
-      --btn:#f7f9fd;
-      --btn2:#eaf0fb;
-      --good:#0f766e;
-      --warn:#b45309;
-      --bad:#b91c1c;
-      --chip:rgba(15,23,42,.08);
-      --accent:#0f9f8e;
-      --accent-soft:#c8f3ea;
-      --cat-client:#c7f2e8;
-      --cat-billing:#e2d8ff;
-      --cat-instructors:#d4e4ff;
-      --cat-guards:#f3d9c6;
-      --cat-system:#dde6f3;
-      --cat-danger:#f8c9d2;
-      --cat-strong:#111827;
-      --cat-border:rgba(15,23,42,.2);
+      --bg:#E7FDFF;
+      --cardA:#F5FFFF;
+      --cardB:#DFFBFF;
+      --surface:#EAFDFF;
+      --surface-strong:#C9F8FF;
+      --text:#061B1E;
+      --muted:#075B63;
+      --line:rgba(0, 200, 220, .30);
+      --line2:rgba(0, 200, 220, .48);
+      --btn:#EAFDFF;
+      --btn2:#C9F8FF;
+      --good:#00FF7B;
+      --warn:#FFB300;
+      --bad:#FF2B2B;
+      --chip:rgba(0, 200, 220, .10);
+      --accent:#00E5FF;
+      --accent-soft:#B9FBFF;
+      --cat-client:#9CFBFF;
+      --cat-billing:#D3B8FF;
+      --cat-instructors:#A6CBFF;
+      --cat-guards:#FFD3A0;
+      --cat-system:#C2F0FF;
+      --cat-danger:#FF9CB3;
+      --cat-strong:#061B1E;
+      --cat-border:rgba(0, 200, 220, .35);
     }
     *{ box-sizing:border-box; }
     body *{ transition: none !important; }
@@ -418,9 +418,9 @@ QA checklist (v4.9-beta):
       color:#0f172a;
     }
     .chip.auto-absent{
-      border-color: rgba(225,29,72,.35);
-      background: rgba(225,29,72,.08);
-      color: #9f1239;
+      border-color: rgba(255,43,43,.55);
+      background: rgba(255,43,43,.12);
+      color: #7f1d1d;
     }
     .chip.teal{ border-color: rgba(16,185,129,.35); background: var(--accent-soft); color:#065f46; }
     .chip.rose{ border-color: rgba(225,29,72,.35); background: rgba(225,29,72,.08); color:#9f1239; }
@@ -534,10 +534,10 @@ QA checklist (v4.9-beta):
       min-height: 38px;
     }
     .row-auto-absent{
-      background: rgba(250,204,214,0.4) !important;
+      background: rgba(255,43,43,0.16) !important;
     }
     .row-auto-absent:hover{
-      background: rgba(250,204,214,0.55) !important;
+      background: rgba(255,43,43,0.24) !important;
     }
 
     .guard-section {
@@ -628,9 +628,9 @@ QA checklist (v4.9-beta):
       line-height:1;
       color:#0f172a;
     }
-    .attBtn.here.active{ border-color: rgba(34,197,94,.5); background: rgba(34,197,94,.12); }
-    .attBtn.absent.active{ border-color: rgba(239,68,68,.5); background: rgba(239,68,68,.12); }
-    .attBtn.clear.active{ border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.08); }
+    .attBtn.here.active{ border-color: rgba(0,255,123,.95); background: rgba(0,255,123,.32); }
+    .attBtn.absent.active{ border-color: rgba(255,43,43,.95); background: rgba(255,43,43,.32); }
+    .attBtn.clear.active{ border-color: rgba(0,229,255,.55); background: rgba(0,229,255,.16); }
 
     /* Flags */
     .flags{ display:flex; gap:8px; margin-top:6px; align-items:center; flex-wrap:wrap; }
@@ -1810,7 +1810,39 @@ QA checklist (v4.9-beta):
         <option value="frontdesk">Front Desk (computer)</option>
       </select>
       <div class="hint">Deck requires manager approval to change zones.</div>
+
+    <div class="field" style="margin-top:10px;">
+      <label>Auto announcements on this device</label>
+      <div class="row" style="gap:10px; align-items:center;">
+        <input type="checkbox" id="autoAnnouncerEnabled" />
+        <span class="tiny" style="color:var(--muted);">Enable only on the main announcer computer (prevents duplicate announcements from multiple tablets).</span>
+      </div>
     </div>
+
+    </div>
+    <hr style="border:none; border-top:1px solid rgba(148,163,184,0.25); margin:14px 0;">
+    <h4 style="margin:0 0 8px 0;">Announcement templates</h4>
+    <div class="field">
+      <label>Auto: class start (time block)</label>
+      <textarea id="tplAutoTime" rows="3" placeholder="Swimmers. Please make your way to the pool deck and parent guardian pick up in the family locker room."></textarea>
+      <div class="hint">Variables: <code>{time12}</code></div>
+    </div>
+    <div class="field">
+      <label>Auto: class start (now)</label>
+      <textarea id="tplClassStart" rows="3" placeholder="The {time12} classes are now starting. Swimmers, please make your way to the pool deck."></textarea>
+      <div class="hint">Variables: <code>{time12}</code></div>
+    </div>
+    <div class="field">
+      <label>Call parent/guardian to pool deck</label>
+      <textarea id="tplCallParent" rows="3" placeholder="Hello, will the parent or guardian of {swimmer_name} please come..."></textarea>
+      <div class="hint">Variables: <code>{swimmer_name}</code></div>
+    </div>
+    <div class="row" style="gap:10px; margin-top:8px;">
+      <button class="secondary" id="tplReload">Reload</button>
+      <button class="secondary" id="tplTestParent">Test Parent-to-Deck</button>
+    </div>
+    <div class="hint" style="margin-top:6px;">Templates are saved on the server and apply to auto + manual announcements.</div>
+
     <div class="row" style="margin-top:10px;">
       <button class="secondary" id="openShortcutsBtn">⌨️ Keyboard Shortcuts</button>
     </div>
@@ -2300,12 +2332,18 @@ QA checklist (v4.9-beta):
   function getLocationTimeZone() {
     const fallbackZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!currentLocation) return fallbackZone;
+
+    // Prefer explicit timezone coming from the server/DB (more reliable than name matching).
+    const explicit = currentLocation.time_zone || currentLocation.timeZone;
+    if (explicit && typeof explicit === 'string') return explicit;
+
     const candidates = [
       currentLocation.name,
       currentLocation.code,
       currentLocation.short_code,
       currentLocation.shortCode
     ].map(normalizeKey);
+
     for (const key of candidates) {
       if (locationTimeZones.has(key)) {
         return locationTimeZones.get(key);
@@ -5617,7 +5655,13 @@ QA checklist (v4.9-beta):
     // Reset next announcement tracking
     nextAnnouncementTime = null;
 
-    if(!activeDateISO || !blocksList.length) {
+    // Auto speak should only run on the announcer device,
+    // but the countdown should display everywhere.
+      // Client-side audio scheduling is disabled.
+    // The server now runs the 3-minutes-before auto announcer independently.
+    let autoEnabled = false;
+
+if(!activeDateISO || !blocksList.length) {
       stopCountdown();
       return;
     }
@@ -5625,7 +5669,7 @@ QA checklist (v4.9-beta):
     const now = new Date();
     const timeZone = getLocationTimeZone();
 
-    blocksList.forEach((t, idxBlock) => {
+    blocksList.forEach((t) => {
       const classAt = parseBlockDateTime(activeDateISO, t, timeZone);
       if(!classAt) return;
 
@@ -5636,16 +5680,22 @@ QA checklist (v4.9-beta):
       // cap: only schedule within 36 hours to avoid weird multi-day timers
       if(delay > 36*60*60*1000) return;
 
+      // Track the earliest announcement time (for the countdown pill)
+      if (!nextAnnouncementTime || announceAt < nextAnnouncementTime) {
+        nextAnnouncementTime = announceAt;
+      }
+
+      // If this device is not the auto announcer, do not schedule audio.
+      if(!autoEnabled) return;
+
       const id = setTimeout(async () => {
         try{
-          // First block: call-up only. Subsequent blocks: pick-up + call-up.
-          const timeLabel = fmtTime(t);
-          const text = (idxBlock === 0)
-            ? `Attention. ${timeLabel} classes. Instructors, please call up your first swimmer.`
-            : `Attention. ${timeLabel} classes. Front desk, please pick up swimmers for this time block. Instructors, please call up your next swimmer.`;
-
-          const resp = await api('/api/speak', { method:'POST', body: JSON.stringify({ text, device_mode: deviceMode }) });
-          setLastAnnouncementUI(resp.lastAnnouncement);
+          // Server-side template + dedupe. Only one auto announcement per time block.
+          const resp = await api('/api/force-time-announcement', {
+            method:'POST',
+            body: JSON.stringify({ start_time: t, device_mode: deviceMode })
+          });
+          if (resp?.lastAnnouncement) setLastAnnouncementUI(resp.lastAnnouncement);
 
           // After announcement, reschedule to update next timer
           setTimeout(() => scheduleAutoAnnouncements(), 1000);
@@ -5657,13 +5707,35 @@ QA checklist (v4.9-beta):
 
       autoTimers.push(id);
 
-      // Track the earliest announcement time
-      if (!nextAnnouncementTime || announceAt < nextAnnouncementTime) {
-        nextAnnouncementTime = announceAt;
+
+      // Also schedule a "class is starting now" call at the exact block time.
+      const startDelay = classAt.getTime() - now.getTime();
+      if (startDelay > 0 && startDelay <= 36*60*60*1000) {
+        if (!nextAnnouncementTime || classAt < nextAnnouncementTime) {
+          nextAnnouncementTime = classAt;
+        }
+
+        if (autoEnabled) {
+          const id2 = setTimeout(async () => {
+            try {
+              const resp2 = await api('/api/force-class-start', {
+                method: 'POST',
+                body: JSON.stringify({ start_time: t, device_mode: deviceMode })
+              });
+              if (resp2?.lastAnnouncement) setLastAnnouncementUI(resp2.lastAnnouncement);
+              setTimeout(() => scheduleAutoAnnouncements(), 1000);
+            } catch (e) {
+              console.error('auto class-start failed', e);
+            }
+          }, startDelay);
+
+          autoTimers.push(id2);
+        }
       }
+
     });
 
-    // Start countdown if we have scheduled announcements
+    // Start countdown if we have a next scheduled announcement time
     if (nextAnnouncementTime) {
       startCountdown();
     } else {
@@ -5716,17 +5788,19 @@ QA checklist (v4.9-beta):
       return;
     }
 
-    // Calculate minutes and seconds
+    // Calculate hours, minutes, seconds
     const totalSeconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
 
-    // Format as :MM or :SS
     let display = '';
-    if (minutes > 0) {
-      display = `:${String(minutes).padStart(2, '0')}`;
+    if (hours > 0) {
+      display = `${hours}h ${String(minutes).padStart(2,'0')}m`;
+    } else if (minutes > 0) {
+      display = `${minutes}m`;
     } else {
-      display = `:${String(seconds).padStart(2, '0')}`;
+      display = `${seconds}s`;
     }
 
     // Update the display
@@ -6439,9 +6513,34 @@ QA checklist (v4.9-beta):
       initials.value = task.initials || '';
       initials.disabled = readOnlyMode;
       initials.addEventListener('input', () => {
+        // Do NOT re-render the whole guard task list on every keystroke.
+        // Re-rendering causes the input to lose focus after 1 character.
+        const next = initials.value.toUpperCase();
+        if (initials.value !== next) {
+          const pos = initials.selectionStart;
+          initials.value = next;
+          try { initials.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+        }
         task.initials = initials.value.toUpperCase();
         saveGuardState();
-        renderGuardTasks();
+
+        const nowDone = (task.initials || '').trim().length > 0;
+        row.classList.toggle('done', nowDone);
+        // Update label styling + checkmark in-place
+        label.style.color = nowDone ? 'rgba(159,176,208,.85)' : '';
+        label.style.fontWeight = nowDone ? '700' : '';
+        const existingCheck = label.querySelector('.guard-done-check');
+        if (nowDone) {
+          if (!existingCheck) {
+            const check = document.createElement('span');
+            check.className = 'guard-done-check';
+            check.textContent = ' ✅';
+            label.appendChild(check);
+          }
+        } else if (existingCheck) {
+          existingCheck.remove();
+        }
+        setGuardMeta();
       });
       row.appendChild(initials);
 
@@ -6500,45 +6599,36 @@ QA checklist (v4.9-beta):
     body.innerHTML = '';
     const weekend = guardState.dayType === 'weekend';
     const rotationHint = el('guardRotationHint');
+
+    // Ensure there is something editable in the table even on weekends.
+    // Weekends default to a simple repeating pattern (2+3, 3+1, 1+2).
     if (weekend) {
-      rotationHint.textContent = 'Weekend rotation starts with Guard 2 + 3, then 3 + 1, then 1 + 2 (repeat). Example: Block 1 = 2+3, Block 2 = 3+1, Block 3 = 1+2, Block 4 = 2+3.';
-      const guardLabels = {
-        1: guardState.guardNames?.[1] ? `Guard 1 (${guardState.guardNames[1]})` : 'Guard 1',
-        2: guardState.guardNames?.[2] ? `Guard 2 (${guardState.guardNames[2]})` : 'Guard 2',
-        3: guardState.guardNames?.[3] ? `Guard 3 (${guardState.guardNames[3]})` : 'Guard 3'
-      };
-      const pattern = [
-        [2, 3],
-        [3, 1],
-        [1, 2]
-      ];
-      const totalBlocks = 6;
-      for (let i = 0; i < totalBlocks; i += 1) {
-        const pair = pattern[i % pattern.length];
-        const tr = document.createElement('tr');
-
-        const tdBlock = document.createElement('td');
-        tdBlock.textContent = `Block ${i + 1}`;
-        tr.appendChild(tdBlock);
-
-        const tdGuard = document.createElement('td');
-        tdGuard.textContent = `${guardLabels[pair[0]]} + ${guardLabels[pair[1]]}`;
-        tr.appendChild(tdGuard);
-
-        const tdZone = document.createElement('td');
-        tdZone.textContent = 'Rotation';
-        tr.appendChild(tdZone);
-
-        const tdRemove = document.createElement('td');
-        tr.appendChild(tdRemove);
-
-        body.appendChild(tr);
+      rotationHint.textContent = 'Weekend rotation defaults to: 2+3, then 3+1, then 1+2 (repeat). You can edit any block below.';
+      const hasRows = Array.isArray(guardState.rotation) && guardState.rotation.length > 0;
+      if (!hasRows) {
+        const pattern = [
+          [2, 3],
+          [3, 1],
+          [1, 2]
+        ];
+        const totalBlocks = 6;
+        guardState.rotation = [];
+        for (let i = 0; i < totalBlocks; i += 1) {
+          const pair = pattern[i % pattern.length];
+          guardState.rotation.push({
+            time: `Block ${i + 1}`,
+            guard: `${pair[0]}+${pair[1]}`,
+            zone: 'Rotation'
+          });
+        }
+        saveGuardState();
       }
-      return;
+    } else {
+      rotationHint.textContent = 'Weekdays have no rotation unless updated manually.';
     }
 
-    rotationHint.textContent = 'Weekdays have no rotation unless updated manually.';
-    guardState.rotation.forEach((entry, idx) => {
+    const rows = Array.isArray(guardState.rotation) ? guardState.rotation : [];
+    rows.forEach((entry, idx) => {
       const tr = document.createElement('tr');
 
       const tdTime = document.createElement('td');
@@ -6578,7 +6668,9 @@ QA checklist (v4.9-beta):
       const removeBtn = document.createElement('button');
       removeBtn.className = 'miniBtn';
       removeBtn.textContent = '✕';
+      removeBtn.disabled = readOnlyMode || weekend; // keep weekend rotation as fixed row count (editable but not removable)
       removeBtn.addEventListener('click', () => {
+        if (weekend) return;
         guardState.rotation.splice(idx, 1);
         saveGuardState();
         renderGuardRotation();
@@ -8319,14 +8411,88 @@ el('activityLogRefresh')?.addEventListener('click', () => {
   loadActivityLog();
 });
 
+async function loadAnnouncementTemplatesIntoSettings(){
+  try{
+    const r = await fetch('/api/announcement-templates');
+    const j = await r.json();
+    const map = {};
+    (j.templates || []).forEach(t => { map[t.key] = t; });
+    if (el('tplAutoTime')) el('tplAutoTime').value = (map.AUTO_TIME_BLOCK?.template || '').trim();
+    if (el('tplClassStart')) el('tplClassStart').value = (map.AUTO_CLASS_START?.template || '').trim();
+    if (el('tplCallParent')) el('tplCallParent').value = (map.CALL_PARENT_TO_DECK?.template || '').trim();
+  }catch(e){
+    console.warn('Failed to load templates', e);
+  }
+}
+
 el('settingsBtn')?.addEventListener('click', () => {
   syncDeviceUI();
+  try{ if(el('autoAnnouncerEnabled')) el('autoAnnouncerEnabled').checked = (localStorage.getItem('autoAnnouncerEnabled') === 'true'); }catch(e){}
+  loadAnnouncementTemplatesIntoSettings();
   showModal('settingsModal', true);
 });
 el('settingsClose')?.addEventListener('click', () => showModal('settingsModal', false));
+
+el('tplReload')?.addEventListener('click', () => {
+  loadAnnouncementTemplatesIntoSettings();
+});
+el('tplTestParent')?.addEventListener('click', async () => {
+  const name = prompt('Swimmer name for test?') || '';
+  if (!name.trim()) return;
+  try{
+    await fetch('/api/call-parent', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ swimmer_name: name.trim(), device_mode: deviceMode })
+    });
+  }catch(e){
+    console.warn('Test speak failed', e);
+  }
+});
 el('settingsModal')?.addEventListener('click', (e) => { if(e.target === el('settingsModal')) showModal('settingsModal', false); });
 
-el('settingsSave')?.addEventListener('click', () => {
+el('settingsSave')?.addEventListener('click', async () => {
+  // Apply device mode
+  const sel = el('deviceModeSelect')?.value || 'deck';
+  deviceMode = sel;
+  localStorage.setItem('deviceMode', deviceMode);
+  try{ if(el('autoAnnouncerEnabled')) localStorage.setItem('autoAnnouncerEnabled', el('autoAnnouncerEnabled').checked ? 'true' : 'false'); }catch(e){}
+  syncDeviceUI();
+
+  // Save templates (best-effort)
+  try {
+    const templates = [
+      {
+        key: 'AUTO_TIME_BLOCK',
+        name: 'Auto: class start (time block)',
+        template: (el('tplAutoTime')?.value || '').trim() || 'Swimmers. Please make your way to the pool deck and parent guardian pick up in the family locker room.',
+        enabled: true,
+        cooldown_seconds: 240
+      },
+      {
+        key: 'AUTO_CLASS_START',
+        name: 'Auto: class start (now)',
+        template: (el('tplClassStart')?.value || '').trim() || 'The {time12} classes are now starting. Swimmers, please make your way to the pool deck.',
+        enabled: true,
+        cooldown_seconds: 240
+      },
+      {
+        key: 'CALL_PARENT_TO_DECK',
+        name: 'Call parent/guardian to pool deck',
+        template: (el('tplCallParent')?.value || '').trim() || 'Hello, will the parent or guardian of {swimmer_name} please come to the pool deck.',
+        enabled: true,
+        cooldown_seconds: 8
+      }
+    ];
+    await fetch('/api/announcement-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templates })
+    });
+  } catch (e) {
+    console.warn('Template save failed', e);
+  }
+
   showModal('settingsModal', false);
 });
 

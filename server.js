@@ -215,6 +215,65 @@ function ensureSchema() {
       details TEXT
     );
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS announcement_templates (
+      key TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      template TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1,
+      cooldown_seconds INTEGER DEFAULT 20,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  // Seed default announcement templates (only if missing)
+  const nowSeed = nowISO();
+  const upsertTpl = db.prepare(`
+    INSERT INTO announcement_templates (key, name, template, enabled, cooldown_seconds, updated_at)
+    VALUES (?, ?, ?, 1, ?, ?)
+    ON CONFLICT(key) DO NOTHING
+  `);
+  upsertTpl.run(
+    "AUTO_TIME_BLOCK",
+    "Auto: class start (time block)",
+    "Parents and Guardians, the {time12} classes are about to begin. Please line your swimmers up at the pool entrance stairs.",
+    240,
+    nowSeed
+  );
+  // If an older AUTO_TIME_BLOCK template exists with legacy wording, reset it to the new default.
+  try {
+    const existingAuto = db.prepare(`SELECT template FROM announcement_templates WHERE key = ?`).get("AUTO_TIME_BLOCK");
+    const t = String(existingAuto?.template || "");
+    const looksLegacy = /front\s*desk|instructors?|call\s*up|attention\.|pick\s*up\s*swimmers/i.test(t);
+    if (looksLegacy) {
+      db.prepare(`UPDATE announcement_templates SET template = ?, enabled = 1, cooldown_seconds = 240, updated_at = ? WHERE key = ?`)
+        .run(
+          "Parents and Guardians, the {time12} classes are about to begin. Please line your swimmers up at the pool entrance stairs.",
+          nowSeed,
+          "AUTO_TIME_BLOCK"
+        );
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  
+
+  upsertTpl.run(
+    "AUTO_CLASS_START",
+    "Auto: class start (now)",
+    "The {time12} classes are now starting. Swimmers, please make your way to the pool deck.",
+    240,
+    nowSeed
+  );
+upsertTpl.run(
+    "CALL_PARENT_TO_DECK",
+    "Call parent/guardian to pool deck",
+    "Hello, will the parent or guardian of {swimmer_name} please come to the pool deck.",
+    8,
+    nowSeed
+  );
   db.exec(`CREATE TABLE IF NOT EXISTS app_state (key TEXT PRIMARY KEY, value TEXT);`);
   db.exec(`
     CREATE TABLE IF NOT EXISTS trial_followups (
@@ -1299,17 +1358,71 @@ function speakAnnouncement(text, opts = {}) {
   const cleaned = String(text || "").replace(/\s+/g, " ").trim();
   if (!cleaned) return Promise.resolve({ ok: false, error: "empty text" });
 
+  const dedupeKey = String(opts.dedupeKey || cleaned);
+  const cooldownMs = Math.max(0, Number(opts.cooldownMs ?? 0));
+  const pingDelayMs = Math.max(0, Number(opts.pingDelayMs ?? 2000));
+
+  // In-memory dedupe to prevent multi-device repeats
+  if (!global.__recentAnnounceMap) global.__recentAnnounceMap = new Map();
+  const m = global.__recentAnnounceMap;
+
+  const now = Date.now();
+  if (cooldownMs > 0) {
+    const last = m.get(dedupeKey) || 0;
+    if ((now - last) < cooldownMs) {
+      return Promise.resolve({ ok: true, skipped: true, text: cleaned, at: nowISO() });
+    }
+    m.set(dedupeKey, now);
+  }
+
   speakQueue = speakQueue.then(async () => {
     lastAnnouncement = { text: cleaned, at: nowISO() };
-    const shouldPing = true;
-    if (shouldPing) {
-      await playPing();
-      await new Promise((r) => setTimeout(r, 350));
-    }
+
+    // Beep first, then wait 2s, then speak (per your requirement)
+    await playPing();
+    await new Promise((r) => setTimeout(r, pingDelayMs));
+
     await speakWithPiper(cleaned);
   });
 
   return speakQueue.then(() => ({ ok: true, text: cleaned, at: lastAnnouncement.at }));
+}
+
+
+function getAnnouncementTemplate(key) {
+  const row = db.prepare(`SELECT key, name, template, enabled, cooldown_seconds, updated_at FROM announcement_templates WHERE key = ?`).get(key);
+  return row || null;
+}
+function listAnnouncementTemplates() {
+  return db.prepare(`SELECT key, name, template, enabled, cooldown_seconds, updated_at FROM announcement_templates ORDER BY key`).all();
+}
+function upsertAnnouncementTemplate({ key, name, template, enabled, cooldown_seconds }) {
+  const now = nowISO();
+  db.prepare(`
+    INSERT INTO announcement_templates (key, name, template, enabled, cooldown_seconds, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      name=excluded.name,
+      template=excluded.template,
+      enabled=excluded.enabled,
+      cooldown_seconds=excluded.cooldown_seconds,
+      updated_at=excluded.updated_at
+  `).run(
+    String(key),
+    String(name || key),
+    String(template || ""),
+    enabled ? 1 : 0,
+    Number(cooldown_seconds ?? 20),
+    now
+  );
+  return getAnnouncementTemplate(key);
+}
+function renderTemplate(tpl, vars = {}) {
+  const s = String(tpl || "");
+  return s.replace(/\{([a-zA-Z0-9_]+)\}/g, (_m, k) => {
+    const v = vars?.[k];
+    return (v === undefined || v === null) ? "" : String(v);
+  }).replace(/\s+/g, " ").trim();
 }
 
 // -------------------- API --------------------
@@ -1340,6 +1453,42 @@ app.get("/api/status", (req, res) => {
     lastAnnouncement
   });
 });
+
+// Announcement templates (editable in app)
+app.get("/api/announcement-templates", (req, res) => {
+  try {
+    res.json({ ok: true, templates: listAnnouncementTemplates() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "templates failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+app.post("/api/announcement-templates", (req, res) => {
+  try {
+    const { templates } = req.body || {};
+    if (!Array.isArray(templates)) return res.status(400).json({ ok: false, error: "missing templates[]" });
+
+    const tx = db.transaction((arr) => {
+      for (const t of arr) {
+        if (!t?.key) continue;
+        upsertAnnouncementTemplate({
+          key: t.key,
+          name: t.name || t.key,
+          template: t.template || "",
+          enabled: (t.enabled !== false),
+          cooldown_seconds: Number(t.cooldown_seconds ?? 20),
+        });
+      }
+    });
+    tx(templates);
+
+    audit(req, "update_announcement_templates", { count: templates.length });
+    res.json({ ok: true, templates: listAnnouncementTemplates() });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "update templates failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
 
 app.post("/api/set-active-date", (req, res) => {
   try {
@@ -1776,7 +1925,7 @@ app.post("/api/remove-addon", (req, res) => {
 app.post("/api/speak", async (req, res) => {
   try {
     const { text, device_mode } = req.body || {};
-    const out = await speakAnnouncement(text, { ping: true });
+    const out = await speakAnnouncement(text, { cooldownMs: 2000, dedupeKey: `MANUAL|${String(text||'').trim()}`, pingDelayMs: 2000 });
     if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
 
     audit(req, "speak", { device_mode, details: { text: out.text } });
@@ -1792,7 +1941,7 @@ app.post("/api/repeat-last", async (req, res) => {
     const { device_mode } = req.body || {};
     if (!lastAnnouncement?.text) return res.status(400).json({ ok: false, error: "No last announcement yet" });
 
-    const out = await speakAnnouncement(lastAnnouncement.text, { ping: true });
+    const out = await speakAnnouncement(lastAnnouncement.text, { cooldownMs: 2000, dedupeKey: `REPEAT|${lastAnnouncement.text}`, pingDelayMs: 2000 });
     if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
 
     audit(req, "repeat_last", { device_mode });
@@ -1814,15 +1963,62 @@ app.post("/api/force-time-announcement", async (req, res) => {
     `).get(date, start_time);
     const c = countRow?.c || 0;
 
-    const msg = `Attention families. ${formatTime12h(start_time)} classes are starting soon. Please bring your swimmer to the pool deck.`.replace(/\s+/g, " ").trim();
+    const tpl = getAnnouncementTemplate("AUTO_TIME_BLOCK");
+    const enabled = tpl ? !!tpl.enabled : true;
+    if (!enabled) return res.json({ ok: true, skipped: true, reason: "disabled" });
 
-    const out = await speakAnnouncement(msg, { ping: true });
+    const time12 = formatTime12h(start_time);
+    const msg = renderTemplate(
+      tpl?.template || "Parents and Guardians, the {time12} classes are about to begin. Please line your swimmers up at the pool entrance stairs.",
+      { time12, start_time, date, count: c }
+    );
+
+    const cooldownMs = (Number(tpl?.cooldown_seconds ?? 240) * 1000);
+    const dedupeKey = `AUTO_TIME_BLOCK|${date}|${start_time}`;
+
+    const out = await speakAnnouncement(msg, { cooldownMs, dedupeKey, pingDelayMs: 2000 });
     if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
 
-    audit(req, "force_time_announcement", { device_mode, date, start_time, details: { count: c } });
-    res.json({ ok: true, lastAnnouncement });
+    audit(req, "force_time_announcement", { device_mode, date, start_time, details: { count: c, template_key: "AUTO_TIME_BLOCK", skipped: !!out.skipped } });
+    res.json({ ok: true, lastAnnouncement, skipped: !!out.skipped });
   } catch (e) {
     res.status(500).json({ ok: false, error: "force-time announcement failed", details: String(e?.stack || e?.message || e) });
+  }
+});
+
+
+// Force class-start announcement (plays at exact block start time)
+app.post("/api/force-class-start", async (req, res) => {
+  try {
+    const { start_time, device_mode } = req.body || {};
+    if (!start_time) return res.status(400).json({ ok: false, error: "missing start_time" });
+
+    const date = activeOrToday();
+    const countRow = db.prepare(`
+      SELECT COUNT(*) AS c FROM roster WHERE date = ? AND start_time = ?
+    `).get(date, start_time);
+    const c = countRow?.c || 0;
+
+    const tpl = getAnnouncementTemplate("AUTO_CLASS_START");
+    const enabled = tpl ? !!tpl.enabled : true;
+    if (!enabled) return res.json({ ok: true, skipped: true, reason: "disabled" });
+
+    const time12 = formatTime12h(start_time);
+    const msg = renderTemplate(
+      tpl?.template || "The {time12} classes are now starting. Swimmers, please make your way to the pool deck.",
+      { time12, start_time, date, count: c }
+    );
+
+    const cooldownMs = (Number(tpl?.cooldown_seconds ?? 240) * 1000);
+    const dedupeKey = `AUTO_CLASS_START|${date}|${start_time}`;
+
+    const out = await speakAnnouncement(msg, { cooldownMs, dedupeKey, pingDelayMs: 2000 });
+    if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
+
+    audit(req, "force_class_start", { device_mode, date, start_time, details: { count: c, template_key: "AUTO_CLASS_START", skipped: !!out.skipped } });
+    res.json({ ok: true, lastAnnouncement, skipped: !!out.skipped });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "force-class-start failed", details: String(e?.stack || e?.message || e) });
   }
 });
 
@@ -1832,12 +2028,23 @@ app.post("/api/call-parent", async (req, res) => {
     const { swimmer_name, device_mode } = req.body || {};
     if (!swimmer_name) return res.status(400).json({ ok: false, error: "missing swimmer_name" });
 
-    const msg = `Parent or guardian of ${swimmer_name}. Please come to the deck.`;
-    const out = await speakAnnouncement(msg, { ping: true });
+    const tpl = getAnnouncementTemplate("CALL_PARENT_TO_DECK");
+    const enabled = tpl ? !!tpl.enabled : true;
+    if (!enabled) return res.json({ ok: true, skipped: true, reason: "disabled" });
+
+    const msg = renderTemplate(
+      tpl?.template || "Hello, will the parent or guardian of {swimmer_name} please come to the pool deck.",
+      { swimmer_name }
+    );
+
+    const cooldownMs = (Number(tpl?.cooldown_seconds ?? 8) * 1000);
+    const dedupeKey = `CALL_PARENT_TO_DECK|${String(swimmer_name).trim().toLowerCase()}`;
+
+    const out = await speakAnnouncement(msg, { cooldownMs, dedupeKey, pingDelayMs: 2000 });
     if (!out.ok) return res.status(400).json({ ok: false, error: out.error || "speech failed" });
 
-    audit(req, "call_parent", { device_mode, swimmer_name, details: { text: msg } });
-    res.json({ ok: true, lastAnnouncement });
+    audit(req, "call_parent", { device_mode, swimmer_name, details: { text: msg, template_key: "CALL_PARENT_TO_DECK", skipped: !!out.skipped } });
+    res.json({ ok: true, lastAnnouncement, skipped: !!out.skipped });
   } catch (e) {
     res.status(500).json({ ok: false, error: "call-parent failed", details: String(e?.stack || e?.message || e) });
   }
@@ -3254,14 +3461,55 @@ app.post("/api/guard-tasks/clear", (req, res) => {
 });
 
 // ==================== LOCATION MANAGEMENT ====================
+function inferLocationTimeZone(location) {
+  if (!location) return null;
+  const key = String(location.code || location.short_code || location.shortCode || location.name || "")
+    .trim()
+    .toLowerCase();
+
+  const nameKey = String(location.name || "")
+    .trim()
+    .toLowerCase();
+
+  const tzMap = new Map([
+    ['swimlabs westchester', 'America/New_York'],
+    ['slw', 'America/New_York'],
+    ['safesplash riverdale', 'America/New_York'],
+    ['ssr', 'America/New_York'],
+
+    ['swimlabs woodlands', 'America/Chicago'],
+    ['swimlabs the woodlands', 'America/Chicago'],
+    ['slwd', 'America/Chicago'],
+    ['slw2', 'America/Chicago'],
+
+    ['safesplash santa monica', 'America/Los_Angeles'],
+    ['ssm', 'America/Los_Angeles'],
+    ['safesplash torrance', 'America/Los_Angeles'],
+    ['sst', 'America/Los_Angeles'],
+    ['safesplash summerlin', 'America/Los_Angeles'],
+    ['sss', 'America/Los_Angeles']
+  ]);
+
+  // Try direct code, then name.
+  if (tzMap.has(key)) return tzMap.get(key);
+  if (tzMap.has(nameKey)) return tzMap.get(nameKey);
+
+  return null;
+}
+
 app.get("/api/locations", (req, res) => {
   try {
     const locations = db.prepare(`SELECT * FROM locations WHERE active = 1 ORDER BY id`).all();
-    res.json({ ok: true, locations });
+    const enriched = (locations || []).map((loc) => ({
+      ...loc,
+      time_zone: loc.time_zone || loc.timeZone || inferLocationTimeZone(loc) || null
+    }));
+    res.json({ ok: true, locations: enriched });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
 });
+
 
 app.post("/api/set-location", (req, res) => {
   try {
@@ -5097,3 +5345,106 @@ scheduleGuardTaskSnapshots();
 app.listen(PORT, () => {
   console.log(`SwimLabs Announcer server running on http://localhost:${PORT}`);
 });
+
+
+/**
+ * ---------------------------------------------------------------------------
+ * SERVER-SIDE AUTO ANNOUNCER (3 minutes before each class)
+ *
+ * This runs independently of the browser UI. It looks at the roster in SQLite
+ * (populated by /api/upload-html) and triggers one announcement per start_time.
+ *
+ * Notes:
+ * - Uses the AUTO_TIME_BLOCK announcement template (customizable in DB).
+ * - Dedupe is enforced via speakAnnouncement(dedupeKey + cooldown_seconds).
+ * - Uses the server's local timezone when interpreting date+start_time.
+ * ---------------------------------------------------------------------------
+ */
+const SERVER_AUTO_ENABLED = true;
+const SERVER_AUTO_LEAD_MS = 3 * 60 * 1000;      // 3 minutes before class
+const SERVER_AUTO_CHECK_MS = 15 * 1000;         // check every 15 seconds
+const SERVER_AUTO_WINDOW_MS = 30 * 1000;        // fire if within this window
+
+function parseLocalDateTimeMs(dateISO, timeHHMM) {
+  // Interprets as local time (no timezone suffix).
+  // Example: new Date("2026-01-30T15:30:00") => local time.
+  if (!dateISO || !timeHHMM) return null;
+  const d = new Date(`${dateISO}T${timeHHMM}:00`);
+  const ms = d.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+async function runServerAutoAnnouncerTick() {
+  if (!SERVER_AUTO_ENABLED) return;
+
+  const tpl = getAnnouncementTemplate("AUTO_TIME_BLOCK");
+  const enabled = tpl ? !!tpl.enabled : true;
+  if (!enabled) return;
+
+  const date = activeOrToday();
+  const nowMs = Date.now();
+
+  // Distinct start times for the active date
+  const rows = db.prepare(`
+    SELECT DISTINCT start_time
+    FROM roster
+    WHERE date = ?
+      AND start_time IS NOT NULL
+      AND TRIM(start_time) != ''
+    ORDER BY start_time
+  `).all(date);
+
+  for (const r of (rows || [])) {
+    const start_time = String(r.start_time || "").trim();
+    if (!start_time) continue;
+
+    const startMs = parseLocalDateTimeMs(date, start_time);
+    if (!startMs) continue;
+
+    const announceAtMs = startMs - SERVER_AUTO_LEAD_MS;
+
+    // Skip if we're too early or too late
+    if (nowMs < announceAtMs) continue;
+    if (nowMs > (announceAtMs + SERVER_AUTO_WINDOW_MS)) continue;
+
+    const time12 = formatTime12h(start_time);
+
+    // Optional: include a count of swimmers in this time block
+    const countRow = db.prepare(`
+      SELECT COUNT(*) AS c
+      FROM roster
+      WHERE date = ? AND start_time = ?
+    `).get(date, start_time);
+    const c = countRow?.c || 0;
+
+    const msg = renderTemplate(
+      tpl?.template || "Parents and Guardians, the {time12} classes are about to begin. Please line your swimmers up at the pool entrance stairs.",
+      { time12, start_time, date, count: c }
+    );
+
+    const cooldownMs = (Number(tpl?.cooldown_seconds ?? 240) * 1000);
+    const dedupeKey = `AUTO_TIME_BLOCK|${date}|${start_time}`;
+
+    try {
+      const out = await speakAnnouncement(msg, { cooldownMs, dedupeKey, pingDelayMs: 2000 });
+      if (out?.ok && !out?.skipped) {
+        console.log(`[AUTO] Announced time block ${date} ${start_time} (${time12})`);
+      }
+    } catch (e) {
+      console.error("[AUTO] Failed to announce:", e?.stack || e?.message || e);
+    }
+  }
+}
+
+function startServerAutoAnnouncer() {
+  if (!SERVER_AUTO_ENABLED) return;
+  console.log(`[AUTO] Server-side auto announcer enabled: ${SERVER_AUTO_CHECK_MS}ms tick, lead ${SERVER_AUTO_LEAD_MS / 60000} minutes`);
+  setInterval(() => {
+    runServerAutoAnnouncerTick().catch((e) => {
+      console.error("[AUTO] Tick error:", e?.stack || e?.message || e);
+    });
+  }, SERVER_AUTO_CHECK_MS);
+}
+
+// Start after the server has booted.
+startServerAutoAnnouncer();
