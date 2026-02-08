@@ -78,3 +78,6 @@ temp/
 # Optional: Ignore local-only ops notes
 ############################
 ops-notes/
+
+# Local HTML fixtures
+/tests/fixtures/retention/*.html
