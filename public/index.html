@@ -40,7 +40,16 @@ QA checklist (v4.9-beta):
       --cat-danger:#FF9CB3;
       --cat-strong:#061B1E;
       --cat-border:rgba(0, 200, 220, .35);
-    }
+    
+  --bg: #eaffff;
+  --cardA: #ffffff;
+  --cardB: #f2ffff;
+  --text: #05121a;
+  --muted: rgba(5,18,26,.72);
+  --line: rgba(5,18,26,.18);
+  --accent: #00b6ff;
+  --accent2: #7c3aed;
+}
     *{ box-sizing:border-box; }
     body *{ transition: none !important; }
     body{
@@ -2620,11 +2629,7 @@ QA checklist (v4.9-beta):
     if (toggleBtn) toggleBtn.classList.toggle('show', managerSidebarCollapsed);
   }
 
-  function handleManagerScroll() {
-    if (window.scrollY > 120) {
-      toggleManagerSidebar(true);
-    }
-  }
+  function handleManagerScroll() { /* disabled: keep sidebar persistent */ }
 
   function showGlobalError(message, retryFn) {
     const banner = el('managerErrorBanner');
@@ -4019,7 +4024,7 @@ QA checklist (v4.9-beta):
     let expirationDate = '';
     if (startDate) {
       const d = new Date(`${startDate}T00:00:00`);
-      d.setDate(d.getDate() + weeks * 7);
+      d.setDate(d.getDate() + (weeks - 1) * 7);
       expirationDate = d.toISOString().split('T')[0];
     }
     return { discountedMonthly, totalBilled, houseCredit, expirationDate };
@@ -4370,36 +4375,47 @@ QA checklist (v4.9-beta):
       const prevMap = new Map(prevRows.map((row) => [normalizeKey(row.instructor), row]));
 
       let sortMode = el('retentionSortSelect')?.value || 'alpha';
+
       const rows = currentRows.map((row) => {
         const prev = prevMap.get(normalizeKey(row.instructor)) || {};
-        const deltaPercent = row.retention_percent != null && prev.retention_percent != null
-          ? row.retention_percent - prev.retention_percent
-          : null;
-        const deltaSwimmers = row.swimmer_count != null && prev.swimmer_count != null
-          ? row.swimmer_count - prev.swimmer_count
-          : null;
-        const status = prev.retention_percent == null ? 'NEW' : (deltaPercent < 0 ? 'Drop' : 'Stable');
+        const newPercent = row.percent_retained ?? row.retention_percent ?? null;
+        const lastPercent = prev.percent_retained ?? prev.retention_percent ?? null;
+        const deltaPercent = newPercent != null && lastPercent != null ? (newPercent - lastPercent) : null;
+
+        const booked = row.booked ?? null;
+        const retained = row.retained ?? null;
+
+        const status = lastPercent == null ? 'NEW' : (deltaPercent != null && deltaPercent < 0 ? 'Drop' : 'Stable');
+
         return {
           instructor: row.instructor,
-          newPercent: row.retention_percent,
-          lastPercent: prev.retention_percent,
+          booked,
+          retained,
+          newPercent,
+          lastPercent,
           deltaPercent,
-          newSwimmers: row.swimmer_count,
-          lastSwimmers: prev.swimmer_count,
-          deltaSwimmers,
           status
         };
       });
 
       if (sortMode === 'best') {
-        rows.sort((a, b) => (b.newPercent ?? -999) - (a.newPercent ?? -999));
+        rows.sort((a,b) => (b.newPercent ?? -1) - (a.newPercent ?? -1));
       } else if (sortMode === 'worst') {
-        rows.sort((a, b) => (a.newPercent ?? 999) - (b.newPercent ?? 999));
+        rows.sort((a,b) => (a.newPercent ?? 999) - (b.newPercent ?? 999));
       } else {
-        rows.sort((a, b) => String(a.instructor || '').localeCompare(String(b.instructor || '')));
+        rows.sort((a,b) => String(a.instructor||'').localeCompare(String(b.instructor||'')));
       }
 
       const tableRows = rows.map((row) => [
+        row.instructor,
+        row.booked ?? '—',
+        row.retained ?? '—',
+        formatPercent(row.newPercent),
+        formatPercent(row.lastPercent),
+        formatDelta(row.deltaPercent, '%', 2),
+        row.status === 'Drop' ? '⚠️ Drop' : row.status
+      ]);
+((row) => [
         row.instructor,
         formatPercent(row.newPercent),
         formatPercent(row.lastPercent),
@@ -4420,9 +4436,9 @@ QA checklist (v4.9-beta):
           </select>
         </div>
         ${tableRows.length ? renderTable(
-          ['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'],
+          ['Instructor', 'Booked', 'Retained', '% Retained', 'Last %', 'Δ%', 'Status'],
           tableRows,
-          { alignRight: [1,2,3,4,5,6] }
+          { alignRight: [1,2,3,4,5] }
         ) : '<div class="tiny" style="color:var(--muted);">No retention uploads yet.</div>'}
       `;
       const sortSelect = el('retentionSortSelect');
@@ -4789,7 +4805,7 @@ QA checklist (v4.9-beta):
           status
         };
       });
-      const headers = ['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'];
+      const headers = ['Instructor', 'Booked', 'Retained', '% Retained', 'Last %', 'Δ%', 'Status'];
       const tableRows = rows.map((row) => [
         escapeHtml(row.instructor || '—'),
         `<span class="table-num">${formatPercent(row.newPercent)}</span>`,
@@ -4839,7 +4855,7 @@ QA checklist (v4.9-beta):
       } else if (currentBreakdownType === 'retention') {
         const previous = reports[1]?.data_json ? JSON.parse(reports[1].data_json).instructors || [] : [];
         const prevMap = new Map(previous.map((i) => [String(i.instructor || '').toLowerCase(), i]));
-        headers = [['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'],
+        headers = [['Instructor', 'Booked', 'Retained', '% Retained', 'Last %', 'Δ%', 'Status'],
           ...(parsed.instructors || []).map((row) => {
             const prev = prevMap.get(String(row.instructor || '').toLowerCase());
             if (!prev) {
@@ -7776,7 +7792,7 @@ if(!activeDateISO || !blocksList.length) {
   el('deleteLatestDropListBtn')?.addEventListener('click', () => deleteLatestReport('drop_list'));
 
   el('sidebarToggleBtn')?.addEventListener('click', () => toggleManagerSidebar(false));
-  window.addEventListener('scroll', handleManagerScroll);
+  // window.addEventListener('scroll', handleManagerScroll); // disabled: keep sidebar persistent
 
   el('openShortcutsBtn')?.addEventListener('click', () => showModal('shortcutsModal', true));
   el('shortcutsClose')?.addEventListener('click', () => showModal('shortcutsModal', false));
