@@ -475,6 +475,12 @@ upsertTpl.run(
 }
 ensureSchema();
 
+// Additive migration for drop_followups (older DBs may exist).
+try {
+  const dropCols = db.prepare(`PRAGMA table_info(drop_followups)`).all().map((r) => r.name);
+  if (!dropCols.includes('drop_key_source')) db.exec(`ALTER TABLE drop_followups ADD COLUMN drop_key_source TEXT;`);
+} catch (_) { /* table may not exist yet */ }
+
 app.get("/api/health", (req, res) => {
   try {
     let locations_count = null;
@@ -3322,7 +3328,17 @@ app.get("/api/drop-followups", (req, res) => {
     }
 
     const rows = db.prepare(`
-      SELECT drop_key_source, swimmer_name, drop_date, drop_type, attended_override, notes, updated_at
+      SELECT
+        drop_key,
+        drop_key_source,
+        swimmer_name,
+        drop_date,
+        instructor_name,
+        drop_kind,
+        program_type,
+        attended_trial,
+        notes,
+        updated_at
       FROM drop_followups
       WHERE ${where.join(' AND ')}
       ORDER BY updated_at DESC
@@ -3338,7 +3354,7 @@ app.get("/api/drop-followups", (req, res) => {
 
 app.post("/api/drop-followups/upsert", (req, res) => {
   try {
-    const { location_id, drop_key_source, swimmer_name, drop_date, drop_type, attended_override, notes, initials, pin } = req.body || {};
+    const { location_id, drop_key_source, swimmer_name, drop_date, drop_type, instructor_name, attended_override, notes, initials, pin } = req.body || {};
     const locId = Number(location_id || 0);
     if (!locId || !drop_key_source) {
       return res.status(400).json({ ok: false, error: "location_id and drop_key_source required" });
@@ -3353,39 +3369,92 @@ app.post("/api/drop-followups/upsert", (req, res) => {
     }
 
     const now = nowISO();
+    const dropKey = sha(String(drop_key_source));
     let att = null;
     if (attended_override === 0 || attended_override === "0") att = 0;
     if (attended_override === 1 || attended_override === "1") att = 1;
 
-    db.prepare(`
-      INSERT INTO drop_followups (
-        location_id, drop_key_source, swimmer_name, drop_date, drop_type, attended_override, notes, created_at, updated_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?
-      )
-      ON CONFLICT(location_id, drop_key_source) DO UPDATE SET
-        swimmer_name=excluded.swimmer_name,
-        drop_date=excluded.drop_date,
-        drop_type=excluded.drop_type,
-        attended_override=excluded.attended_override,
-        notes=excluded.notes,
-        updated_at=excluded.updated_at
-    `).run(
-      locId,
-      String(drop_key_source),
-      swimmer_name || null,
-      drop_date || null,
-      drop_type || null,
-      att,
-      notes || null,
-      now,
-      now
-    );
+    // Best-effort: persist the key source if the column exists.
+    try {
+      const cols = db.prepare(`PRAGMA table_info(drop_followups)`).all().map((r) => r.name);
+      if (!cols.includes('drop_key_source')) db.exec(`ALTER TABLE drop_followups ADD COLUMN drop_key_source TEXT;`);
+    } catch (_) { /* ignore */ }
+
+    const hasKeySource = (() => {
+      try {
+        const cols = db.prepare(`PRAGMA table_info(drop_followups)`).all().map((r) => r.name);
+        return cols.includes('drop_key_source');
+      } catch (_) {
+        return false;
+      }
+    })();
+
+    if (hasKeySource) {
+      db.prepare(`
+        INSERT INTO drop_followups (
+          location_id, drop_key, drop_key_source, swimmer_name, drop_date, instructor_name, drop_kind, program_type, attended_trial, notes, created_at, updated_at
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+        ON CONFLICT(location_id, drop_key) DO UPDATE SET
+          drop_key_source=excluded.drop_key_source,
+          swimmer_name=excluded.swimmer_name,
+          drop_date=excluded.drop_date,
+          instructor_name=excluded.instructor_name,
+          drop_kind=excluded.drop_kind,
+          program_type=excluded.program_type,
+          attended_trial=excluded.attended_trial,
+          notes=excluded.notes,
+          updated_at=excluded.updated_at
+      `).run(
+        locId,
+        dropKey,
+        String(drop_key_source),
+        swimmer_name || null,
+        drop_date || null,
+        instructor_name || null,
+        drop_type || null,
+        null,
+        att,
+        notes || null,
+        now,
+        now
+      );
+    } else {
+      db.prepare(`
+        INSERT INTO drop_followups (
+          location_id, drop_key, swimmer_name, drop_date, instructor_name, drop_kind, program_type, attended_trial, notes, created_at, updated_at
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+        ON CONFLICT(location_id, drop_key) DO UPDATE SET
+          swimmer_name=excluded.swimmer_name,
+          drop_date=excluded.drop_date,
+          instructor_name=excluded.instructor_name,
+          drop_kind=excluded.drop_kind,
+          program_type=excluded.program_type,
+          attended_trial=excluded.attended_trial,
+          notes=excluded.notes,
+          updated_at=excluded.updated_at
+      `).run(
+        locId,
+        dropKey,
+        swimmer_name || null,
+        drop_date || null,
+        instructor_name || null,
+        drop_type || null,
+        null,
+        att,
+        notes || null,
+        now,
+        now
+      );
+    }
 
     audit(req, "drop_followup_upsert", { details: { location_id: locId, swimmer_name, drop_date, drop_type, initials: initialsClean } });
     logActivity("drop_followup_upsert", { location_id: locId, initials: initialsClean, details: { swimmer_name, drop_date, drop_type } });
 
-    res.json({ ok: true });
+    res.json({ ok: true, drop_key: dropKey });
   } catch (error) {
     console.error("Drop followups upsert error:", error);
     res.status(500).json({ ok: false, error: error.message });
