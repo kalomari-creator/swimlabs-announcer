@@ -5470,6 +5470,13 @@ QA checklist (v4.9-beta):
     if (systemLock) {
       systemLock.classList.add('hidden');
     }
+
+    // Manager/Admin navigation is a persistent left sidebar (no hamburger).
+    const sidebar = el('managerSidebar');
+    if (sidebar) sidebar.classList.remove('collapsed');
+    managerSidebarCollapsed = false;
+    const sidebarToggle = el('sidebarToggleBtn');
+    if (sidebarToggle) sidebarToggle.style.display = 'none';
   }
 
   function syncDeviceUI(){
