@@ -7,31 +7,28 @@ const crypto = require("crypto");
 const cheerio = require('cheerio');
 const multer = require('multer');
 
+const managerReportParsers = require('./lib/managerReportParsers');
+
 // Configure multer for file uploads (store in memory)
 const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
-const PORT = 5055;
-// ---- CORS CONFIG (REQUIRED FOR TAILSCALE + IP ACCESS) ----
-const ALLOWED_ORIGINS = new Set([
-  "http://100.102.148.122:5055",
-  "http://swimlabs-server-ser.tail8048a1.ts.net:5055",
-]);
-
+const PORT = Number(process.env.PORT) || 5056;
+// ---- CORS CONFIG (LAN + TAILSCALE + MULTI-PORT FRIENDLY) ----
+// Allow the requesting Origin (if present). This keeps the UI working whether served
+// from 5055, 5056, a LAN IP, or a Tailscale hostname.
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
+  if (origin) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 // ---- END CORS CONFIG ----
@@ -460,6 +457,28 @@ upsertTpl.run(
 }
 ensureSchema();
 
+app.get("/api/health", (req, res) => {
+  try {
+    let locations_count = null;
+    try {
+      const row = db.prepare("SELECT COUNT(*) AS c FROM locations WHERE active = 1").get();
+      locations_count = row ? row.c : 0;
+    } catch (e) {
+      locations_count = null;
+    }
+
+    res.json({
+      ok: true,
+      port: PORT,
+      cwd: APP_ROOT,
+      db_path: dbPath,
+      locations_count
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // -------------------- Lockout per IP --------------------
 const ipAuthState = new Map();
 
@@ -700,104 +719,100 @@ function parseRetentionReport(html) {
   const $ = cheerio.load(html || "");
   const warnings = [];
   const instructors = [];
-  const tables = $("table").toArray();
-  if (!tables.length) warnings.push("No retention tables detected.");
 
-  const tableSet = new Set(tables);
-  const nodes = $("body").find("*").toArray();
-
-  const extractPercent = (table) => {
-    const cell = $(table).find("tr").first().find("th,td").eq(1);
-    const text = cell.text().trim();
-    const match = text.match(/-?\d+(\.\d+)?/);
-    return match ? parseFloat(match[0]) : null;
+  // Date brackets (displayed as-is from report)
+  const getSpanValue = (label) => {
+    let val = null;
+    $("span").each((_, span) => {
+      const strong = $(span).find("strong").first();
+      const strongText = strong.text().replace(/\s+/g, " ").trim().toLowerCase();
+      if (!strongText) return;
+      if (strongText.startsWith(label.toLowerCase())) {
+        const full = $(span).text().replace(/\s+/g, " ").trim();
+        val = full.replace(new RegExp("^\\s*" + label.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&") + "\\s*:?\\s*", "i"), "").trim();
+      }
+    });
+    return val;
   };
 
-  const extractSwimmerCount = (tableList) => {
-    for (const table of tableList) {
-      const rows = $(table).find("tr");
-      for (let i = 0; i < rows.length; i += 1) {
-        const cells = $(rows[i]).find("th,td").toArray();
-        for (let j = 0; j < cells.length; j += 1) {
-          const text = $(cells[j]).text().trim().toLowerCase();
-          if (text.includes("swimmer") || text.includes("student") || text.includes("count")) {
-            const nextCell = cells[j + 1];
-            if (nextCell) {
-              const numMatch = $(nextCell).text().match(/-?\d+(\.\d+)?/);
-              if (numMatch) return parseFloat(numMatch[0]);
-            }
-          }
+  const asOf = getSpanValue("As Of Date");
+  const retainedDate = getSpanValue("Retained Date");
+  const date_bracket = {
+    as_of: asOf || null,
+    retained: retainedDate || null
+  };
+
+  // The retention report uses a repeated table-per-instructor layout with <h2>Instructor Name</h2>
+  const tables = $("table.report-table.table.table-top.no-margin-bottom").toArray();
+  if (!tables.length) warnings.push("No instructor retention tables found.");
+
+  const safeInt = (s) => {
+    const m = String(s || "").match(/-?\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  };
+
+  const safeFloat = (s) => {
+    const m = String(s || "").match(/-?\d+(\.\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+  };
+
+  for (const table of tables) {
+    const instructor = $(table).find("h2").first().text().replace(/\s+/g, " ").trim();
+    if (!instructor) continue;
+
+    // Find the "Totals" header tbody, then the next tbody with the numeric totals row
+    const tbodies = $(table).children("tbody").toArray();
+    let totalsHeaderIdx = -1;
+    for (let i = 0; i < tbodies.length; i += 1) {
+      const h2 = $(tbodies[i]).find("h2").first().text().replace(/\s+/g, " ").trim().toLowerCase();
+      if (h2 === "totals") {
+        totalsHeaderIdx = i;
+        break;
+      }
+    }
+
+    let booked = null;
+    let retained = null;
+    let percent_retained = null;
+
+    if (totalsHeaderIdx >= 0) {
+      for (let j = totalsHeaderIdx + 1; j < tbodies.length; j += 1) {
+        const tb = tbodies[j];
+        const classList = ($(tb).attr("class") || "").toLowerCase();
+        // the totals value row is typically "time shaded-alt"
+        if (!classList.includes("time")) continue;
+
+        const row = $(tb).find("tr").first();
+        const strongs = row.find("strong").toArray().map((n) => $(n).text().trim());
+        const smalls = row.find("small").toArray().map((n) => $(n).text().trim());
+
+        if (strongs.length >= 2) {
+          booked = safeInt(strongs[0]);
+          retained = safeInt(strongs[1]);
+
+          // Percent is associated with retained total cell (second strong)
+          // In practice the last <small> in this row is the percent retained.
+          const lastSmall = smalls.length ? smalls[smalls.length - 1] : null;
+          percent_retained = lastSmall ? safeFloat(lastSmall.replace("%", "")) : null;
         }
+        break;
       }
     }
-    return null;
-  };
 
-  let i = 0;
-  while (i < nodes.length) {
-    const node = nodes[i];
-    if (tableSet.has(node)) {
-      i += 1;
-      continue;
+    if (booked == null || retained == null || percent_retained == null) {
+      warnings.push(`Could not parse totals for instructor: ${instructor}`);
     }
-    const text = $(node).text().replace(/\s+/g, " ").trim();
-    const isCandidate = text.length > 1 && text.length < 60 && /[a-z]/i.test(text);
-    if (!isCandidate) {
-      i += 1;
-      continue;
-    }
-    const tableList = [];
-    let j = i + 1;
-    while (j < nodes.length && tableList.length < 4) {
-      if (tableSet.has(nodes[j])) tableList.push(nodes[j]);
-      j += 1;
-    }
-    if (tableList.length === 4) {
-      const retentionPercent = extractPercent(tableList[1]);
-      const swimmerCount = extractSwimmerCount(tableList);
-      instructors.push({
-        instructor: text,
-        retention_percent: retentionPercent,
-        swimmer_count: swimmerCount
-      });
-      i = j;
-      continue;
-    }
-    i += 1;
-  }
 
-  if (!instructors.length) {
-    const { headers, rows } = parseHTMLTable(html);
-    if (!rows.length) warnings.push("No retention rows detected.");
-    const headerMap = headers.map((h) => h.toLowerCase());
-    const instructorIdx = headerMap.findIndex((h) => h.includes("instructor") || h.includes("coach"));
-    const percentIdx = headerMap.findIndex((h) => h.includes("%") || h.includes("retention"));
-    const countIdx = headerMap.findIndex((h) => h.includes("swimmer") || h.includes("count"));
-    rows.forEach((cols) => {
-      const instructor = cols[instructorIdx >= 0 ? instructorIdx : 0] || "";
-      const percentRaw = cols[percentIdx >= 0 ? percentIdx : 1] || "";
-      const countRaw = cols[countIdx >= 0 ? countIdx : 2] || "";
-      const percentMatch = String(percentRaw).match(/-?\d+(\.\d+)?/);
-      const countMatch = String(countRaw).match(/-?\d+(\.\d+)?/);
-      if (instructor.trim()) {
-        instructors.push({
-          instructor: instructor.trim(),
-          retention_percent: percentMatch ? parseFloat(percentMatch[0]) : null,
-          swimmer_count: countMatch ? parseFloat(countMatch[0]) : null
-        });
-      }
+    instructors.push({
+      instructor,
+      booked,
+      retained,
+      retention_percent: percent_retained,
+      percent_retained
     });
   }
 
-  if (!instructors.length) warnings.push("No instructors detected in retention report.");
-  return { instructors, warnings };
-}
-
-function parseAgedAccountsReport(html) {
-  const { headers, rows } = parseHTMLTable(html);
-  const warnings = [];
-  if (!rows.length) warnings.push("No aged accounts rows detected.");
-  return { headers, rows, warnings };
+  return { warnings, date_bracket, instructors };
 }
 
 function parseDropListReport(html) {
@@ -832,7 +847,7 @@ function calculateBundle({ durationWeeks, monthlyPrice, startDate }) {
   let expirationDate = null;
   if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate))) {
     const start = new Date(`${startDate}T00:00:00`);
-    start.setDate(start.getDate() + weeks * 7);
+    start.setDate(start.getDate() + (weeks - 1) * 7);
     expirationDate = start.toISOString().split("T")[0];
   }
   return {
@@ -2903,9 +2918,9 @@ app.post("/api/manager-reports/preview", upload.single("report"), (req, res) => 
     const locationName = parseLocationFromHTML(html);
     const reportDate = parseDateFromHTML(html);
     let parsed = null;
-    if (reportType === "retention") parsed = parseRetentionReport(html);
-    if (reportType === "aged_accounts") parsed = parseAgedAccountsReport(html);
-    if (reportType === "drop_list") parsed = parseDropListReport(html);
+    if (reportType === "retention") parsed = managerReportParsers.parseRetentionReport(html);
+    if (reportType === "aged_accounts") parsed = managerReportParsers.parseAgedAccountsReport(html);
+    if (reportType === "drop_list") parsed = managerReportParsers.parseDropListReport(html);
     const summary = {
       location_name: locationName,
       report_type: reportType,
@@ -2962,9 +2977,9 @@ app.post("/api/manager-reports/upload", upload.single("report"), (req, res) => {
 
     const reportDate = parseDateFromHTML(html);
     let parsed = null;
-    if (reportType === "retention") parsed = parseRetentionReport(html);
-    if (reportType === "aged_accounts") parsed = parseAgedAccountsReport(html);
-    if (reportType === "drop_list") parsed = parseDropListReport(html);
+    if (reportType === "retention") parsed = managerReportParsers.parseRetentionReport(html);
+    if (reportType === "aged_accounts") parsed = managerReportParsers.parseAgedAccountsReport(html);
+    if (reportType === "drop_list") parsed = managerReportParsers.parseDropListReport(html);
     const warnings = parsed?.warnings || [];
     if (locationName && locId && location && resolveLocationByName(locationName)?.id !== location.id) {
       warnings.push(`HTML location "${locationName}" does not match selected location.`);
@@ -3499,11 +3514,25 @@ function inferLocationTimeZone(location) {
 
 app.get("/api/locations", (req, res) => {
   try {
-    const locations = db.prepare(`SELECT * FROM locations WHERE active = 1 ORDER BY id`).all();
-    const enriched = (locations || []).map((loc) => ({
+    // Prefer active locations, but never return an empty list (prevents UI "Loading locations..." forever
+    // when a location import forgot to set active=1).
+    let locations = [];
+    try {
+      locations = db.prepare(`SELECT * FROM locations WHERE active = 1 ORDER BY id`).all() || [];
+    } catch (e) {
+      // If schema doesn't have "active", fall back below.
+      locations = [];
+    }
+
+    if (!locations.length) {
+      locations = db.prepare(`SELECT * FROM locations ORDER BY id`).all() || [];
+    }
+
+    const enriched = locations.map((loc) => ({
       ...loc,
       time_zone: loc.time_zone || loc.timeZone || inferLocationTimeZone(loc) || null
     }));
+
     res.json({ ok: true, locations: enriched });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
@@ -5342,8 +5371,9 @@ function scheduleGuardTaskSnapshots() {
 
 scheduleGuardTaskSnapshots();
 
-app.listen(PORT, () => {
-  console.log(`SwimLabs Announcer server running on http://localhost:${PORT}`);
+const HOST = process.env.HOST || process.env.BIND_IP || '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`SwimLabs Announcer server running on http://${HOST}:${PORT} (bound to ${HOST})`);
 });
 
 

@@ -4374,6 +4374,18 @@ QA checklist (v4.9-beta):
       const prevRows = previous?.data_json ? JSON.parse(previous.data_json).instructors || [] : [];
       const prevMap = new Map(prevRows.map((row) => [normalizeKey(row.instructor), row]));
 
+      let dateBracketText = '';
+      try {
+        const parsed = latest?.data_json ? JSON.parse(latest.data_json) : null;
+        const bracket = parsed?.date_bracket || null;
+        dateBracketText = bracket?.raw || [
+          bracket?.as_of ? `As Of Date: ${bracket.as_of}` : null,
+          bracket?.retained ? `Retained Date: ${bracket.retained}` : null
+        ].filter(Boolean).join(' | ') || '';
+      } catch (e) {
+        dateBracketText = '';
+      }
+
       let sortMode = el('retentionSortSelect')?.value || 'alpha';
 
       const rows = currentRows.map((row) => {
@@ -4427,6 +4439,7 @@ QA checklist (v4.9-beta):
       ]);
 
       el('retentionTable').innerHTML = `
+        ${dateBracketText ? `<div class="tiny" style="color:var(--muted); margin-bottom:8px;">Date Bracket: ${escapeHtml(dateBracketText)}</div>` : ''}
         <div class="row" style="margin-bottom:8px;">
           <span class="pill tiny">Sort</span>
           <select id="retentionSortSelect">
