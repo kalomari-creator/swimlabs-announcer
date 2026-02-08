@@ -13,7 +13,7 @@ const managerReportParsers = require('./lib/managerReportParsers');
 const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
-const PORT = Number(process.env.PORT) || 5056;
+const PORT = Number(process.env.PORT) || 5055;
 // ---- CORS CONFIG (LAN + TAILSCALE + MULTI-PORT FRIENDLY) ----
 // Allow the requesting Origin (if present). This keeps the UI working whether served
 // from 5055, 5056, a LAN IP, or a Tailscale hostname.
