@@ -1206,6 +1206,19 @@ QA checklist (v4.9-beta):
               <input type="date" id="clientDropStart" />
               <input type="date" id="clientDropEnd" />
               <button class="secondary miniBtn" id="clientDropApply">Apply</button>
+              <select id="clientDropTypeFilter">
+                <option value="all">All types</option>
+                <option value="trial">Trial</option>
+                <option value="makeup">Makeup</option>
+                <option value="regular">Regular</option>
+              </select>
+              <select id="clientDropAttendedFilter">
+                <option value="all">Attended (all)</option>
+                <option value="yes">Attended</option>
+                <option value="no">Not attended</option>
+                <option value="unknown">Unknown</option>
+              </select>
+              <input type="text" id="clientDropSearch" placeholder="Search swimmer..." style="min-width:180px;" />
             </div>
             <div id="clientDropListTable"></div>
           </div>
@@ -2289,7 +2302,7 @@ QA checklist (v4.9-beta):
   ];
   const dismissedNotificationsKey = 'manager_notifications_dismissed';
   const managerSectionFilters = {
-    client: { start: null, end: null, instructor: '', status: '', showTrends: true, dropRange: '7', dropStart: '', dropEnd: '' },
+    client: { start: null, end: null, instructor: '', status: '', showTrends: true, dropRange: '7', dropStart: '', dropEnd: '', dropType: 'all', dropAttended: 'all', dropSearch: '' },
     instructors: { showTrends: true },
     billing: {},
     system: {},
@@ -3873,7 +3886,7 @@ QA checklist (v4.9-beta):
         const parsed = report.data_json ? JSON.parse(report.data_json) : {};
         return parsed.entries || [];
       });
-      renderClientDropList(entries);
+      await renderClientDropListEnhanced(entries);
     } catch (e) {
       showInlineError('clientDropListTable', `Drop list failed: ${e.message}`, loadClientDropList);
     }
@@ -3947,6 +3960,9 @@ QA checklist (v4.9-beta):
       el('clientDropRange').value = managerSectionFilters.client.dropRange;
       el('clientDropStart').value = managerSectionFilters.client.dropStart;
       el('clientDropEnd').value = managerSectionFilters.client.dropEnd;
+      if (el('clientDropTypeFilter')) el('clientDropTypeFilter').value = managerSectionFilters.client.dropType || 'all';
+      if (el('clientDropAttendedFilter')) el('clientDropAttendedFilter').value = managerSectionFilters.client.dropAttended || 'all';
+      if (el('clientDropSearch')) el('clientDropSearch').value = managerSectionFilters.client.dropSearch || '';
       const isCustom = managerSectionFilters.client.dropRange === 'custom';
       el('clientDropStart').classList.toggle('hidden', !isCustom);
       el('clientDropEnd').classList.toggle('hidden', !isCustom);
@@ -7746,6 +7762,23 @@ if(!activeDateISO || !blocksList.length) {
     managerSectionFilters.client.dropEnd = el('clientDropEnd').value;
     loadClientDropList();
   });
+  el('clientDropTypeFilter')?.addEventListener('change', () => {
+    managerSectionFilters.client.dropType = el('clientDropTypeFilter').value;
+    loadClientDropList();
+  });
+
+  el('clientDropAttendedFilter')?.addEventListener('change', () => {
+    managerSectionFilters.client.dropAttended = el('clientDropAttendedFilter').value;
+    loadClientDropList();
+  });
+
+  let clientDropSearchTimer = null;
+  el('clientDropSearch')?.addEventListener('input', () => {
+    managerSectionFilters.client.dropSearch = el('clientDropSearch').value;
+    if (clientDropSearchTimer) clearTimeout(clientDropSearchTimer);
+    clientDropSearchTimer = setTimeout(() => loadClientDropList(), 200);
+  });
+
   el('clientDropRange')?.addEventListener('change', () => {
     const isCustom = el('clientDropRange').value === 'custom';
     el('clientDropStart').classList.toggle('hidden', !isCustom);
@@ -9019,6 +9052,205 @@ el('settingsSave')?.addEventListener('click', async () => {
       // Start clock update (runs independently of announcements)
       startCountdown();
     }
+  }
+
+
+  function normalizeSpaceText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function buildDropKeySource(entry) {
+    const parsed = parseDropDetails(entry.raw || []);
+    const nameKey = normalizeKey(parsed.name || '');
+    const dropDate = entry.drop_date || '';
+    const rawKey = normalizeKey(normalizeSpaceText(parsed.rawString)).slice(0, 200);
+    return `${currentLocation?.id || ''}|${dropDate}|${nameKey}|${rawKey}`;
+  }
+
+  function inferDropType(entry) {
+    const parsed = parseDropDetails(entry.raw || []);
+    const tagText = (parsed.tags || []).join(' ').toLowerCase();
+    const raw = (parsed.rawString || '').toLowerCase();
+    if (tagText.includes('trial') || raw.includes('trial')) return 'trial';
+    if (tagText.includes('makeup') || raw.includes('makeup')) return 'makeup';
+    return 'regular';
+  }
+
+  async function renderClientDropListEnhanced(entries) {
+    const filteredByDate = applyClientDropFilters(entries || []);
+    if (!filteredByDate.length) {
+      renderClientDropList(filteredByDate);
+      return;
+    }
+
+    const typeFilter = managerSectionFilters.client.dropType || 'all';
+    const attendedFilter = managerSectionFilters.client.dropAttended || 'all';
+    const search = normalizeKey(managerSectionFilters.client.dropSearch || '');
+
+    const endISO = todayISO();
+    const startHist = new Date();
+    startHist.setDate(startHist.getDate() - 180);
+    const histStartISO = startHist.toISOString().split('T')[0];
+
+    let followupRows = [];
+    let historyRows = [];
+    try {
+      const follow = await api(`/api/drop-followups?location_id=${currentLocation.id}&start=${histStartISO}&end=${endISO}`);
+      followupRows = follow.rows || [];
+    } catch (_) {
+      followupRows = [];
+    }
+    try {
+      const hist = await api(`/api/attendance-history?location_id=${currentLocation.id}&start=${histStartISO}&end=${endISO}&limit=2000`);
+      historyRows = hist.rows || [];
+    } catch (_) {
+      historyRows = [];
+    }
+
+    const followupMap = new Map(followupRows.map((r) => [String(r.drop_key_source), r]));
+    const historyBySwimmer = new Map();
+    historyRows.forEach((row) => {
+      const key = normalizeKey(row.swimmer_name);
+      if (!historyBySwimmer.has(key)) historyBySwimmer.set(key, []);
+      historyBySwimmer.get(key).push(row);
+    });
+
+    const computeTrialAttendance = (nameKey) => {
+      const rows = historyBySwimmer.get(nameKey) || [];
+      const trialRows = rows.filter((r) => r.flag_trial === 1 || /trial/i.test(String(r.program || '')));
+      if (!trialRows.length) return 'unknown';
+      if (trialRows.some((r) => r.attendance === 1)) return 'yes';
+      if (trialRows.some((r) => r.attendance === 0)) return 'no';
+      return 'unknown';
+    };
+
+    const enriched = filteredByDate.map((entry) => {
+      const parsed = parseDropDetails(entry.raw || []);
+      const nameKey = normalizeKey(parsed.name || '');
+      const dropType = inferDropType(entry);
+      const keySource = buildDropKeySource(entry);
+      const follow = followupMap.get(keySource) || null;
+
+      let attended = null;
+      if (dropType === 'trial' && nameKey) {
+        attended = computeTrialAttendance(nameKey);
+      }
+
+      if (follow && follow.attended_override !== null && follow.attended_override !== undefined) {
+        attended = follow.attended_override === 1 ? 'yes' : 'no';
+      }
+
+      return { entry, parsed, dropType, keySource, follow, attended: attended || 'unknown' };
+    }).filter((row) => {
+      if (search) {
+        const hay = normalizeKey(`${row.parsed.name || ''} ${row.parsed.rawString || ''}`);
+        if (!hay.includes(search)) return false;
+      }
+      if (typeFilter !== 'all' && row.dropType !== typeFilter) return false;
+      if (attendedFilter !== 'all') {
+        if (row.dropType !== 'trial') return false;
+        if ((row.attended || 'unknown') !== attendedFilter) return false;
+      }
+      return true;
+    });
+
+    if (!enriched.length) {
+      el('clientDropListTable').innerHTML = renderEmptyState({
+        icon: '📉',
+        title: 'No drops match these filters',
+        description: 'Try widening the date range or clearing filters.'
+      });
+      return;
+    }
+
+    const displayRows = enriched.slice(0, 20);
+    const moreCount = enriched.length - displayRows.length;
+
+    const rowsHtml = displayRows.map((row) => {
+      const attendedText = row.dropType === 'trial' ? (row.attended === 'yes' ? 'Yes' : row.attended === 'no' ? 'No' : 'Unknown') : '—';
+      const notes = row.follow?.notes || '';
+      const attendedOverride = row.follow?.attended_override;
+
+      const selectHtml = row.dropType === 'trial' ? `
+        <select data-drop-attended>
+          <option value="" ${attendedOverride == null ? 'selected' : ''}>Auto (${attendedText})</option>
+          <option value="1" ${attendedOverride === 1 ? 'selected' : ''}>Yes</option>
+          <option value="0" ${attendedOverride === 0 ? 'selected' : ''}>No</option>
+        </select>` : '';
+
+      return `
+        <tr data-drop-key-source="${escapeHtml(row.keySource)}" data-drop-name="${escapeHtml(row.parsed.name || '')}" data-drop-date="${escapeHtml(row.entry.drop_date || '')}" data-drop-type="${escapeHtml(row.dropType)}">
+          <td>${formatDateUS(row.entry.drop_date)}</td>
+          <td>
+            ${renderDropDetails(row.entry, row.keySource)}
+            <div class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap;">
+              <span class="chip">${escapeHtml(row.dropType)}</span>
+              ${row.dropType === 'trial' ? `<span class="chip">Attended: ${escapeHtml(attendedText)}</span>` : ''}
+            </div>
+            <div class="row" style="gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">
+              ${selectHtml}
+              <input type="text" data-drop-notes placeholder="Follow-up notes..." value="${escapeHtml(notes)}" style="min-width:240px; flex:1;" />
+              <button class="secondary miniBtn" data-drop-save>Save</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    el('clientDropListTable').innerHTML = `
+      ${moreCount > 0 ? `<div class="tiny" style="color:var(--muted); margin-bottom:6px;">Showing first 20 of ${enriched.length} drops.</div>` : ''}
+      <table>
+        <thead>
+          <tr>
+            <th>Drop Date</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `;
+
+    el('clientDropListTable').querySelectorAll('[data-drop-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.dropToggle;
+        const target = el('clientDropListTable').querySelector(`[data-drop-full="${escapeSelector(key)}"]`);
+        if (target) target.classList.toggle('hidden');
+      });
+    });
+
+    el('clientDropListTable').querySelectorAll('[data-drop-save]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const tr = btn.closest('tr');
+        const keySource = tr?.dataset.dropKeySource || '';
+        const notesVal = tr?.querySelector('[data-drop-notes]')?.value || '';
+        const attendedVal = tr?.querySelector('[data-drop-attended]')?.value || '';
+        const dropDate = tr?.dataset.dropDate || '';
+
+        const confirmed = await openProtectedAction({
+          title: 'Save drop follow-up',
+          message: `Save notes for ${dropDate}`,
+          requireInitials: true,
+          requirePin: true
+        });
+        if (!confirmed.ok) return;
+
+        await api('/api/drop-followups/upsert', {
+          method: 'POST',
+          body: JSON.stringify({
+            location_id: currentLocation.id,
+            drop_key_source: keySource,
+            swimmer_name: tr?.dataset.dropName || null,
+            drop_date: tr?.dataset.dropDate || null,
+            drop_type: tr?.dataset.dropType || null,
+            attended_override: attendedVal === '' ? null : attendedVal,
+            notes: notesVal || '',
+            initials: confirmed.initials,
+            pin: confirmed.pin
+          })
+        });
+
+        await loadClientDropList();
+      });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', initApp);

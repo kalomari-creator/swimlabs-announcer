@@ -329,6 +329,24 @@ upsertTpl.run(
     );
   `);
 
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS drop_followups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id INTEGER NOT NULL,
+      drop_key_source TEXT NOT NULL,
+      swimmer_name TEXT,
+      drop_date TEXT,
+      drop_type TEXT,
+      attended_override INTEGER DEFAULT NULL,
+      notes TEXT,
+      created_at TEXT,
+      updated_at TEXT,
+      UNIQUE(location_id, drop_key_source)
+    );
+  `);
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_drop_followups_location_date ON drop_followups(location_id, drop_date);`);
   db.exec(`
     CREATE TABLE IF NOT EXISTS bundle_tracker (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3184,7 +3202,7 @@ app.get("/api/attendance-history", (req, res) => {
     const limit = Math.min(Number(req.query?.limit || 500), 2000);
     if (!locId) return res.status(400).json({ ok: false, error: "location_id required" });
     const rows = db.prepare(`
-      SELECT date, start_time, swimmer_name, instructor_name, program, attendance, attendance_at, attendance_auto_absent, updated_at
+      SELECT date, start_time, swimmer_name, instructor_name, program, flag_trial, flag_makeup, attendance, attendance_at, attendance_auto_absent, updated_at
       FROM roster
       WHERE location_id = ? AND date BETWEEN ? AND ?
       ORDER BY date DESC, start_time DESC, swimmer_name ASC
@@ -3284,6 +3302,92 @@ app.post("/api/absence-tracker/update", (req, res) => {
     res.json({ ok: true, status: nextStatus });
   } catch (error) {
     console.error("Absence tracker update error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ==================== DROP FOLLOW-UPS (DROP LIST) ====================
+app.get("/api/drop-followups", (req, res) => {
+  try {
+    const locId = Number(req.query?.location_id || 0);
+    const start = req.query?.start || null;
+    const end = req.query?.end || null;
+    if (!locId) return res.status(400).json({ ok: false, error: "location_id required" });
+
+    const where = ["location_id = ?"];
+    const params = [locId];
+    if (start && end) {
+      where.push("(drop_date IS NULL OR (drop_date BETWEEN ? AND ?))");
+      params.push(start, end);
+    }
+
+    const rows = db.prepare(`
+      SELECT drop_key_source, swimmer_name, drop_date, drop_type, attended_override, notes, updated_at
+      FROM drop_followups
+      WHERE ${where.join(' AND ')}
+      ORDER BY updated_at DESC
+      LIMIT 2000
+    `).all(...params);
+
+    res.json({ ok: true, rows });
+  } catch (error) {
+    console.error("Drop followups list error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post("/api/drop-followups/upsert", (req, res) => {
+  try {
+    const { location_id, drop_key_source, swimmer_name, drop_date, drop_type, attended_override, notes, initials, pin } = req.body || {};
+    const locId = Number(location_id || 0);
+    if (!locId || !drop_key_source) {
+      return res.status(400).json({ ok: false, error: "location_id and drop_key_source required" });
+    }
+    const initialsClean = normalizeInitials(initials);
+    if (!initialsClean) {
+      return res.status(400).json({ ok: false, error: "Initials required" });
+    }
+    const pinCheck = verifyPin(pin, "manager");
+    if (!pinCheck.ok) {
+      return res.status(401).json({ ok: false, error: "Invalid manager PIN" });
+    }
+
+    const now = nowISO();
+    let att = null;
+    if (attended_override === 0 || attended_override === "0") att = 0;
+    if (attended_override === 1 || attended_override === "1") att = 1;
+
+    db.prepare(`
+      INSERT INTO drop_followups (
+        location_id, drop_key_source, swimmer_name, drop_date, drop_type, attended_override, notes, created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+      ON CONFLICT(location_id, drop_key_source) DO UPDATE SET
+        swimmer_name=excluded.swimmer_name,
+        drop_date=excluded.drop_date,
+        drop_type=excluded.drop_type,
+        attended_override=excluded.attended_override,
+        notes=excluded.notes,
+        updated_at=excluded.updated_at
+    `).run(
+      locId,
+      String(drop_key_source),
+      swimmer_name || null,
+      drop_date || null,
+      drop_type || null,
+      att,
+      notes || null,
+      now,
+      now
+    );
+
+    audit(req, "drop_followup_upsert", { details: { location_id: locId, swimmer_name, drop_date, drop_type, initials: initialsClean } });
+    logActivity("drop_followup_upsert", { location_id: locId, initials: initialsClean, details: { swimmer_name, drop_date, drop_type } });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Drop followups upsert error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
