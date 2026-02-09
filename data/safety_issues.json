@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "date": "2026-02-07",
+    "start_time": "09:30",
+    "location_id": 1,
+    "note": "940 megan bt 943",
+    "updated_at": "2026-02-07T14:43:26.583Z"
+  },
+  {
+    "date": "2026-02-07",
+    "start_time": "14:30",
+    "location_id": 1,
+    "note": "megan 2:52/53",
+    "updated_at": "2026-02-07T19:54:05.766Z"
+  }
+]

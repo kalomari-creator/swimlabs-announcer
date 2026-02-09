@@ -40,16 +40,7 @@ QA checklist (v4.9-beta):
       --cat-danger:#FF9CB3;
       --cat-strong:#061B1E;
       --cat-border:rgba(0, 200, 220, .35);
-    
-  --bg: #eaffff;
-  --cardA: #ffffff;
-  --cardB: #f2ffff;
-  --text: #05121a;
-  --muted: rgba(5,18,26,.72);
-  --line: rgba(5,18,26,.18);
-  --accent: #00b6ff;
-  --accent2: #7c3aed;
-}
+    }
     *{ box-sizing:border-box; }
     body *{ transition: none !important; }
     body{
@@ -549,6 +540,22 @@ QA checklist (v4.9-beta):
       background: rgba(255,43,43,0.24) !important;
     }
 
+
+    /* Attendance row highlighting (high-contrast) */
+    .row-here{
+      background: rgba(0, 255, 140, 0.20) !important;
+      box-shadow: inset 0 0 0 2px rgba(0, 255, 140, 0.55);
+    }
+    .row-here:hover{
+      background: rgba(0, 255, 140, 0.26) !important;
+    }
+    .row-absent{
+      background: rgba(255, 43, 43, 0.18) !important;
+      box-shadow: inset 0 0 0 2px rgba(255, 43, 43, 0.55);
+    }
+    .row-absent:hover{
+      background: rgba(255, 43, 43, 0.24) !important;
+    }
     .guard-section {
       padding: 14px;
       border: 1px solid rgba(255,255,255,.08);
@@ -1206,19 +1213,6 @@ QA checklist (v4.9-beta):
               <input type="date" id="clientDropStart" />
               <input type="date" id="clientDropEnd" />
               <button class="secondary miniBtn" id="clientDropApply">Apply</button>
-              <select id="clientDropTypeFilter">
-                <option value="all">All types</option>
-                <option value="trial">Trial</option>
-                <option value="makeup">Makeup</option>
-                <option value="regular">Regular</option>
-              </select>
-              <select id="clientDropAttendedFilter">
-                <option value="all">Attended (all)</option>
-                <option value="yes">Attended</option>
-                <option value="no">Not attended</option>
-                <option value="unknown">Unknown</option>
-              </select>
-              <input type="text" id="clientDropSearch" placeholder="Search swimmer..." style="min-width:180px;" />
             </div>
             <div id="clientDropListTable"></div>
           </div>
@@ -2302,7 +2296,7 @@ QA checklist (v4.9-beta):
   ];
   const dismissedNotificationsKey = 'manager_notifications_dismissed';
   const managerSectionFilters = {
-    client: { start: null, end: null, instructor: '', status: '', showTrends: true, dropRange: '7', dropStart: '', dropEnd: '', dropType: 'all', dropAttended: 'all', dropSearch: '' },
+    client: { start: null, end: null, instructor: '', status: '', showTrends: true, dropRange: '7', dropStart: '', dropEnd: '' },
     instructors: { showTrends: true },
     billing: {},
     system: {},
@@ -2642,7 +2636,11 @@ QA checklist (v4.9-beta):
     if (toggleBtn) toggleBtn.classList.toggle('show', managerSidebarCollapsed);
   }
 
-  function handleManagerScroll() { /* disabled: keep sidebar persistent */ }
+  function handleManagerScroll() {
+    if (window.scrollY > 120) {
+      toggleManagerSidebar(true);
+    }
+  }
 
   function showGlobalError(message, retryFn) {
     const banner = el('managerErrorBanner');
@@ -3886,7 +3884,7 @@ QA checklist (v4.9-beta):
         const parsed = report.data_json ? JSON.parse(report.data_json) : {};
         return parsed.entries || [];
       });
-      await renderClientDropListEnhanced(entries);
+      renderClientDropList(entries);
     } catch (e) {
       showInlineError('clientDropListTable', `Drop list failed: ${e.message}`, loadClientDropList);
     }
@@ -3960,9 +3958,6 @@ QA checklist (v4.9-beta):
       el('clientDropRange').value = managerSectionFilters.client.dropRange;
       el('clientDropStart').value = managerSectionFilters.client.dropStart;
       el('clientDropEnd').value = managerSectionFilters.client.dropEnd;
-      if (el('clientDropTypeFilter')) el('clientDropTypeFilter').value = managerSectionFilters.client.dropType || 'all';
-      if (el('clientDropAttendedFilter')) el('clientDropAttendedFilter').value = managerSectionFilters.client.dropAttended || 'all';
-      if (el('clientDropSearch')) el('clientDropSearch').value = managerSectionFilters.client.dropSearch || '';
       const isCustom = managerSectionFilters.client.dropRange === 'custom';
       el('clientDropStart').classList.toggle('hidden', !isCustom);
       el('clientDropEnd').classList.toggle('hidden', !isCustom);
@@ -4040,7 +4035,7 @@ QA checklist (v4.9-beta):
     let expirationDate = '';
     if (startDate) {
       const d = new Date(`${startDate}T00:00:00`);
-      d.setDate(d.getDate() + (weeks - 1) * 7);
+      d.setDate(d.getDate() + weeks * 7);
       expirationDate = d.toISOString().split('T')[0];
     }
     return { discountedMonthly, totalBilled, houseCredit, expirationDate };
@@ -4390,60 +4385,37 @@ QA checklist (v4.9-beta):
       const prevRows = previous?.data_json ? JSON.parse(previous.data_json).instructors || [] : [];
       const prevMap = new Map(prevRows.map((row) => [normalizeKey(row.instructor), row]));
 
-      let dateBracketText = '';
-      try {
-        const parsed = latest?.data_json ? JSON.parse(latest.data_json) : null;
-        const bracket = parsed?.date_bracket || null;
-        dateBracketText = bracket?.raw || [
-          bracket?.as_of ? `As Of Date: ${bracket.as_of}` : null,
-          bracket?.retained ? `Retained Date: ${bracket.retained}` : null
-        ].filter(Boolean).join(' | ') || '';
-      } catch (e) {
-        dateBracketText = '';
-      }
-
       let sortMode = el('retentionSortSelect')?.value || 'alpha';
-
       const rows = currentRows.map((row) => {
         const prev = prevMap.get(normalizeKey(row.instructor)) || {};
-        const newPercent = row.percent_retained ?? row.retention_percent ?? null;
-        const lastPercent = prev.percent_retained ?? prev.retention_percent ?? null;
-        const deltaPercent = newPercent != null && lastPercent != null ? (newPercent - lastPercent) : null;
-
-        const booked = row.booked ?? null;
-        const retained = row.retained ?? null;
-
-        const status = lastPercent == null ? 'NEW' : (deltaPercent != null && deltaPercent < 0 ? 'Drop' : 'Stable');
-
+        const deltaPercent = row.retention_percent != null && prev.retention_percent != null
+          ? row.retention_percent - prev.retention_percent
+          : null;
+        const deltaSwimmers = row.swimmer_count != null && prev.swimmer_count != null
+          ? row.swimmer_count - prev.swimmer_count
+          : null;
+        const status = prev.retention_percent == null ? 'NEW' : (deltaPercent < 0 ? 'Drop' : 'Stable');
         return {
           instructor: row.instructor,
-          booked,
-          retained,
-          newPercent,
-          lastPercent,
+          newPercent: row.retention_percent,
+          lastPercent: prev.retention_percent,
           deltaPercent,
+          newSwimmers: row.swimmer_count,
+          lastSwimmers: prev.swimmer_count,
+          deltaSwimmers,
           status
         };
       });
 
       if (sortMode === 'best') {
-        rows.sort((a,b) => (b.newPercent ?? -1) - (a.newPercent ?? -1));
+        rows.sort((a, b) => (b.newPercent ?? -999) - (a.newPercent ?? -999));
       } else if (sortMode === 'worst') {
-        rows.sort((a,b) => (a.newPercent ?? 999) - (b.newPercent ?? 999));
+        rows.sort((a, b) => (a.newPercent ?? 999) - (b.newPercent ?? 999));
       } else {
-        rows.sort((a,b) => String(a.instructor||'').localeCompare(String(b.instructor||'')));
+        rows.sort((a, b) => String(a.instructor || '').localeCompare(String(b.instructor || '')));
       }
 
       const tableRows = rows.map((row) => [
-        row.instructor,
-        row.booked ?? '—',
-        row.retained ?? '—',
-        formatPercent(row.newPercent),
-        formatPercent(row.lastPercent),
-        formatDelta(row.deltaPercent, '%', 2),
-        row.status === 'Drop' ? '⚠️ Drop' : row.status
-      ]);
-((row) => [
         row.instructor,
         formatPercent(row.newPercent),
         formatPercent(row.lastPercent),
@@ -4455,7 +4427,6 @@ QA checklist (v4.9-beta):
       ]);
 
       el('retentionTable').innerHTML = `
-        ${dateBracketText ? `<div class="tiny" style="color:var(--muted); margin-bottom:8px;">Date Bracket: ${escapeHtml(dateBracketText)}</div>` : ''}
         <div class="row" style="margin-bottom:8px;">
           <span class="pill tiny">Sort</span>
           <select id="retentionSortSelect">
@@ -4465,9 +4436,9 @@ QA checklist (v4.9-beta):
           </select>
         </div>
         ${tableRows.length ? renderTable(
-          ['Instructor', 'Booked', 'Retained', '% Retained', 'Last %', 'Δ%', 'Status'],
+          ['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'],
           tableRows,
-          { alignRight: [1,2,3,4,5] }
+          { alignRight: [1,2,3,4,5,6] }
         ) : '<div class="tiny" style="color:var(--muted);">No retention uploads yet.</div>'}
       `;
       const sortSelect = el('retentionSortSelect');
@@ -4834,7 +4805,7 @@ QA checklist (v4.9-beta):
           status
         };
       });
-      const headers = ['Instructor', 'Booked', 'Retained', '% Retained', 'Last %', 'Δ%', 'Status'];
+      const headers = ['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'];
       const tableRows = rows.map((row) => [
         escapeHtml(row.instructor || '—'),
         `<span class="table-num">${formatPercent(row.newPercent)}</span>`,
@@ -4884,7 +4855,7 @@ QA checklist (v4.9-beta):
       } else if (currentBreakdownType === 'retention') {
         const previous = reports[1]?.data_json ? JSON.parse(reports[1].data_json).instructors || [] : [];
         const prevMap = new Map(previous.map((i) => [String(i.instructor || '').toLowerCase(), i]));
-        headers = [['Instructor', 'Booked', 'Retained', '% Retained', 'Last %', 'Δ%', 'Status'],
+        headers = [['Instructor', 'New Retention %', 'Last Retention %', 'Δ%', 'New Swimmers', 'Last Swimmers', 'Δ Swimmers', 'Status'],
           ...(parsed.instructors || []).map((row) => {
             const prev = prevMap.get(String(row.instructor || '').toLowerCase());
             if (!prev) {
@@ -5486,13 +5457,6 @@ QA checklist (v4.9-beta):
     if (systemLock) {
       systemLock.classList.add('hidden');
     }
-
-    // Manager/Admin navigation is a persistent left sidebar (no hamburger).
-    const sidebar = el('managerSidebar');
-    if (sidebar) sidebar.classList.remove('collapsed');
-    managerSidebarCollapsed = false;
-    const sidebarToggle = el('sidebarToggleBtn');
-    if (sidebarToggle) sidebarToggle.style.display = 'none';
   }
 
   function syncDeviceUI(){
@@ -6080,6 +6044,13 @@ if(!activeDateISO || !blocksList.length) {
 
       if (kid.attendance_auto_absent) {
         tr.classList.add('row-auto-absent');
+      }
+
+      // Attendance-driven row highlight
+      if (kid.attendance === 1) {
+        tr.classList.add('row-here');
+      } else if (kid.attendance === 0) {
+        tr.classList.add('row-absent');
       }
 
       // Attendance
@@ -7762,23 +7733,6 @@ if(!activeDateISO || !blocksList.length) {
     managerSectionFilters.client.dropEnd = el('clientDropEnd').value;
     loadClientDropList();
   });
-  el('clientDropTypeFilter')?.addEventListener('change', () => {
-    managerSectionFilters.client.dropType = el('clientDropTypeFilter').value;
-    loadClientDropList();
-  });
-
-  el('clientDropAttendedFilter')?.addEventListener('change', () => {
-    managerSectionFilters.client.dropAttended = el('clientDropAttendedFilter').value;
-    loadClientDropList();
-  });
-
-  let clientDropSearchTimer = null;
-  el('clientDropSearch')?.addEventListener('input', () => {
-    managerSectionFilters.client.dropSearch = el('clientDropSearch').value;
-    if (clientDropSearchTimer) clearTimeout(clientDropSearchTimer);
-    clientDropSearchTimer = setTimeout(() => loadClientDropList(), 200);
-  });
-
   el('clientDropRange')?.addEventListener('change', () => {
     const isCustom = el('clientDropRange').value === 'custom';
     el('clientDropStart').classList.toggle('hidden', !isCustom);
@@ -7845,7 +7799,7 @@ if(!activeDateISO || !blocksList.length) {
   el('deleteLatestDropListBtn')?.addEventListener('click', () => deleteLatestReport('drop_list'));
 
   el('sidebarToggleBtn')?.addEventListener('click', () => toggleManagerSidebar(false));
-  // window.addEventListener('scroll', handleManagerScroll); // disabled: keep sidebar persistent
+  window.addEventListener('scroll', handleManagerScroll);
 
   el('openShortcutsBtn')?.addEventListener('click', () => showModal('shortcutsModal', true));
   el('shortcutsClose')?.addEventListener('click', () => showModal('shortcutsModal', false));
@@ -9052,205 +9006,6 @@ el('settingsSave')?.addEventListener('click', async () => {
       // Start clock update (runs independently of announcements)
       startCountdown();
     }
-  }
-
-
-  function normalizeSpaceText(value) {
-    return String(value || '').replace(/\s+/g, ' ').trim();
-  }
-
-  function buildDropKeySource(entry) {
-    const parsed = parseDropDetails(entry.raw || []);
-    const nameKey = normalizeKey(parsed.name || '');
-    const dropDate = entry.drop_date || '';
-    const rawKey = normalizeKey(normalizeSpaceText(parsed.rawString)).slice(0, 200);
-    return `${currentLocation?.id || ''}|${dropDate}|${nameKey}|${rawKey}`;
-  }
-
-  function inferDropType(entry) {
-    const parsed = parseDropDetails(entry.raw || []);
-    const tagText = (parsed.tags || []).join(' ').toLowerCase();
-    const raw = (parsed.rawString || '').toLowerCase();
-    if (tagText.includes('trial') || raw.includes('trial')) return 'trial';
-    if (tagText.includes('makeup') || raw.includes('makeup')) return 'makeup';
-    return 'regular';
-  }
-
-  async function renderClientDropListEnhanced(entries) {
-    const filteredByDate = applyClientDropFilters(entries || []);
-    if (!filteredByDate.length) {
-      renderClientDropList(filteredByDate);
-      return;
-    }
-
-    const typeFilter = managerSectionFilters.client.dropType || 'all';
-    const attendedFilter = managerSectionFilters.client.dropAttended || 'all';
-    const search = normalizeKey(managerSectionFilters.client.dropSearch || '');
-
-    const endISO = todayISO();
-    const startHist = new Date();
-    startHist.setDate(startHist.getDate() - 180);
-    const histStartISO = startHist.toISOString().split('T')[0];
-
-    let followupRows = [];
-    let historyRows = [];
-    try {
-      const follow = await api(`/api/drop-followups?location_id=${currentLocation.id}&start=${histStartISO}&end=${endISO}`);
-      followupRows = follow.rows || [];
-    } catch (_) {
-      followupRows = [];
-    }
-    try {
-      const hist = await api(`/api/attendance-history?location_id=${currentLocation.id}&start=${histStartISO}&end=${endISO}&limit=2000`);
-      historyRows = hist.rows || [];
-    } catch (_) {
-      historyRows = [];
-    }
-
-    const followupMap = new Map(followupRows.map((r) => [String(r.drop_key_source), r]));
-    const historyBySwimmer = new Map();
-    historyRows.forEach((row) => {
-      const key = normalizeKey(row.swimmer_name);
-      if (!historyBySwimmer.has(key)) historyBySwimmer.set(key, []);
-      historyBySwimmer.get(key).push(row);
-    });
-
-    const computeTrialAttendance = (nameKey) => {
-      const rows = historyBySwimmer.get(nameKey) || [];
-      const trialRows = rows.filter((r) => r.flag_trial === 1 || /trial/i.test(String(r.program || '')));
-      if (!trialRows.length) return 'unknown';
-      if (trialRows.some((r) => r.attendance === 1)) return 'yes';
-      if (trialRows.some((r) => r.attendance === 0)) return 'no';
-      return 'unknown';
-    };
-
-    const enriched = filteredByDate.map((entry) => {
-      const parsed = parseDropDetails(entry.raw || []);
-      const nameKey = normalizeKey(parsed.name || '');
-      const dropType = inferDropType(entry);
-      const keySource = buildDropKeySource(entry);
-      const follow = followupMap.get(keySource) || null;
-
-      let attended = null;
-      if (dropType === 'trial' && nameKey) {
-        attended = computeTrialAttendance(nameKey);
-      }
-
-      if (follow && follow.attended_override !== null && follow.attended_override !== undefined) {
-        attended = follow.attended_override === 1 ? 'yes' : 'no';
-      }
-
-      return { entry, parsed, dropType, keySource, follow, attended: attended || 'unknown' };
-    }).filter((row) => {
-      if (search) {
-        const hay = normalizeKey(`${row.parsed.name || ''} ${row.parsed.rawString || ''}`);
-        if (!hay.includes(search)) return false;
-      }
-      if (typeFilter !== 'all' && row.dropType !== typeFilter) return false;
-      if (attendedFilter !== 'all') {
-        if (row.dropType !== 'trial') return false;
-        if ((row.attended || 'unknown') !== attendedFilter) return false;
-      }
-      return true;
-    });
-
-    if (!enriched.length) {
-      el('clientDropListTable').innerHTML = renderEmptyState({
-        icon: '📉',
-        title: 'No drops match these filters',
-        description: 'Try widening the date range or clearing filters.'
-      });
-      return;
-    }
-
-    const displayRows = enriched.slice(0, 20);
-    const moreCount = enriched.length - displayRows.length;
-
-    const rowsHtml = displayRows.map((row) => {
-      const attendedText = row.dropType === 'trial' ? (row.attended === 'yes' ? 'Yes' : row.attended === 'no' ? 'No' : 'Unknown') : '—';
-      const notes = row.follow?.notes || '';
-      const attendedOverride = row.follow?.attended_override;
-
-      const selectHtml = row.dropType === 'trial' ? `
-        <select data-drop-attended>
-          <option value="" ${attendedOverride == null ? 'selected' : ''}>Auto (${attendedText})</option>
-          <option value="1" ${attendedOverride === 1 ? 'selected' : ''}>Yes</option>
-          <option value="0" ${attendedOverride === 0 ? 'selected' : ''}>No</option>
-        </select>` : '';
-
-      return `
-        <tr data-drop-key-source="${escapeHtml(row.keySource)}" data-drop-name="${escapeHtml(row.parsed.name || '')}" data-drop-date="${escapeHtml(row.entry.drop_date || '')}" data-drop-type="${escapeHtml(row.dropType)}">
-          <td>${formatDateUS(row.entry.drop_date)}</td>
-          <td>
-            ${renderDropDetails(row.entry, row.keySource)}
-            <div class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap;">
-              <span class="chip">${escapeHtml(row.dropType)}</span>
-              ${row.dropType === 'trial' ? `<span class="chip">Attended: ${escapeHtml(attendedText)}</span>` : ''}
-            </div>
-            <div class="row" style="gap:8px; margin-top:8px; align-items:center; flex-wrap:wrap;">
-              ${selectHtml}
-              <input type="text" data-drop-notes placeholder="Follow-up notes..." value="${escapeHtml(notes)}" style="min-width:240px; flex:1;" />
-              <button class="secondary miniBtn" data-drop-save>Save</button>
-            </div>
-          </td>
-        </tr>`;
-    }).join('');
-
-    el('clientDropListTable').innerHTML = `
-      ${moreCount > 0 ? `<div class="tiny" style="color:var(--muted); margin-bottom:6px;">Showing first 20 of ${enriched.length} drops.</div>` : ''}
-      <table>
-        <thead>
-          <tr>
-            <th>Drop Date</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    `;
-
-    el('clientDropListTable').querySelectorAll('[data-drop-toggle]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const key = btn.dataset.dropToggle;
-        const target = el('clientDropListTable').querySelector(`[data-drop-full="${escapeSelector(key)}"]`);
-        if (target) target.classList.toggle('hidden');
-      });
-    });
-
-    el('clientDropListTable').querySelectorAll('[data-drop-save]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const tr = btn.closest('tr');
-        const keySource = tr?.dataset.dropKeySource || '';
-        const notesVal = tr?.querySelector('[data-drop-notes]')?.value || '';
-        const attendedVal = tr?.querySelector('[data-drop-attended]')?.value || '';
-        const dropDate = tr?.dataset.dropDate || '';
-
-        const confirmed = await openProtectedAction({
-          title: 'Save drop follow-up',
-          message: `Save notes for ${dropDate}`,
-          requireInitials: true,
-          requirePin: true
-        });
-        if (!confirmed.ok) return;
-
-        await api('/api/drop-followups/upsert', {
-          method: 'POST',
-          body: JSON.stringify({
-            location_id: currentLocation.id,
-            drop_key_source: keySource,
-            swimmer_name: tr?.dataset.dropName || null,
-            drop_date: tr?.dataset.dropDate || null,
-            drop_type: tr?.dataset.dropType || null,
-            attended_override: attendedVal === '' ? null : attendedVal,
-            notes: notesVal || '',
-            initials: confirmed.initials,
-            pin: confirmed.pin
-          })
-        });
-
-        await loadClientDropList();
-      });
-    });
   }
 
   document.addEventListener('DOMContentLoaded', initApp);

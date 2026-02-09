@@ -81,3 +81,7 @@ ops-notes/
 
 # Local HTML fixtures
 /tests/fixtures/retention/*.html
+
+# Local generated schedules
+schedules/
+
