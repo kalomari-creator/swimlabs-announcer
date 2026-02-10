@@ -7,28 +7,31 @@ const crypto = require("crypto");
 const cheerio = require('cheerio');
 const multer = require('multer');
 
-const managerReportParsers = require('./lib/managerReportParsers');
-
 // Configure multer for file uploads (store in memory)
 const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
-const PORT = Number(process.env.PORT) || 5055;
-// ---- CORS CONFIG (LAN + TAILSCALE + MULTI-PORT FRIENDLY) ----
-// Allow the requesting Origin (if present). This keeps the UI working whether served
-// from 5055, 5056, a LAN IP, or a Tailscale hostname.
+const PORT = 5055;
+// ---- CORS CONFIG (REQUIRED FOR TAILSCALE + IP ACCESS) ----
+const ALLOWED_ORIGINS = new Set([
+  "http://100.102.148.122:5055",
+  "http://swimlabs-server-ser.tail8048a1.ts.net:5055",
+]);
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (origin) {
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
 
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
   next();
 });
 // ---- END CORS CONFIG ----
@@ -329,24 +332,6 @@ upsertTpl.run(
     );
   `);
 
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS drop_followups (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      location_id INTEGER NOT NULL,
-      drop_key_source TEXT NOT NULL,
-      swimmer_name TEXT,
-      drop_date TEXT,
-      drop_type TEXT,
-      attended_override INTEGER DEFAULT NULL,
-      notes TEXT,
-      created_at TEXT,
-      updated_at TEXT,
-      UNIQUE(location_id, drop_key_source)
-    );
-  `);
-
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_drop_followups_location_date ON drop_followups(location_id, drop_date);`);
   db.exec(`
     CREATE TABLE IF NOT EXISTS bundle_tracker (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -474,34 +459,6 @@ upsertTpl.run(
   db.exec(`CREATE INDEX IF NOT EXISTS idx_observations_location_date ON observations(location_id, date);`);
 }
 ensureSchema();
-
-// Additive migration for drop_followups (older DBs may exist).
-try {
-  const dropCols = db.prepare(`PRAGMA table_info(drop_followups)`).all().map((r) => r.name);
-  if (!dropCols.includes('drop_key_source')) db.exec(`ALTER TABLE drop_followups ADD COLUMN drop_key_source TEXT;`);
-} catch (_) { /* table may not exist yet */ }
-
-app.get("/api/health", (req, res) => {
-  try {
-    let locations_count = null;
-    try {
-      const row = db.prepare("SELECT COUNT(*) AS c FROM locations WHERE active = 1").get();
-      locations_count = row ? row.c : 0;
-    } catch (e) {
-      locations_count = null;
-    }
-
-    res.json({
-      ok: true,
-      port: PORT,
-      cwd: APP_ROOT,
-      db_path: dbPath,
-      locations_count
-    });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
 
 // -------------------- Lockout per IP --------------------
 const ipAuthState = new Map();
@@ -702,7 +659,13 @@ function parseDateFromText(text) {
 }
 
 function parseDateFromHTML(html) {
-  const stripped = String(html || "")
+  const raw = String(html || "");
+  // iClassPro Roll Sheets embed a JSON "filters" object with an authoritative startDate.
+  // Example: "startDate":"2026-02-02 00:00:00"
+  let m = raw.match(/"startDate"\s*:\s*"?(\d{4}-\d{2}-\d{2})/i);
+  if (m && m[1]) return m[1];
+
+  const stripped = raw
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ");
@@ -743,100 +706,104 @@ function parseRetentionReport(html) {
   const $ = cheerio.load(html || "");
   const warnings = [];
   const instructors = [];
+  const tables = $("table").toArray();
+  if (!tables.length) warnings.push("No retention tables detected.");
 
-  // Date brackets (displayed as-is from report)
-  const getSpanValue = (label) => {
-    let val = null;
-    $("span").each((_, span) => {
-      const strong = $(span).find("strong").first();
-      const strongText = strong.text().replace(/\s+/g, " ").trim().toLowerCase();
-      if (!strongText) return;
-      if (strongText.startsWith(label.toLowerCase())) {
-        const full = $(span).text().replace(/\s+/g, " ").trim();
-        val = full.replace(new RegExp("^\\s*" + label.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&") + "\\s*:?\\s*", "i"), "").trim();
-      }
-    });
-    return val;
+  const tableSet = new Set(tables);
+  const nodes = $("body").find("*").toArray();
+
+  const extractPercent = (table) => {
+    const cell = $(table).find("tr").first().find("th,td").eq(1);
+    const text = cell.text().trim();
+    const match = text.match(/-?\d+(\.\d+)?/);
+    return match ? parseFloat(match[0]) : null;
   };
 
-  const asOf = getSpanValue("As Of Date");
-  const retainedDate = getSpanValue("Retained Date");
-  const date_bracket = {
-    as_of: asOf || null,
-    retained: retainedDate || null
-  };
-
-  // The retention report uses a repeated table-per-instructor layout with <h2>Instructor Name</h2>
-  const tables = $("table.report-table.table.table-top.no-margin-bottom").toArray();
-  if (!tables.length) warnings.push("No instructor retention tables found.");
-
-  const safeInt = (s) => {
-    const m = String(s || "").match(/-?\d+/);
-    return m ? parseInt(m[0], 10) : null;
-  };
-
-  const safeFloat = (s) => {
-    const m = String(s || "").match(/-?\d+(\.\d+)?/);
-    return m ? parseFloat(m[0]) : null;
-  };
-
-  for (const table of tables) {
-    const instructor = $(table).find("h2").first().text().replace(/\s+/g, " ").trim();
-    if (!instructor) continue;
-
-    // Find the "Totals" header tbody, then the next tbody with the numeric totals row
-    const tbodies = $(table).children("tbody").toArray();
-    let totalsHeaderIdx = -1;
-    for (let i = 0; i < tbodies.length; i += 1) {
-      const h2 = $(tbodies[i]).find("h2").first().text().replace(/\s+/g, " ").trim().toLowerCase();
-      if (h2 === "totals") {
-        totalsHeaderIdx = i;
-        break;
-      }
-    }
-
-    let booked = null;
-    let retained = null;
-    let percent_retained = null;
-
-    if (totalsHeaderIdx >= 0) {
-      for (let j = totalsHeaderIdx + 1; j < tbodies.length; j += 1) {
-        const tb = tbodies[j];
-        const classList = ($(tb).attr("class") || "").toLowerCase();
-        // the totals value row is typically "time shaded-alt"
-        if (!classList.includes("time")) continue;
-
-        const row = $(tb).find("tr").first();
-        const strongs = row.find("strong").toArray().map((n) => $(n).text().trim());
-        const smalls = row.find("small").toArray().map((n) => $(n).text().trim());
-
-        if (strongs.length >= 2) {
-          booked = safeInt(strongs[0]);
-          retained = safeInt(strongs[1]);
-
-          // Percent is associated with retained total cell (second strong)
-          // In practice the last <small> in this row is the percent retained.
-          const lastSmall = smalls.length ? smalls[smalls.length - 1] : null;
-          percent_retained = lastSmall ? safeFloat(lastSmall.replace("%", "")) : null;
+  const extractSwimmerCount = (tableList) => {
+    for (const table of tableList) {
+      const rows = $(table).find("tr");
+      for (let i = 0; i < rows.length; i += 1) {
+        const cells = $(rows[i]).find("th,td").toArray();
+        for (let j = 0; j < cells.length; j += 1) {
+          const text = $(cells[j]).text().trim().toLowerCase();
+          if (text.includes("swimmer") || text.includes("student") || text.includes("count")) {
+            const nextCell = cells[j + 1];
+            if (nextCell) {
+              const numMatch = $(nextCell).text().match(/-?\d+(\.\d+)?/);
+              if (numMatch) return parseFloat(numMatch[0]);
+            }
+          }
         }
-        break;
       }
     }
+    return null;
+  };
 
-    if (booked == null || retained == null || percent_retained == null) {
-      warnings.push(`Could not parse totals for instructor: ${instructor}`);
+  let i = 0;
+  while (i < nodes.length) {
+    const node = nodes[i];
+    if (tableSet.has(node)) {
+      i += 1;
+      continue;
     }
+    const text = $(node).text().replace(/\s+/g, " ").trim();
+    const isCandidate = text.length > 1 && text.length < 60 && /[a-z]/i.test(text);
+    if (!isCandidate) {
+      i += 1;
+      continue;
+    }
+    const tableList = [];
+    let j = i + 1;
+    while (j < nodes.length && tableList.length < 4) {
+      if (tableSet.has(nodes[j])) tableList.push(nodes[j]);
+      j += 1;
+    }
+    if (tableList.length === 4) {
+      const retentionPercent = extractPercent(tableList[1]);
+      const swimmerCount = extractSwimmerCount(tableList);
+      instructors.push({
+        instructor: text,
+        retention_percent: retentionPercent,
+        swimmer_count: swimmerCount
+      });
+      i = j;
+      continue;
+    }
+    i += 1;
+  }
 
-    instructors.push({
-      instructor,
-      booked,
-      retained,
-      retention_percent: percent_retained,
-      percent_retained
+  if (!instructors.length) {
+    const { headers, rows } = parseHTMLTable(html);
+    if (!rows.length) warnings.push("No retention rows detected.");
+    const headerMap = headers.map((h) => h.toLowerCase());
+    const instructorIdx = headerMap.findIndex((h) => h.includes("instructor") || h.includes("coach"));
+    const percentIdx = headerMap.findIndex((h) => h.includes("%") || h.includes("retention"));
+    const countIdx = headerMap.findIndex((h) => h.includes("swimmer") || h.includes("count"));
+    rows.forEach((cols) => {
+      const instructor = cols[instructorIdx >= 0 ? instructorIdx : 0] || "";
+      const percentRaw = cols[percentIdx >= 0 ? percentIdx : 1] || "";
+      const countRaw = cols[countIdx >= 0 ? countIdx : 2] || "";
+      const percentMatch = String(percentRaw).match(/-?\d+(\.\d+)?/);
+      const countMatch = String(countRaw).match(/-?\d+(\.\d+)?/);
+      if (instructor.trim()) {
+        instructors.push({
+          instructor: instructor.trim(),
+          retention_percent: percentMatch ? parseFloat(percentMatch[0]) : null,
+          swimmer_count: countMatch ? parseFloat(countMatch[0]) : null
+        });
+      }
     });
   }
 
-  return { warnings, date_bracket, instructors };
+  if (!instructors.length) warnings.push("No instructors detected in retention report.");
+  return { instructors, warnings };
+}
+
+function parseAgedAccountsReport(html) {
+  const { headers, rows } = parseHTMLTable(html);
+  const warnings = [];
+  if (!rows.length) warnings.push("No aged accounts rows detected.");
+  return { headers, rows, warnings };
 }
 
 function parseDropListReport(html) {
@@ -871,7 +838,7 @@ function calculateBundle({ durationWeeks, monthlyPrice, startDate }) {
   let expirationDate = null;
   if (startDate && /^\d{4}-\d{2}-\d{2}$/.test(String(startDate))) {
     const start = new Date(`${startDate}T00:00:00`);
-    start.setDate(start.getDate() + (weeks - 1) * 7);
+    start.setDate(start.getDate() + weeks * 7);
     expirationDate = start.toISOString().split("T")[0];
   }
   return {
@@ -2942,9 +2909,9 @@ app.post("/api/manager-reports/preview", upload.single("report"), (req, res) => 
     const locationName = parseLocationFromHTML(html);
     const reportDate = parseDateFromHTML(html);
     let parsed = null;
-    if (reportType === "retention") parsed = managerReportParsers.parseRetentionReport(html);
-    if (reportType === "aged_accounts") parsed = managerReportParsers.parseAgedAccountsReport(html);
-    if (reportType === "drop_list") parsed = managerReportParsers.parseDropListReport(html);
+    if (reportType === "retention") parsed = parseRetentionReport(html);
+    if (reportType === "aged_accounts") parsed = parseAgedAccountsReport(html);
+    if (reportType === "drop_list") parsed = parseDropListReport(html);
     const summary = {
       location_name: locationName,
       report_type: reportType,
@@ -3001,9 +2968,9 @@ app.post("/api/manager-reports/upload", upload.single("report"), (req, res) => {
 
     const reportDate = parseDateFromHTML(html);
     let parsed = null;
-    if (reportType === "retention") parsed = managerReportParsers.parseRetentionReport(html);
-    if (reportType === "aged_accounts") parsed = managerReportParsers.parseAgedAccountsReport(html);
-    if (reportType === "drop_list") parsed = managerReportParsers.parseDropListReport(html);
+    if (reportType === "retention") parsed = parseRetentionReport(html);
+    if (reportType === "aged_accounts") parsed = parseAgedAccountsReport(html);
+    if (reportType === "drop_list") parsed = parseDropListReport(html);
     const warnings = parsed?.warnings || [];
     if (locationName && locId && location && resolveLocationByName(locationName)?.id !== location.id) {
       warnings.push(`HTML location "${locationName}" does not match selected location.`);
@@ -3208,7 +3175,7 @@ app.get("/api/attendance-history", (req, res) => {
     const limit = Math.min(Number(req.query?.limit || 500), 2000);
     if (!locId) return res.status(400).json({ ok: false, error: "location_id required" });
     const rows = db.prepare(`
-      SELECT date, start_time, swimmer_name, instructor_name, program, flag_trial, flag_makeup, attendance, attendance_at, attendance_auto_absent, updated_at
+      SELECT date, start_time, swimmer_name, instructor_name, program, attendance, attendance_at, attendance_auto_absent, updated_at
       FROM roster
       WHERE location_id = ? AND date BETWEEN ? AND ?
       ORDER BY date DESC, start_time DESC, swimmer_name ASC
@@ -3308,155 +3275,6 @@ app.post("/api/absence-tracker/update", (req, res) => {
     res.json({ ok: true, status: nextStatus });
   } catch (error) {
     console.error("Absence tracker update error:", error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// ==================== DROP FOLLOW-UPS (DROP LIST) ====================
-app.get("/api/drop-followups", (req, res) => {
-  try {
-    const locId = Number(req.query?.location_id || 0);
-    const start = req.query?.start || null;
-    const end = req.query?.end || null;
-    if (!locId) return res.status(400).json({ ok: false, error: "location_id required" });
-
-    const where = ["location_id = ?"];
-    const params = [locId];
-    if (start && end) {
-      where.push("(drop_date IS NULL OR (drop_date BETWEEN ? AND ?))");
-      params.push(start, end);
-    }
-
-    const rows = db.prepare(`
-      SELECT
-        drop_key,
-        drop_key_source,
-        swimmer_name,
-        drop_date,
-        instructor_name,
-        drop_kind,
-        program_type,
-        attended_trial,
-        notes,
-        updated_at
-      FROM drop_followups
-      WHERE ${where.join(' AND ')}
-      ORDER BY updated_at DESC
-      LIMIT 2000
-    `).all(...params);
-
-    res.json({ ok: true, rows });
-  } catch (error) {
-    console.error("Drop followups list error:", error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-app.post("/api/drop-followups/upsert", (req, res) => {
-  try {
-    const { location_id, drop_key_source, swimmer_name, drop_date, drop_type, instructor_name, attended_override, notes, initials, pin } = req.body || {};
-    const locId = Number(location_id || 0);
-    if (!locId || !drop_key_source) {
-      return res.status(400).json({ ok: false, error: "location_id and drop_key_source required" });
-    }
-    const initialsClean = normalizeInitials(initials);
-    if (!initialsClean) {
-      return res.status(400).json({ ok: false, error: "Initials required" });
-    }
-    const pinCheck = verifyPin(pin, "manager");
-    if (!pinCheck.ok) {
-      return res.status(401).json({ ok: false, error: "Invalid manager PIN" });
-    }
-
-    const now = nowISO();
-    const dropKey = sha(String(drop_key_source));
-    let att = null;
-    if (attended_override === 0 || attended_override === "0") att = 0;
-    if (attended_override === 1 || attended_override === "1") att = 1;
-
-    // Best-effort: persist the key source if the column exists.
-    try {
-      const cols = db.prepare(`PRAGMA table_info(drop_followups)`).all().map((r) => r.name);
-      if (!cols.includes('drop_key_source')) db.exec(`ALTER TABLE drop_followups ADD COLUMN drop_key_source TEXT;`);
-    } catch (_) { /* ignore */ }
-
-    const hasKeySource = (() => {
-      try {
-        const cols = db.prepare(`PRAGMA table_info(drop_followups)`).all().map((r) => r.name);
-        return cols.includes('drop_key_source');
-      } catch (_) {
-        return false;
-      }
-    })();
-
-    if (hasKeySource) {
-      db.prepare(`
-        INSERT INTO drop_followups (
-          location_id, drop_key, drop_key_source, swimmer_name, drop_date, instructor_name, drop_kind, program_type, attended_trial, notes, created_at, updated_at
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-        )
-        ON CONFLICT(location_id, drop_key) DO UPDATE SET
-          drop_key_source=excluded.drop_key_source,
-          swimmer_name=excluded.swimmer_name,
-          drop_date=excluded.drop_date,
-          instructor_name=excluded.instructor_name,
-          drop_kind=excluded.drop_kind,
-          program_type=excluded.program_type,
-          attended_trial=excluded.attended_trial,
-          notes=excluded.notes,
-          updated_at=excluded.updated_at
-      `).run(
-        locId,
-        dropKey,
-        String(drop_key_source),
-        swimmer_name || null,
-        drop_date || null,
-        instructor_name || null,
-        drop_type || null,
-        null,
-        att,
-        notes || null,
-        now,
-        now
-      );
-    } else {
-      db.prepare(`
-        INSERT INTO drop_followups (
-          location_id, drop_key, swimmer_name, drop_date, instructor_name, drop_kind, program_type, attended_trial, notes, created_at, updated_at
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-        )
-        ON CONFLICT(location_id, drop_key) DO UPDATE SET
-          swimmer_name=excluded.swimmer_name,
-          drop_date=excluded.drop_date,
-          instructor_name=excluded.instructor_name,
-          drop_kind=excluded.drop_kind,
-          program_type=excluded.program_type,
-          attended_trial=excluded.attended_trial,
-          notes=excluded.notes,
-          updated_at=excluded.updated_at
-      `).run(
-        locId,
-        dropKey,
-        swimmer_name || null,
-        drop_date || null,
-        instructor_name || null,
-        drop_type || null,
-        null,
-        att,
-        notes || null,
-        now,
-        now
-      );
-    }
-
-    audit(req, "drop_followup_upsert", { details: { location_id: locId, swimmer_name, drop_date, drop_type, initials: initialsClean } });
-    logActivity("drop_followup_upsert", { location_id: locId, initials: initialsClean, details: { swimmer_name, drop_date, drop_type } });
-
-    res.json({ ok: true, drop_key: dropKey });
-  } catch (error) {
-    console.error("Drop followups upsert error:", error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -3687,25 +3505,11 @@ function inferLocationTimeZone(location) {
 
 app.get("/api/locations", (req, res) => {
   try {
-    // Prefer active locations, but never return an empty list (prevents UI "Loading locations..." forever
-    // when a location import forgot to set active=1).
-    let locations = [];
-    try {
-      locations = db.prepare(`SELECT * FROM locations WHERE active = 1 ORDER BY id`).all() || [];
-    } catch (e) {
-      // If schema doesn't have "active", fall back below.
-      locations = [];
-    }
-
-    if (!locations.length) {
-      locations = db.prepare(`SELECT * FROM locations ORDER BY id`).all() || [];
-    }
-
-    const enriched = locations.map((loc) => ({
+    const locations = db.prepare(`SELECT * FROM locations WHERE active = 1 ORDER BY id`).all();
+    const enriched = (locations || []).map((loc) => ({
       ...loc,
       time_zone: loc.time_zone || loc.timeZone || inferLocationTimeZone(loc) || null
     }));
-
     res.json({ ok: true, locations: enriched });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
@@ -5544,9 +5348,8 @@ function scheduleGuardTaskSnapshots() {
 
 scheduleGuardTaskSnapshots();
 
-const HOST = process.env.HOST || process.env.BIND_IP || '0.0.0.0';
-app.listen(PORT, HOST, () => {
-  console.log(`SwimLabs Announcer server running on http://${HOST}:${PORT} (bound to ${HOST})`);
+app.listen(PORT, () => {
+  console.log(`SwimLabs Announcer server running on http://localhost:${PORT}`);
 });
 
 

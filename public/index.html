@@ -540,22 +540,6 @@ QA checklist (v4.9-beta):
       background: rgba(255,43,43,0.24) !important;
     }
 
-
-    /* Attendance row highlighting (high-contrast) */
-    .row-here{
-      background: rgba(0, 255, 140, 0.20) !important;
-      box-shadow: inset 0 0 0 2px rgba(0, 255, 140, 0.55);
-    }
-    .row-here:hover{
-      background: rgba(0, 255, 140, 0.26) !important;
-    }
-    .row-absent{
-      background: rgba(255, 43, 43, 0.18) !important;
-      box-shadow: inset 0 0 0 2px rgba(255, 43, 43, 0.55);
-    }
-    .row-absent:hover{
-      background: rgba(255, 43, 43, 0.24) !important;
-    }
     .guard-section {
       padding: 14px;
       border: 1px solid rgba(255,255,255,.08);
@@ -2257,6 +2241,10 @@ QA checklist (v4.9-beta):
   let activeDateISO = null;
   let managerDateRange = null;
   let blocksList = [];
+  // Roster-derived class start times for the selected day (source of truth for Guard Rotation)
+  let rosterDayBlocks = [];
+  let rosterDayBlocksDate = null;
+
   let autoTimers = [];
   let currentLocation = null;
   let allLocations = [];
@@ -5539,7 +5527,10 @@ QA checklist (v4.9-beta):
       if (el('attendanceReportEndDate')) el('attendanceReportEndDate').value = range.end;
       if (el('instructorReportStartDate')) el('instructorReportStartDate').value = range.start;
       if (el('instructorReportEndDate')) el('instructorReportEndDate').value = range.end;
-      if (el('guardTasksDate') && !el('guardTasksDate').value) el('guardTasksDate').value = range.start;
+      if (el('guardTasksDate') && !el('guardTasksDate').value) {
+        const fallbackGuardDate = activeDateISO || getTodayISO();
+        el('guardTasksDate').value = fallbackGuardDate;
+      }
     }
   }
 
@@ -6044,13 +6035,6 @@ if(!activeDateISO || !blocksList.length) {
 
       if (kid.attendance_auto_absent) {
         tr.classList.add('row-auto-absent');
-      }
-
-      // Attendance-driven row highlight
-      if (kid.attendance === 1) {
-        tr.classList.add('row-here');
-      } else if (kid.attendance === 0) {
-        tr.classList.add('row-absent');
       }
 
       // Attendance
@@ -6617,29 +6601,95 @@ if(!activeDateISO || !blocksList.length) {
     renderGuardTasks();
   }
 
+
+
+function sortTime24Asc(a, b) {
+  const [ah, am] = String(a || '0:0').split(':').map((x) => parseInt(x, 10) || 0);
+  const [bh, bm] = String(b || '0:0').split(':').map((x) => parseInt(x, 10) || 0);
+  return (ah * 60 + am) - (bh * 60 + bm);
+}
+
+async function loadRosterDayBlocks(dateISO) {
+  try {
+    if (!currentLocation || !dateISO) {
+      rosterDayBlocks = [];
+      rosterDayBlocksDate = dateISO || null;
+      return rosterDayBlocks;
+    }
+    // Avoid refetching if unchanged
+    if (rosterDayBlocksDate === dateISO && Array.isArray(rosterDayBlocks) && rosterDayBlocks.length) {
+      return rosterDayBlocks;
+    }
+    const resp = await apiWithTimeout(`/api/roster/classes?location_id=${currentLocation.id}&date=${encodeURIComponent(dateISO)}`, { timeoutMs: 2500 });
+    const classes = resp.classes || [];
+    const times = [];
+    classes.forEach((cls) => {
+      // classKey = `${date}|${start_time}|${instructor}|${program}` (lowercased on server)
+      const key = String(cls.classKey || '');
+      const parts = key.split('|');
+      const t = (parts[1] || '').trim();
+      if (t && !times.includes(t)) times.push(t);
+    });
+    times.sort(sortTime24Asc);
+    rosterDayBlocks = times;
+    rosterDayBlocksDate = dateISO;
+    return rosterDayBlocks;
+  } catch (e) {
+    // If roster not loaded for that day, fall back to generic blocksList.
+    rosterDayBlocks = [];
+    rosterDayBlocksDate = dateISO || null;
+    return rosterDayBlocks;
+  }
+}
+
+function getRotationSourceTimes() {
+  // Prefer roster-derived times (per-day truth). Fall back to configured block times.
+  if (Array.isArray(rosterDayBlocks) && rosterDayBlocks.length) return rosterDayBlocks;
+  if (Array.isArray(blocksList) && blocksList.length) return blocksList;
+  return [];
+}
+
+function rotationMatchesSource(rows, sourceTimes) {
+  if (!Array.isArray(rows) || !rows.length) return false;
+  if (!Array.isArray(sourceTimes) || !sourceTimes.length) return false;
+  if (rows.length !== sourceTimes.length) return false;
+  for (let i = 0; i < sourceTimes.length; i += 1) {
+    const expected = fmtTime(sourceTimes[i]);
+    const got = String(rows[i]?.time || '').trim();
+    if (got !== expected) return false;
+  }
+  return true;
+}
+
   function renderGuardRotation() {
     const body = el('guardRotationBody');
     body.innerHTML = '';
     const weekend = guardState.dayType === 'weekend';
     const rotationHint = el('guardRotationHint');
+    const sourceTimes = getRotationSourceTimes();
+    const hasRosterBlocks = Array.isArray(sourceTimes) && sourceTimes.length > 0;
+    const isPlaceholderRotation = (rows) => Array.isArray(rows) && rows.length > 0 && rows.every((r) => /^Block\s+\d+/i.test(String(r.time || '').trim()));
 
     // Ensure there is something editable in the table even on weekends.
     // Weekends default to a simple repeating pattern (2+3, 3+1, 1+2).
     if (weekend) {
       rotationHint.textContent = 'Weekend rotation defaults to: 2+3, then 3+1, then 1+2 (repeat). You can edit any block below.';
       const hasRows = Array.isArray(guardState.rotation) && guardState.rotation.length > 0;
-      if (!hasRows) {
+      const shouldAutoRebuild = hasRosterBlocks && (!hasRows || isPlaceholderRotation(guardState.rotation) || guardState.rotation.length !== sourceTimes.length || !rotationMatchesSource(guardState.rotation, sourceTimes));
+      if (shouldAutoRebuild) {
         const pattern = [
           [2, 3],
           [3, 1],
           [1, 2]
         ];
-        const totalBlocks = 6;
+
+        const totalBlocks = hasRosterBlocks ? sourceTimes.length : 6;
         guardState.rotation = [];
         for (let i = 0; i < totalBlocks; i += 1) {
           const pair = pattern[i % pattern.length];
+          const labelTime = hasRosterBlocks ? fmtTime(sourceTimes[i]) : `Block ${i + 1}`;
           guardState.rotation.push({
-            time: `Block ${i + 1}`,
+            time: labelTime,
             guard: `${pair[0]}+${pair[1]}`,
             zone: 'Rotation'
           });
@@ -6647,7 +6697,22 @@ if(!activeDateISO || !blocksList.length) {
         saveGuardState();
       }
     } else {
-      rotationHint.textContent = 'Weekdays have no rotation unless updated manually.';
+      // Weekdays: still auto-build rows based on roster schedule blocks (times),
+      // but leave "Guards Up" empty for the manager to fill in.
+      rotationHint.textContent = hasRosterBlocks
+        ? 'Rotation rows auto-built from today\'s roster times. Fill in Guards Up as needed.'
+        : 'Weekdays: load a roster to auto-build rotation rows, or add them manually.';
+
+      const hasRows = Array.isArray(guardState.rotation) && guardState.rotation.length > 0;
+      const shouldAutoRebuild = hasRosterBlocks && (!hasRows || isPlaceholderRotation(guardState.rotation) || guardState.rotation.length !== sourceTimes.length || !rotationMatchesSource(guardState.rotation, sourceTimes));
+      if (shouldAutoRebuild) {
+        guardState.rotation = sourceTimes.map((t) => ({
+          time: fmtTime(t),
+          guard: '',
+          zone: ''
+        }));
+        saveGuardState();
+      }
     }
 
     const rows = Array.isArray(guardState.rotation) ? guardState.rotation : [];
@@ -6753,10 +6818,26 @@ if(!activeDateISO || !blocksList.length) {
     el('panelLifeguard').classList.add('hidden');
     el('panelGuardTasks').classList.remove('hidden');
 
-    const defaultDate = managerDateRange?.start || activeDateISO || getTodayISO();
+    // Guard Tasks date MUST follow the active roster date by default.
+    // If the user manually changes the date in this panel, we respect it until the panel is reopened.
+    const rosterDate = el('rosterDate')?.value || '';
+    const defaultDate = activeDateISO || rosterDate || getTodayISO();
     const dateInput = el('guardTasksDate');
-    if (dateInput && !dateInput.value) dateInput.value = defaultDate;
-    guardState = await loadGuardState(dateInput.value);
+
+    // If opened from another panel (Roster/Virtual Desk), force-sync to the roster's active date.
+    const shouldForceSync = (fromPanel === 'roster' || fromPanel === 'virtualDesk' || fromPanel === 'announcements');
+    if (dateInput) {
+      if (shouldForceSync || !dateInput.value) {
+        dateInput.value = defaultDate;
+      }
+    }
+
+    // Ensure blocksList is loaded so weekend rotation can auto-build from the schedule (e.g., first class 2:15).
+    try { await loadBlocks(); } catch(e) { /* non-fatal */ }
+    // Pull actual class times from the roster for this specific date (source of truth for Rotation Plan)
+    try { await loadRosterDayBlocks(dateInput ? dateInput.value : defaultDate); } catch(e) { /* non-fatal */ }
+
+    guardState = await loadGuardState(dateInput ? dateInput.value : defaultDate);
     renderGuardTasks();
   }
 
@@ -7848,7 +7929,9 @@ if(!activeDateISO || !blocksList.length) {
   });
 
   el('guardTasksDate').addEventListener('change', async () => {
-    guardState = await loadGuardState(el('guardTasksDate').value);
+    const date = el('guardTasksDate').value;
+    await loadRosterDayBlocks(date);
+    guardState = await loadGuardState(date);
     renderGuardTasks();
   });
 
