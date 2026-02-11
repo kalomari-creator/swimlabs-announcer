@@ -614,23 +614,57 @@ QA checklist (v4.9-beta):
       color: #0f172a;
     }
 
-    /* Attendance buttons */
-    .attWrap{ display:flex; gap:6px; align-items:center; }
+    /* Attendance buttons – HIGH VISIBILITY STATES */
+    .attWrap{
+      display:flex;
+      gap:6px;
+      align-items:center;
+    }
+
+    /* NOT TAKEN */
     .attBtn{
       padding:6px 8px;
       border-radius:12px;
       font-size:12px;
       font-weight:900;
-      border:1px solid var(--line);
-      background: var(--surface);
+      border:1px solid rgba(148,163,184,.45);
+      background:#f1f5f9;
       cursor:pointer;
       user-select:none;
       line-height:1;
-      color:#0f172a;
+      color:#334155;
+      opacity:0.45;
     }
-    .attBtn.here.active{ border-color: rgba(0,255,123,.95); background: rgba(0,255,123,.32); }
-    .attBtn.absent.active{ border-color: rgba(255,43,43,.95); background: rgba(255,43,43,.32); }
-    .attBtn.clear.active{ border-color: rgba(0,229,255,.55); background: rgba(0,229,255,.16); }
+
+    /* HERE */
+    .attBtn.here.active{
+      opacity:1;
+      background:#00ff7b;
+      border-color:#00ff7b;
+      color:#00331a;
+      box-shadow:0 0 12px rgba(0,255,123,.75);
+    }
+
+    /* ABSENT */
+    .attBtn.absent.active{
+      opacity:1;
+      background:#ff2b2b;
+      border-color:#ff2b2b;
+      color:#ffffff;
+      box-shadow:0 0 12px rgba(255,43,43,.75);
+    }
+
+    /* CLEAR */
+    .attBtn.clear.active{
+      opacity:1;
+      background:#e5e7eb;
+      border-color:#cbd5e1;
+      color:#334155;
+      box-shadow:none;
+    }
+
+    tr.row-here{ background:rgba(0,255,123,.08) !important; }
+    tr.row-absent{ background:rgba(255,43,43,.08) !important; }
 
     /* Flags */
     .flags{ display:flex; gap:8px; margin-top:6px; align-items:center; flex-wrap:wrap; }
