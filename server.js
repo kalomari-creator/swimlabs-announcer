@@ -16,12 +16,24 @@ const PORT = 5055;
 const ALLOWED_ORIGINS = new Set([
   "http://100.102.148.122:5055",
   "http://swimlabs-server-ser.tail8048a1.ts.net:5055",
+  "http://192.168.0.75:5055",  // WiFi (wlo1)
+  "http://192.168.0.79:5055",  // Ethernet (enp1s0)
+  "http://localhost:5055",
+  "http://127.0.0.1:5055",
 ]);
+
+// Allow any origin from local 192.168.x.x when accessing on port 5055 (DHCP-friendly)
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  if (/^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:5055$/.test(origin)) return true;
+  return false;
+}
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
@@ -1557,7 +1569,7 @@ app.post("/api/import-today", async (req, res) => {
         ?, ?, ?, ?, ?,
         ?, ?
       )
-      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+      ON CONFLICT(location_id, date, start_time, swimmer_name) DO UPDATE SET
         instructor_name=excluded.instructor_name,
         zone=excluded.zone,
         program=excluded.program,
@@ -1872,7 +1884,7 @@ app.post("/api/add-swimmer", (req, res) => {
         ?, ?,
         0, NULL, NULL
       )
-      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+      ON CONFLICT(location_id, date, start_time, swimmer_name) DO UPDATE SET
         instructor_name=excluded.instructor_name,
         zone=excluded.zone,
         program=excluded.program,
@@ -2154,7 +2166,7 @@ function importRosterRows({ date, locationId, rows, source }) {
       ?, ?, ?,
       ?
     )
-    ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+    ON CONFLICT(location_id, date, start_time, swimmer_name) DO UPDATE SET
       instructor_name=excluded.instructor_name,
       substitute_instructor=excluded.substitute_instructor,
       is_substitute=excluded.is_substitute,
@@ -2813,7 +2825,7 @@ app.post("/api/upload-html", upload.single('html'), async (req, res) => {
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
-      ON CONFLICT(date, start_time, swimmer_name) DO UPDATE SET
+      ON CONFLICT(location_id, date, start_time, swimmer_name) DO UPDATE SET
         instructor_name=excluded.instructor_name,
         substitute_instructor=excluded.substitute_instructor,
         is_substitute=excluded.is_substitute,
@@ -5348,8 +5360,8 @@ function scheduleGuardTaskSnapshots() {
 
 scheduleGuardTaskSnapshots();
 
-app.listen(PORT, () => {
-  console.log(`SwimLabs Announcer server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`SwimLabs Announcer server running on http://0.0.0.0:${PORT}`);
 });
 
 
