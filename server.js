@@ -997,6 +997,28 @@ function hasAutoAbsentIndicator($cell, $) {
   return hasCancel;
 }
 
+// Roll sheet: green check = present. Blank = not taken, circle-with-line = absent (handled above).
+function hasAutoPresentIndicator($cell, $) {
+  if (!$cell || !$cell.length) return false;
+  const text = $cell.text().trim();
+  if (/[\u2713\u2714\u2705✓✔✅]/.test(text)) return true;
+
+  let hasCheck = false;
+  $cell.find("img").each((_, img) => {
+    const src = String($(img).attr("src") || "").toLowerCase();
+    const alt = String($(img).attr("alt") || "").toLowerCase();
+    const title = String($(img).attr("title") || "").toLowerCase();
+    const filename = src.split("/").pop() || "";
+    const blob = `${src} ${alt} ${title} ${filename}`;
+    if (blob.includes("check") || blob.includes("checkmark") || blob.includes("present") || blob.includes("attend")) {
+      if (!blob.includes("cancel") && !blob.includes("absent") && !(blob.includes("circle") && (blob.includes("slash") || blob.includes("strike")))) {
+        hasCheck = true;
+      }
+    }
+  });
+  return hasCheck;
+}
+
 function isAbsentAttendanceCell($cell, $) {
   if (!$cell || !$cell.length) return false;
 
@@ -2602,8 +2624,13 @@ function parseHTMLRoster(html) {
         const rowCells = $row.find('td');
         dateColumns.forEach((col) => {
           const cell = rowCells.eq(col.index);
+          const autoPresent = hasAutoPresentIndicator(cell, $);
           const autoAbsent = hasAutoAbsentIndicator(cell, $);
-          const attendance = isAbsentAttendanceCell(cell, $) ? 0 : null;
+          const isAbsent = isAbsentAttendanceCell(cell, $);
+          // Blank = not taken (null), check = present (1), circle-with-line = absent (0)
+          let attendance = null;
+          if (autoPresent) attendance = 1;
+          else if (isAbsent) attendance = 0;
           if (col.date) datesFound.add(col.date);
 
           swimmers.push({
@@ -2624,13 +2651,14 @@ function parseHTMLRoster(html) {
           });
         });
       } else {
-        // Fallback: single-date upload with absence detection on attendance cells
-        let attendance = null;
+        // Fallback: single-date upload with present/absent detection on attendance cells
         const attendanceCell = $row.find('td.date-time, td.cell-bordered');
+        const autoPresent = hasAutoPresentIndicator(attendanceCell, $);
         const autoAbsent = hasAutoAbsentIndicator(attendanceCell, $);
-        if (isAbsentAttendanceCell(attendanceCell, $)) {
-          attendance = 0;
-        }
+        const isAbsent = isAbsentAttendanceCell(attendanceCell, $);
+        let attendance = null;
+        if (autoPresent) attendance = 1;
+        else if (isAbsent) attendance = 0;
 
         swimmers.push({
           date: null,
